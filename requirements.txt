@@ -3,3 +3,4 @@ Flask_SQLAlchemy
 openpyxl
 Flask-Login
 gunicorn
+flask_migrate
