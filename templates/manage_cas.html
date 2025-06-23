@@ -1,0 +1,66 @@
+{% extends "layout.html" %}
+
+{% block title %}Thiết lập Ca trực{% endblock %}
+
+{% block content %}
+
+<h2>Thiết lập Ca trực</h2>
+
+<form method="GET" action="/cas">
+  <label>Chọn khoa:</label>
+  <select name="department" onchange="this.form.submit()">
+    {% for dept in departments %}
+      <option value="{{ dept }}" {% if dept == selected_department %}selected{% endif %}>{{ dept }}</option>
+    {% endfor %}
+  </select>
+</form>
+
+<hr>
+
+<form method="POST">
+  <input type="hidden" name="department" value="{{ selected_department }}">
+
+  <label>Tên ca:</label>
+  <input type="text" name="ca_name" required><br><br>
+
+  <label>Bác sĩ:</label>
+  <select name="doctor_id" required>
+    {% for d in doctors %}
+      <option value="{{ d.id }}">{{ d.full_name }}</option>
+    {% else %}
+      <option disabled>Không có bác sĩ trong khoa</option>
+    {% endfor %}
+  </select><br><br>
+
+  <label>Điều dưỡng 1:</label>
+  <select name="nurse1_id" required>
+    {% for n in nurses %}
+      <option value="{{ n.id }}">{{ n.full_name }}</option>
+    {% else %}
+      <option disabled>Không có điều dưỡng trong khoa</option>
+    {% endfor %}
+  </select><br><br>
+
+  <label>Điều dưỡng 2:</label>
+  <select name="nurse2_id" required>
+    {% for n in nurses %}
+      <option value="{{ n.id }}">{{ n.full_name }}</option>
+    {% else %}
+      <option disabled>Không có điều dưỡng trong khoa</option>
+    {% endfor %}
+  </select><br><br>
+
+  <button type="submit" class="btn btn-primary">Thêm ca</button>
+</form>
+
+<hr>
+<h3>Danh sách các ca đã tạo:</h3>
+<ul>
+  {% for ca in cas %}
+    <li><strong>{{ ca.name }}</strong>: {{ ca.doctor.full_name }} + {{ ca.nurse1.full_name }} + {{ ca.nurse2.full_name }}</li>
+  {% else %}
+    <li>Chưa có ca nào trong khoa này.</li>
+  {% endfor %}
+</ul>
+
+{% endblock %}

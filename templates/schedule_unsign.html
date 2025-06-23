@@ -1,0 +1,18 @@
+
+{% extends "layout.html" %}
+
+{% block title %}Hủy ký xác nhận{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+  <h2>🗑️ Hủy ký xác nhận bảng lịch trực</h2>
+  <p>Chức năng này chỉ dành cho quản trị viên. Hủy ký sẽ cho phép sửa hoặc xóa các lịch trực đã được ký.</p>
+  <form method="POST" action="/schedule/unsign" onsubmit="return confirm('Bạn có chắc muốn hủy ký và mở khóa chỉnh sửa?');">
+    <input type="hidden" name="department" value="{{ department }}">
+    <input type="hidden" name="from_date" value="{{ from_date }}">
+    <input type="hidden" name="to_date" value="{{ to_date }}">
+    <button class="btn btn-danger">🗑️ Hủy ký xác nhận</button>
+    <a href="/schedule" class="btn btn-secondary ms-2">Quay lại</a>
+  </form>
+</div>
+{% endblock %}

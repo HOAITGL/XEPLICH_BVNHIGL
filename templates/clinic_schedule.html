@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <title>Bảng phân lịch phòng khám</title>
+    <style>
+        body {
+            font-family: "Times New Roman", Times, serif;
+            font-size: 16px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+        th, td {
+            border: 1px solid black;
+            padding: 6px;
+            text-align: center;
+        }
+        .header-center {
+            text-align: center;
+            font-weight: bold;
+        }
+        .footer-note {
+            margin-top: 30px;
+        }
+        .footer-note td {
+            vertical-align: top;
+        }
+    </style>
+</head>
+<body onload="window.print()">
+    <table>
+        <tr>
+            <td class="header-center" colspan="3">
+                <strong>BỆNH VIỆN NHI TỈNH GIA LAI</strong>
+            </td>
+            <td class="header-center" colspan="4">
+                <strong>CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</strong><br>
+                Độc lập - Tự do - Hạnh phúc<br>
+                Gia Lai, ngày {{ now.strftime('%d') }} tháng {{ now.strftime('%m') }} năm {{ now.strftime('%Y') }}
+            </td>
+        </tr>
+    </table>
+
+    <h3 class="header-center">BẢNG PHÂN LỊCH LÀM PHÒNG KHÁM</h3>
+    <p class="header-center">(Từ ngày {{ start_date.strftime('%d/%m/%Y') }} đến ngày {{ end_date.strftime('%d/%m/%Y') }})</p>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Phòng khám</th>
+                {% for d in date_range %}
+                    <th>{{ d.strftime('%a %d/%m') }}</th>
+                {% endfor %}
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><strong>Khu tiếp đón - Đóng dấu - Dẫn BN</strong></td>
+                {% for d in date_range %}
+                    <td>{{ clinic_schedule['tiep_don'][d] or '' }}</td>
+                {% endfor %}
+            </tr>
+            {% for room_name, shifts in clinic_schedule['phong_kham'].items() %}
+            <tr>
+                <td><strong>{{ room_name }}</strong></td>
+                {% for d in date_range %}
+                    <td>{{ shifts[d] or '' }}</td>
+                {% endfor %}
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <table class="footer-note" width="100%">
+        <tr>
+            <td width="40%">
+                <strong>Nơi nhận:</strong><br>
+                - Ban Giám đốc<br>
+                - Các khoa phòng<br>
+                - Lưu: VT
+            </td>
+            <td width="30%" style="text-align: center;">
+                <strong>NGƯỜI LẬP BẢNG</strong><br>
+                <em>(Ký, ghi rõ họ tên)</em><br><br><br>
+                ....................................
+            </td>
+            <td width="30%" style="text-align: center;">
+                <strong>GIÁM ĐỐC</strong><br>
+                <em>(Ký, ghi rõ họ tên)</em><br><br><br>
+                ....................................
+            </td>
+        </tr>
+    </table>
+</body>
+</html>

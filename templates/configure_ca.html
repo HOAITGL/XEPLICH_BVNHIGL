@@ -1,0 +1,84 @@
+{% extends "layout.html" %}
+{% block title %}Cấu hình Ca trực{% endblock %}
+{% block content %}
+
+<div class="container mt-4">
+  <h2 class="mb-4">Cấu hình thông số Ca trực theo khoa</h2>
+
+  {% if message %}
+    <div class="alert alert-success">{{ message }}</div>
+  {% endif %}
+
+  <form method="POST" class="border p-3 rounded bg-light mb-4">
+    {% if selected_config %}
+      <input type="hidden" name="config_id" value="{{ selected_config.id }}">
+    {% endif %}
+
+    <div class="row g-2">
+      <div class="col-md-3">
+        <label class="form-label">Khoa:</label>
+        <select class="form-select form-select-sm" name="department" required>
+          {% for dept in departments %}
+            <option value="{{ dept }}" {% if selected_config and dept == selected_config.department %}selected{% endif %}>{{ dept }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label">Ca/ngày:</label>
+        <input type="number" name="num_shifts" class="form-control form-control-sm" step="1" value="{{ selected_config.num_shifts if selected_config else 2 }}" required>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label">Ca/ca làm:</label>
+        <input type="number" name="cas_per_shift" class="form-control form-control-sm" step="1" value="{{ selected_config.cas_per_shift if selected_config else 3 }}" required>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label">BS/ca:</label>
+        <input type="number" name="doctors_per_ca" class="form-control form-control-sm" step="1" value="{{ selected_config.doctors_per_ca if selected_config else 1 }}" required>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label">ĐD/ca:</label>
+        <input type="number" name="nurses_per_ca" class="form-control form-control-sm" step="1" value="{{ selected_config.nurses_per_ca if selected_config else 2 }}" required>
+      </div>
+      <div class="col-md-1 d-flex align-items-end">
+        <button type="submit" class="btn btn-sm btn-primary w-100">
+          {% if selected_config %}Cập nhật{% else %}Lưu{% endif %}
+        </button>
+      </div>
+    </div>
+  </form>
+
+  <h3 class="mb-3">Danh sách cấu hình hiện có</h3>
+  <table class="table table-bordered table-sm small align-middle">
+    <thead class="table-light text-center">
+      <tr>
+        <th>Khoa</th>
+        <th>Ca/ngày</th>
+        <th>Ca/ca</th>
+        <th>BS/ca</th>
+        <th>ĐD/ca</th>
+        <th>Hành động</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for c in configs %}
+      <tr>
+        <td>{{ c.department }}</td>
+        <td class="text-center">{{ c.num_shifts }}</td>
+        <td class="text-center">{{ c.cas_per_shift }}</td>
+        <td class="text-center">{{ c.doctors_per_ca }}</td>
+        <td class="text-center">{{ c.nurses_per_ca }}</td>
+        <td class="text-center">
+          <a href="/configure-ca?edit_id={{ c.id }}" class="btn btn-sm btn-warning">Sửa</a>
+          <form method="POST" action="/delete-ca-config/{{ c.id }}" style="display:inline;" onsubmit="return confirm('Bạn có chắc chắn muốn xoá?');">
+            <button type="submit" class="btn btn-sm btn-danger">Xoá</button>
+          </form>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="6" class="text-center">Chưa có cấu hình nào.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% endblock %}

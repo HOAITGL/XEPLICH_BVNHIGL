@@ -1,0 +1,91 @@
+{% extends "layout.html" %}
+{% block title %}Bảng in chấm công{% endblock %}
+
+{% block content %}
+<!-- TIÊU ĐỀ CHUẨN CÔNG VĂN -->
+<div class="d-none d-print-block text-center mb-3">
+  <div class="row">
+    <div class="col-6 text-start">
+      <strong>BỆNH VIỆN NHI TỈNH GIA LAI</strong><br>
+      {% if selected_department %}
+      <span style="display:inline-block; font-weight:bold; border-bottom:1px solid black; margin-left:25px;">
+        {{ selected_department.upper() }}
+      </span>
+      {% endif %}
+    </div>
+    <div class="col-6 text-center">
+      <strong>CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</strong><br>
+      <div style="margin-top: 4px;">
+        <span style="display: inline-block; font-weight: normal; border-bottom: 1px solid black;">
+          Độc lập - Tự do - Hạnh phúc
+        </span>
+      </div>
+      {% if now %}
+      <div style="margin-top: 4px;">
+        <em>Gia Lai, ngày {{ now.strftime('%d') }} tháng {{ now.strftime('%m') }} năm {{ now.strftime('%Y') }}</em>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+  <table class="table table-bordered table-sm text-center align-middle">
+    <thead>
+      <tr>
+        <th rowspan="2">STT</th>
+        <th rowspan="2">Họ và tên</th>
+        <th rowspan="2">Chức danh</th>
+        {% for day in days_in_month %}
+          <th>{{ day.day }}</th>
+        {% endfor %}
+      </tr>
+    </thead>
+    <tbody>
+      {% for user in users %}
+      <tr>
+        <td>{{ loop.index }}</td>
+        <td class="text-start">{{ user.name }}</td>
+        <td>{{ user.position }}</td>
+        {% for day in days_in_month %}
+          <td>{{ schedule_map.get((user.id, day), '') }}</td>
+        {% endfor %}
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+<div class="d-none d-print-block" style="width: 100%; font-size: 13px; margin-top: 0.5cm;">
+  <div style="display: grid; grid-template-columns: 20% 20% 20% 20% 20%;">
+    <div style="text-align: left;">
+      <strong>Nơi nhận:</strong><br>
+      - Ban Giám đốc<br>
+      - Các khoa/phòng<br>
+      - Đăng website<br>
+      - Lưu: VP, KH-CNTT
+    </div>
+    <div style="text-align: center;">
+      <strong>NGƯỜI LẬP BẢNG</strong><br><em>(Ký, ghi rõ họ tên)</em>
+    </div>
+    <div style="text-align: center;">
+      <strong>TRƯỞNG KHOA/PHÒNG</strong><br><em>(Ký, ghi rõ họ tên)</em>
+    </div>
+    <div style="text-align: center;">
+      <strong>PHÒNG TỔ CHỨC - HCQT</strong><br><em>(Ký, ghi rõ họ tên)</em>
+    </div>
+    <div style="text-align: center;">
+      <strong>GIÁM ĐỐC</strong><br><em>(Ký, ghi rõ họ tên)</em>
+    </div>
+  </div>
+</div>
+
+<script>
+document.querySelector("form").addEventListener("submit", function(e) {
+  const printChecked = document.getElementById("print_filter").checked;
+  const contractType = document.querySelector("select[name='contract_type']").value;
+  if (printChecked && !contractType) {
+    alert("Vui lòng chọn loại hợp đồng nếu muốn lọc khi in!");
+    e.preventDefault();
+  }
+});
+</script>
+{% endblock %}

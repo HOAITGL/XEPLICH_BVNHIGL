@@ -1,0 +1,72 @@
+{% extends "layout.html" %}
+
+{% block title %}Thiết lập nhân viên Ca trực{% endblock %}
+
+{% block content %}
+
+<h2>Thiết lập nhân viên Ca trực</h2>
+
+<form method="GET" action="/cas">
+  <label>Chọn khoa:</label>
+  <select name="department" onchange="this.form.submit()">
+    {% for dept in departments %}
+      <option value="{{ dept }}" {% if dept == selected_department %}selected{% endif %}>{{ dept }}</option>
+    {% endfor %}
+  </select>
+</form>
+
+<hr>
+
+<form method="POST">
+  <input type="hidden" name="department" value="{{ selected_department }}">
+
+  <label>Tên ca:</label>
+  <input type="text" name="ca_name" required><br><br>
+
+  <label>Bác sĩ:</label>
+  <select name="doctor_id" required>
+    {% for d in doctors %}
+      <option value="{{ d.id }}">{{ d.name }}</option>
+    {% else %}
+      <option disabled>Không có bác sĩ trong khoa</option>
+    {% endfor %}
+  </select><br><br>
+
+  <label>Điều dưỡng 1:</label>
+  <select name="nurse1_id" required>
+    {% for n in nurses %}
+      <option value="{{ n.id }}">{{ n.name }}</option>
+    {% else %}
+      <option disabled>Không có điều dưỡng trong khoa</option>
+    {% endfor %}
+  </select><br><br>
+
+  <label>Điều dưỡng 2:</label>
+  <select name="nurse2_id" required>
+    {% for n in nurses %}
+      <option value="{{ n.id }}">{{ n.name }}</option>
+    {% else %}
+      <option disabled>Không có điều dưỡng trong khoa</option>
+    {% endfor %}
+  </select><br><br>
+
+  <button type="submit" class="btn btn-primary">Thêm ca</button>
+</form>
+
+<hr>
+<h3>Danh sách các ca đã tạo:</h3>
+<ul>
+  {% for ca in cas %}
+    <li>
+      <strong>Ca {{ loop.index }}:</strong> {{ ca.doctor.name }} + {{ ca.nurse1.name }} + {{ ca.nurse2.name }}
+      <a href="/cas/edit/{{ ca.id }}" class="btn btn-sm btn-warning ms-2">Sửa</a>
+      <form method="POST" action="/cas/delete/{{ ca.id }}" style="display:inline;" onsubmit="return confirm('Xoá ca này?')">
+        <button class="btn btn-sm btn-danger">Xoá</button>
+      </form>
+    </li>
+  {% else %}
+    <li>Chưa có ca nào trong khoa này.</li>
+  {% endfor %}
+</ul>
+
+{% endblock %}

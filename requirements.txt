@@ -1,0 +1,5 @@
+Flask
+Flask_SQLAlchemy
+openpyxl
+Flask-Login
+gunicorn

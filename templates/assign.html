@@ -1,0 +1,125 @@
+{% extends "layout.html" %}
+{% block title %}Xếp lịch trực theo khoa{% endblock %}
+{% block content %}
+
+<div class="d-flex align-items-center gap-3 mb-3">
+  <h2>📅 Xếp lịch trực theo khoa</h2>
+  <a href="{{ url_for('auto_assign_page') }}" class="btn btn-warning">⚙️ Tạo lịch tự động</a>
+</div>
+
+<!-- Hiển thị cảnh báo nếu có -->
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+    {% for category, message in messages %}
+      <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+        {{ message }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+      </div>
+    {% endfor %}
+  {% endif %}
+{% endwith %}
+
+<form method="GET" class="mb-3">
+  <label for="department">Chọn khoa:</label>
+  <select name="department" id="department" onchange="this.form.submit()">
+    <option value="">-- Tất cả khoa --</option>
+    {% for d in departments %}
+      <option value="{{ d }}" {% if d == selected_department %}selected{% endif %}>{{ d }}</option>
+    {% endfor %}
+  </select>
+</form>
+
+{% if users %}
+  <form method="POST">
+    <input type="hidden" name="department" value="{{ selected_department }}">
+    <div class="d-flex align-items-end gap-3 mb-3">
+      <div>
+        <label for="start_date" class="form-label">Từ ngày:</label>
+        <input type="date" id="start_date" name="start_date" class="form-control form-control-sm" required>
+      </div>
+      <div>
+        <label for="end_date" class="form-label">Đến ngày:</label>
+        <input type="date" id="end_date" name="end_date" class="form-control form-control-sm" required>
+      </div>
+      <div class="pb-1">
+        <button type="submit" class="btn btn-primary">💾 Lưu lịch</button>
+      </div>
+    </div>
+
+    <style>
+      .table-container {
+        max-height: 500px;
+        overflow: auto;
+        border: 1px solid #dee2e6;
+      }
+
+      .table thead th {
+        position: sticky;
+        top: 0;
+        background-color: #f8f9fa;
+        z-index: 3;
+        text-align: center;
+        vertical-align: middle;
+      }
+
+      .table td, .table th {
+        text-align: center;
+        vertical-align: middle;
+        padding: 6px;
+      }
+
+      .sticky-col {
+        position: sticky;
+        left: 0;
+        background: white;
+        z-index: 2;
+      }
+
+      .sticky-col-2 {
+        position: sticky;
+        left: 160px;
+        background: white;
+        z-index: 2;
+      }
+
+      th:first-child, td:first-child {
+        min-width: 160px;
+        text-align: left;
+      }
+
+      th:nth-child(2), td:nth-child(2) {
+        min-width: 80px;
+      }
+
+      th:nth-child(n+3), td:nth-child(n+3) {
+        min-width: 55px;
+      }
+    </style>
+
+    <div class="table-container mt-2">
+      <table class="table table-bordered">
+        <thead>
+          <tr>
+            <th class="sticky-col">Họ tên</th>
+            <th class="sticky-col-2">Chức danh</th>
+            {% for shift in shifts %}
+              <th>{{ shift.name }}</th>
+            {% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for user in users %}
+            <tr>
+              <td class="sticky-col">{{ user.name }}</td>
+              <td class="sticky-col-2">{{ user.position }}</td>
+              {% for shift in shifts %}
+                <td><input type="checkbox" name="schedule" value="{{ user.id }}-{{ shift.id }}"></td>
+              {% endfor %}
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </form>
+{% endif %}
+{% endblock %}

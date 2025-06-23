@@ -1,0 +1,18 @@
+
+{% extends "layout.html" %}
+
+{% block title %}Xác nhận lịch trực{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+  <h2>🔏 Ký xác nhận bảng lịch trực</h2>
+  <p>Xác nhận lịch trực của khoa <strong>{{ department }}</strong> từ <strong>{{ from_date }}</strong> đến <strong>{{ to_date }}</strong>.</p>
+  <form method="POST" action="/schedule/sign" onsubmit="return confirm('Bạn có chắc muốn ký xác nhận và khóa lịch trực không?');">
+    <input type="hidden" name="department" value="{{ department }}">
+    <input type="hidden" name="from_date" value="{{ from_date }}">
+    <input type="hidden" name="to_date" value="{{ to_date }}">
+    <button class="btn btn-warning">🔏 Ký xác nhận</button>
+    <a href="/schedule" class="btn btn-secondary ms-2">Quay lại</a>
+  </form>
+</div>
+{% endblock %}

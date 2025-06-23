@@ -1,0 +1,41 @@
+{% extends 'layout.html' %}
+{% block title %}Quản lý Phòng khám{% endblock %}
+
+{% block content %}
+<div class="container">
+  <h2 class="my-3">Quản lý Phòng khám</h2>
+  <form method="POST" action="/clinic-rooms/add" class="mb-3 d-flex gap-2">
+    <input type="text" name="name" placeholder="Tên phòng khám" required class="form-control w-25">
+    <input type="text" name="description" placeholder="Mô tả" class="form-control w-50">
+    <button type="submit" class="btn btn-success">➕ Thêm</button>
+  </form>
+
+  <table class="table table-bordered">
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Tên</th>
+        <th>Mô tả</th>
+        <th>Hành động</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for room in rooms %}
+      <tr>
+        <td>{{ room.id }}</td>
+        <td>{{ room.name }}</td>
+        <td>{{ room.description }}</td>
+        <td>
+          <form action="/clinic-rooms/update/{{ room.id }}" method="POST" class="d-inline-block">
+            <input type="text" name="name" value="{{ room.name }}" class="form-control mb-1" required>
+            <input type="text" name="description" value="{{ room.description }}" class="form-control mb-1">
+            <button class="btn btn-primary btn-sm">💾 Cập nhật</button>
+          </form>
+          <a href="/clinic-rooms/delete/{{ room.id }}" class="btn btn-danger btn-sm mt-1">🗑 Xoá</a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

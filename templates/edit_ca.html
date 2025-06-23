@@ -1,0 +1,33 @@
+{% extends 'layout.html' %}
+{% block title %}Sửa Ca{% endblock %}
+{% block content %}
+<h3>Sửa Ca trực</h3>
+<form method="POST">
+  <label>Tên ca:</label>
+  <input name="ca_name" value="{{ ca.name }}" class="form-control" required><br>
+
+  <label>Bác sĩ:</label>
+  <select name="doctor_id" class="form-select" required>
+    {% for u in doctors %}
+      <option value="{{ u.id }}" {% if u.id == ca.doctor_id %}selected{% endif %}>{{ u.name }}</option>
+    {% endfor %}
+  </select><br>
+
+  <label>Điều dưỡng 1:</label>
+  <select name="nurse1_id" class="form-select" required>
+    {% for u in nurses %}
+      <option value="{{ u.id }}" {% if u.id == ca.nurse1_id %}selected{% endif %}>{{ u.name }}</option>
+    {% endfor %}
+  </select><br>
+
+  <label>Điều dưỡng 2:</label>
+  <select name="nurse2_id" class="form-select" required>
+    {% for u in nurses %}
+      <option value="{{ u.id }}" {% if u.id == ca.nurse2_id %}selected{% endif %}>{{ u.name }}</option>
+    {% endfor %}
+  </select><br>
+
+  <button type="submit" class="btn btn-primary">Cập nhật</button>
+  <a href="/cas?department={{ ca.department }}" class="btn btn-secondary">Huỷ</a>
+</form>
+{% endblock %}

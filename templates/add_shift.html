@@ -1,0 +1,49 @@
+{% extends 'layout.html' %}
+{% block title %}Thêm ca trực{% endblock %}
+
+{% block content %}
+<h2>➕ Thêm ca trực mới</h2>
+
+<!-- Hiển thị lỗi -->
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+    {% for category, message in messages %}
+      <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+        {{ message }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+      </div>
+    {% endfor %}
+  {% endif %}
+{% endwith %}
+
+<form method="POST" class="card p-3 shadow-sm">
+  <div class="row mb-2">
+    <div class="col">
+      <label for="name" class="form-label">Tên ca</label>
+      <input type="text" class="form-control" id="name" name="name" required value="{{ old.name if old else '' }}">
+    </div>
+    <div class="col">
+      <label for="code" class="form-label">Mã ca trực</label>
+      <input type="text" class="form-control" id="code" name="code" required value="{{ old.code if old else '' }}">
+    </div>
+    <div class="col">
+      <label for="start_time" class="form-label">Giờ bắt đầu</label>
+      <input type="text" class="form-control" id="start_time" name="start_time"
+             placeholder="HH:MM hoặc HH:MM:SS" required value="{{ old.start_time if old else '' }}">
+    </div>
+    <div class="col">
+      <label for="end_time" class="form-label">Giờ kết thúc</label>
+      <input type="text" class="form-control" id="end_time" name="end_time"
+             placeholder="HH:MM hoặc HH:MM:SS" required value="{{ old.end_time if old else '' }}">
+    </div>
+    <div class="col">
+      <label for="duration" class="form-label">Thời lượng (giờ)</label>
+      <input type="number" step="0.5" class="form-control" id="duration" name="duration" required
+             value="{{ old.duration if old else '' }}">
+    </div>
+    <div class="col-auto d-flex align-items-end">
+      <button type="submit" class="btn btn-primary">💾 Lưu ca trực</button>
+    </div>
+  </div>
+</form>
+{% endblock %}

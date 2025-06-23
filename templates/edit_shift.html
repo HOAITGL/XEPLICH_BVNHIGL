@@ -1,0 +1,46 @@
+{% extends "layout.html" %}
+{% block title %}Sửa ca trực{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+  <h2>🛠️ Sửa ca trực</h2>
+
+  <!-- Hiển thị lỗi nếu có -->
+  {% if error %}
+    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+      {{ error }}
+      <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+  {% endif %}
+
+  <form method="POST">
+    <div class="mb-3">
+      <label class="form-label">Mã ca trực:</label>
+      <input type="text" name="code" class="form-control" value="{{ shift.code }}" required>
+    </div>
+
+    <div class="mb-3">
+      <label class="form-label">Tên ca trực:</label>
+      <input type="text" name="name" class="form-control" value="{{ shift.name }}" required>
+    </div>
+
+    <div class="mb-3">
+      <label class="form-label">Thời gian bắt đầu:</label>
+      <input type="time" name="start_time" class="form-control" value="{{ shift.start_time.strftime('%H:%M') }}" required>
+    </div>
+
+    <div class="mb-3">
+      <label class="form-label">Thời gian kết thúc:</label>
+      <input type="time" name="end_time" class="form-control" value="{{ shift.end_time.strftime('%H:%M') }}" required>
+    </div>
+
+    <div class="mb-3">
+      <label class="form-label">Số giờ:</label>
+      <input type="number" name="duration" class="form-control" value="{{ shift.duration }}" step="0.5" required>
+    </div>
+
+    <button type="submit" class="btn btn-primary">💾 Lưu thay đổi</button>
+    <a href="/shifts" class="btn btn-secondary">Quay lại</a>
+  </form>
+</div>
+{% endblock %}
