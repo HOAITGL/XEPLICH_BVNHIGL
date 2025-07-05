@@ -3329,8 +3329,11 @@ def init_db():
 
 @app.route('/run-seed')
 def run_seed():
-    import seed
-    return "Đã chạy seed.py thành công!"
+    try:
+        import seed
+        return "✅ Đã chạy seed.py thành công!"
+    except Exception as e:
+        return f"❌ Lỗi khi chạy seed.py: {str(e)}"
 
 if __name__ == '__main__':
     with app.app_context():
