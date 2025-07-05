@@ -9,78 +9,65 @@
       margin: 0;
       font-family: Arial, sans-serif;
     }
-
     .sidebar {
       height: 100vh;
-      width: 250px;
+      width: 260px;
       position: fixed;
       top: 0;
       left: 0;
       background-color: #343a40;
-      padding-top: 20px;
+      padding-top: 10px;
       color: white;
     }
-
     .sidebar ul {
       list-style-type: none;
       padding: 0;
     }
-
     .sidebar ul li {
-      padding: 10px 20px;
+      padding: 6px 13px;
+      font-size: 15px;
     }
-
     .sidebar ul li a {
       color: white;
       text-decoration: none;
       display: block;
     }
-
     .sidebar ul li a:hover {
       background-color: #495057;
       border-radius: 5px;
     }
-
     .content {
-      margin-left: 260px;
-      padding: 20px;
+      margin-left: 270px;
+      padding: 15px;
     }
-
     @media print {
       nav, .sidebar, .btn, form, .d-flex, .d-print-none {
         display: none !important;
       }
-
       .d-print-block {
         display: block !important;
       }
-
       .hide-on-print {
         display: none !important;
       }
-
       .table-container {
         max-height: none !important;
         overflow: visible !important;
         height: auto !important;
       }
-
       .table-container::-webkit-scrollbar {
         display: none;
       }
-
       table {
         width: 100% !important;
         font-size: 12px;
         border-collapse: collapse;
       }
-
       th, td {
         border: 1px solid black;
         padding: 4px;
         text-align: center;
       }
-
       html, body {
         margin: 0 !important;
         padding: 0 !important;
@@ -89,7 +76,6 @@
         zoom: 100%;
       }
     }
-
     @page {
       size: A4 landscape;
       margin: 1cm 1.5cm 1cm 2.05cm;
@@ -101,25 +87,28 @@
     <ul>
       <li><a href="/">🏠 Trang chủ</a></li>
 
-      {% if user and user.role in ['admin', 'manager'] %}
-      <li><a href="/assign">📝 Xếp lịch trực thường</a></li>
-      <li><a href="/generate-ca">Tạo lịch theo ca (kíp)</a></li>
-      <li><a href="/shifts">⏰ Cấu hình ca trực</a></li>
-      <li><a href="/cas">Thiết lập nhân viên ca trực</a></li>
-      <li><a href="/configure-ca">Cấu hình thông số ca trực</a></li>
+      {% if session.get('role') in ['admin', 'user', 'manager'] %}
+	<li><a href="/schedule">📅 Xem lịch trực</a></li>
+	<li><a href="/yeu-cau-xu-ly-cong-viec">📄 Yêu cầu xử lý CV ngoài giờ</a></li>
+	<li><a href="/leaves">📆 Đơn nghỉ phép</a></li>
       {% endif %}
 
-      <li><a href="/schedule">📅 Xem lịch trực</a></li>
-      <li><a href="/report-all">🗂 Tổng hợp lịch trực-KHTH</a></li>
-      <li><a href="/bang-cham-cong">📋 Bảng chấm công</a></li>
-
-      {% if user and user.role in ['admin', 'manager'] %}
-      <li><a class="nav-link" href="/clinic-rooms">🏥 Phòng khám</a></li>
-      <li><a href="/users-by-department">👥 Nhân sự theo khoa</a></li>
+      {% if session.get('role') in ['admin', 'manager'] %}
+	<li><a href="/assign">📝 Xếp lịch trực</a></li>
+        <li><a href="/report-all">🗂 Tổng hợp lịch trực-KHTH</a></li>
+        <li><a href="/bang-cham-cong">📋 Bảng chấm công</a></li>
+	<li><a href="/tong-hop-cong-truc-view">📊 Bảng tổng hợp công trực</a></li>
+        <li><a href="{{ url_for('shift_payment_view') }}">💰 Bảng thanh toán tiền trực</a></li>
+        <li><a href="/shifts">⏰ Cấu hình ca trực</a></li>
+        <li><a class="nav-link" href="/clinic-rooms">🏥 Thiết lập Phòng khám</a></li>
+        <li><a href="/users-by-department">👥 Nhân sự theo khoa</a></li>
       {% endif %}
 
-      {% if user and user.role == 'admin' %}
-      <li><a href="/roles">🔐 Hệ thống phân quyền</a></li>
+      {% if session.get('role') == 'admin' %}
+        <li><a href="/shift-rate-config">⏰ Cấu hình tiền trực</a></li>
+        <li><a href="/configure-hscc">⚕️ Thiết lập khoa HSCC</a></li>
+        <li><a href="/roles">🔐 Hệ thống phân quyền</a></li>
+	<li><a href="/danh-sach-yeu-cau">📂 Danh sách yêu cầu công việc</a></li>
       {% endif %}
 
       <li><a href="/change-password">🔑 Đổi mật khẩu</a></li>
@@ -129,9 +118,10 @@
 
   <div class="content">
     {% if user %}
-    <p class="user-greeting d-print-none">Xin chào {{ user.name }} ({{ user.role }})</p>
+      <p class="d-print-none">Xin chào {{ user.name }} ({{ user.role }})</p>
+    {% else %}
+      <p>Xin chào Khách</p>
     {% endif %}
-
     {% block content %}{% endblock %}
   </div>
 
@@ -155,13 +145,12 @@
 
     window.addEventListener('beforeprint', markRowsWithoutTruc);
 
-    // Ẩn thông báo flash sau 5 giây
     setTimeout(function() {
       const alerts = document.querySelectorAll('.alert');
       alerts.forEach(alert => {
         alert.classList.remove('show');
         alert.classList.add('fade');
-        setTimeout(() => alert.remove(), 500);  // Xoá khỏi DOM sau khi ẩn
+        setTimeout(() => alert.remove(), 500);
       });
     }, 5000);
   </script>

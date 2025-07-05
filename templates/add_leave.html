@@ -1,0 +1,93 @@
+{% extends 'layout.html' %}
+{% block content %}
+
+<h2>Thêm đơn nghỉ phép</h2>
+<form method="POST">
+
+    {% if current_user_role == 'admin' %}
+    <!-- Admin chọn khoa -->
+    <div class="form-group">
+        <label for="department">Chọn khoa</label>
+        <select name="department" class="form-control" onchange="this.form.submit()" required>
+            <option value="">-- Chọn khoa --</option>
+            {% for dept in departments %}
+                <option value="{{ dept }}" {% if dept == selected_department %}selected{% endif %}>{{ dept }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    {% else %}
+    <!-- User thường: hiện 1 khoa cố định -->
+    <input type="hidden" name="department" value="{{ departments[0] }}">
+    <div class="form-group">
+        <label for="department">Khoa</label>
+        <input type="text" class="form-control" value="{{ departments[0] }}" readonly>
+    </div>
+    {% endif %}
+
+    {% if users %}
+    {% if current_user_role == 'admin' %}
+    <div class="form-group">
+        <label for="user_id">Nhân viên</label>
+        <select class="form-control" name="user_id" required>
+            <option value="">-- Chọn nhân viên --</option>
+            {% for user in users %}
+                <option value="{{ user.id }}">{{ user.name }} - {{ user.department }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    {% else %}
+    <!-- User thường: tự động chọn chính mình -->
+    <input type="hidden" name="user_id" value="{{ users[0].id }}">
+    <div class="form-group">
+        <label for="user_id">Nhân viên</label>
+        <input type="text" class="form-control" value="{{ users[0].name }}" readonly>
+    </div>
+    {% endif %}
+
+    <!-- Phần còn lại giữ nguyên -->
+    <div class="form-row">
+        <div class="form-group col-md-4">
+            <label>Ngày sinh</label>
+            <input type="number" name="birth_day" class="form-control" placeholder="01" min="1" max="31" required>
+        </div>
+        <div class="form-group col-md-4">
+            <label>Tháng sinh</label>
+            <input type="number" name="birth_month" class="form-control" placeholder="01" min="1" max="12" required>
+        </div>
+        <div class="form-group col-md-4">
+            <label>Năm sinh</label>
+            <input type="number" name="birth_year" class="form-control" placeholder="1980" required>
+        </div>
+    </div>
+
+    <div class="form-group">
+        <label for="start_work_year">Năm vào công tác</label>
+        <input type="number" name="start_work_year" class="form-control" placeholder="2005" required>
+    </div>
+
+    <div class="form-group">
+        <label for="start_date">Từ ngày</label>
+        <input type="date" name="start_date" class="form-control" required>
+    </div>
+
+    <div class="form-group">
+        <label for="end_date">Đến ngày</label>
+        <input type="date" name="end_date" class="form-control" required>
+    </div>
+
+    <div class="form-group">
+        <label for="reason">Lý do</label>
+        <input type="text" name="reason" class="form-control" required>
+    </div>
+
+    <div class="form-group">
+        <label for="location">Nơi nghỉ phép</label>
+        <input type="text" name="location" class="form-control" required>
+    </div>
+
+    <button type="submit" class="btn btn-success">Lưu</button>
+    <a href="/leaves" class="btn btn-secondary">Huỷ</a>
+    {% endif %}
+</form>
+
+{% endblock %}

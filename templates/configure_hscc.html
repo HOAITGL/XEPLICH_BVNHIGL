@@ -1,0 +1,36 @@
+{% extends 'layout.html' %}
+{% block content %}
+<h3>🧪 Thiết lập khoa trực Hồi sức cấp cứu (HSCC)</h3>
+
+<form method="post" class="mb-3">
+  <input type="text" name="department" placeholder="Nhập tên khoa" class="form-control w-25 d-inline" required>
+  <button class="btn btn-success">Thêm</button>
+</form>
+
+<h5>Danh sách khoa HSCC:</h5>
+
+<table class="table table-bordered w-50">
+  <thead>
+    <tr><th>Khoa HSCC</th><th>Hành động</th></tr>
+  </thead>
+  <tbody>
+    {% for dept in departments %}
+    <tr>
+      <td>
+        <form method="post" action="/configure-hscc/update/{{ dept.id }}" class="d-flex">
+          <input type="text" name="new_name" value="{{ dept.department_name }}" class="form-control me-2" required>
+          <button type="submit" class="btn btn-sm btn-primary">💾</button>
+        </form>
+      </td>
+      <td>
+        <form method="post" action="/configure-hscc/delete/{{ dept.id }}" onsubmit="return confirm('Bạn chắc chắn muốn xóa?')">
+          <button type="submit" class="btn btn-sm btn-danger">🗑️</button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}
+
+

@@ -23,15 +23,6 @@
   <label>Tên ca:</label>
   <input type="text" name="ca_name" required><br><br>
 
-  <label>Bác sĩ:</label>
-  <select name="doctor_id" required>
-    {% for d in doctors %}
-      <option value="{{ d.id }}">{{ d.name }}</option>
-    {% else %}
-      <option disabled>Không có bác sĩ trong khoa</option>
-    {% endfor %}
-  </select><br><br>
-
   <label>Điều dưỡng 1:</label>
   <select name="nurse1_id" required>
     {% for n in nurses %}

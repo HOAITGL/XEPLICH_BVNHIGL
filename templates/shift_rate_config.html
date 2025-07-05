@@ -1,0 +1,58 @@
+{% extends 'layout.html' %}
+
+{% block title %}Cấu hình tiền trực{% endblock %}
+
+{% block content %}
+<h2>⚙️ Cấu hình tiền trực</h2>
+
+<form method="post" class="mb-4">
+  <div class="row g-3">
+    <div class="col-md-3">
+      <label class="form-label">Loại ca</label>
+      <select name="ca_loai" class="form-select">
+        <option>16h</option>
+        <option>24h</option>
+      </select>
+    </div>
+    <div class="col-md-3">
+      <label class="form-label">Loại trực</label>
+      <select name="truc_loai" class="form-select">
+        <option>thường</option>
+        <option>HSCC</option>
+      </select>
+    </div>
+    <div class="col-md-3">
+      <label class="form-label">Loại ngày</label>
+      <select name="ngay_loai" class="form-select">
+        <option>ngày_thường</option>
+        <option>ngày_nghỉ</option>
+        <option>ngày_lễ</option>
+      </select>
+    </div>
+    <div class="col-md-3">
+      <label class="form-label">Đơn giá (VNĐ)</label>
+      <input type="number" name="don_gia" class="form-control" required>
+    </div>
+  </div>
+  <button type="submit" class="btn btn-primary mt-3">+ Thêm mới</button>
+</form>
+
+<table class="table table-bordered table-striped">
+  <thead class="table-dark">
+    <tr>
+      <th>Loại ca</th><th>Loại trực</th><th>Loại ngày</th><th>Đơn giá</th><th>Thao tác</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for r in rates %}
+    <tr>
+      <td>{{ r.ca_loai }}</td>
+      <td>{{ r.truc_loai }}</td>
+      <td>{{ r.ngay_loai }}</td>
+      <td>{{ "{:,.2f}".format(r.don_gia).replace(",", "X").replace(".", ",").replace("X", ".") }}</td>
+      <td><a href="/shift-rate-config/delete/{{ r.id }}" class="btn btn-sm btn-danger">Xóa</a></td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

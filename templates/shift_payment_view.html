@@ -1,0 +1,97 @@
+{% extends 'layout.html' %}
+{% block content %}
+
+<h4 class="fw-bold text-center my-3">
+  BẢNG THANH TOÁN TIỀN TRỰC THÁNG {{ thang }}/{{ nam }}
+</h4>
+
+<div class="d-flex gap-2 mb-3 flex-wrap">
+  <a href="/export-shift-payment-all?mode={{ mode }}&department={{ selected_department }}&start_date={{ start_date }}&end_date={{ end_date }}"
+     class="btn btn-success">⬇️ Xuất Excel</a>
+
+  <a href="/print-shift-payment?mode={{ mode }}&department={{ selected_department }}&start_date={{ start_date }}&end_date={{ end_date }}"
+     class="btn btn-secondary" target="_blank">🖨️ In bảng</a>
+
+  {% if selected_department == 'all' %}
+  <a href="/print-shift-payment-summary?mode={{ mode }}&start_date={{ start_date }}&end_date={{ end_date }}"
+     class="btn btn-dark" target="_blank">🖨️ In bảng tổng hợp</a>
+  {% endif %}
+</div>
+
+<form method="GET" action="/shift-payment-view" class="mb-3 d-flex gap-3 flex-wrap align-items-end">
+  <div>
+    <label for="department">Khoa/Phòng:</label>
+    <select name="department" class="form-select">
+      <option value="all">Tất cả</option>
+      {% for dept in departments %}
+        <option value="{{ dept }}" {% if dept == selected_department %}selected{% endif %}>{{ dept }}</option>
+      {% endfor %}
+    </select>
+  </div>
+
+  <div>
+    <label for="mode">Chế độ:</label>
+    <select name="mode" class="form-select">
+      <option value="16h" {% if mode == '16h' %}selected{% endif %}>Tính theo giờ 16h</option>
+      <option value="24h" {% if mode == '24h' %}selected{% endif %}>Tính theo ca 24h</option>
+    </select>
+  </div>
+
+  <div>
+    <label for="start_date">Từ ngày:</label>
+    <input type="date" name="start_date" value="{{ start_date }}" class="form-control">
+  </div>
+
+  <div>
+    <label for="end_date">Đến ngày:</label>
+    <input type="date" name="end_date" value="{{ end_date }}" class="form-control">
+  </div>
+
+  <button type="submit" class="btn btn-primary">Lọc</button>
+</form>
+
+<table class="table table-bordered table-sm text-center align-middle">
+  <thead class="table-light">
+    <tr>
+      <th rowspan="2">STT</th>
+      <th rowspan="2">HỌ TÊN</th>
+      <th colspan="2">Trực ngày thường</th>
+      <th colspan="2">Trực ngày nghỉ</th>
+      <th colspan="2">Trực ngày lễ</th>
+      <th rowspan="2">Tổng số<br>ngày trực</th>
+      <th rowspan="2">Thành tiền<br>QĐ 73</th>
+      <th rowspan="2">Tiền ăn<br>(15k/ngày)</th>
+      <th rowspan="2">Tổng cộng</th>
+      <th rowspan="2">Ghi chú</th>
+    </tr>
+    <tr>
+      <th>Thường</th>
+      <th>HSCC</th>
+      <th>Thường</th>
+      <th>HSCC</th>
+      <th>Thường</th>
+      <th>HSCC</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for row in rows %}
+    <tr>
+      <td>{{ loop.index }}</td>
+      <td class="text-start">{{ row.user.name }}</td>
+      <td>{{ row.detail[('thường', 'ngày_thường')].so_ngay }}</td>
+      <td>{{ row.detail[('HSCC', 'ngày_thường')].so_ngay }}</td>
+      <td>{{ row.detail[('thường', 'ngày_nghỉ')].so_ngay }}</td>
+      <td>{{ row.detail[('HSCC', 'ngày_nghỉ')].so_ngay }}</td>
+      <td>{{ row.detail[('thường', 'ngày_lễ')].so_ngay }}</td>
+      <td>{{ row.detail[('HSCC', 'ngày_lễ')].so_ngay }}</td>
+      <td>{{ row.tong_ngay }}</td>
+      <td>{{ "{:,.0f}".format(row.tien_ca).replace(",", ".") }}</td>
+      <td>{{ "{:,.0f}".format(row.tien_an).replace(",", ".") }}</td>
+      <td>{{ "{:,.0f}".format(row.tong_tien).replace(",", ".") }}</td>
+      <td>{% if row.is_contract %}HD{% endif %}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+{% endblock %}

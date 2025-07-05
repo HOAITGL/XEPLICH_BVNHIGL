@@ -2,7 +2,7 @@ from models.schedule_lock import ScheduleLock
 
 from functools import wraps
 
-def login_required(f):
+def session_login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
         if 'user_id' not in session:
@@ -11,7 +11,7 @@ def login_required(f):
     return decorated_function
 
 
-from flask import Flask, render_template, request, redirect, session, send_file, flash
+from flask import Flask, render_template, request, redirect, url_for, flash, session
 from flask_login import login_required
 from datetime import datetime, timedelta
 from flask_sqlalchemy import SQLAlchemy
@@ -20,6 +20,9 @@ from models import ScheduleSignature
 from models.ScheduleSignature import ScheduleSignature
 from flask import Flask
 from extensions import db  # Sử dụng đối tượng db đã khởi tạo trong extensions.py
+from flask import session
+from openpyxl import Workbook
+from io import BytesIO
 
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///database.db'
@@ -52,14 +55,14 @@ def admin_required(f):
 
 from flask_login import LoginManager
 
+# Flask-Login
 login_manager = LoginManager()
 login_manager.init_app(app)
-
-from models.user import User
+login_manager.login_view = 'login'
 
 @login_manager.user_loader
 def load_user(user_id):
-    return User.query.get(int(user_id))
+    return db.session.get(User, int(user_id))
 
 # Import models
 from models.user import User
@@ -72,58 +75,479 @@ from models.ca import Ca
 # Import logic
 from scheduler.logic import generate_schedule
 
-@app.before_request
-def require_login():
-    allowed_routes = ['login']
-    if 'user_id' not in session and request.endpoint not in allowed_routes:
-        return redirect('/login')
-
 @app.context_processor
 def inject_user():
-    return {
-        'user': {
-            'role': session.get('role'),
-            'department': session.get('department'),
-            'name': session.get('name')  # <-- cần dòng này!
-        }
-    }
+    user = None
+    if 'user_id' in session:
+        user = db.session.get(User, session['user_id'])
+    return dict(user=user)
+
+
+from flask_login import login_user, logout_user
+from flask import redirect, url_for, flash
+from flask import request, redirect, render_template, flash
+from models.user import User
 
 @app.route('/')
+@login_required
 def index():
     return render_template('index.html')
-
-from flask_login import login_user
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
         username = request.form['username']
         password = request.form['password']
-        user = User.query.filter_by(username=username).first()
-        if user and user.password == password:
-            # Gọi login_user từ Flask-Login
+        user = User.query.filter_by(username=username, password=password).first()
+        session['department'] = user.department  # ✅ Bổ sung dòng này
+        
+        if user:
             login_user(user)
-
-            # Gán session nếu cần sử dụng song song
             session['user_id'] = user.id
             session['role'] = user.role
-            session['department'] = user.department
-
-            flash("✅ Đăng nhập thành công.", "success")
-            return redirect('/')
+            session['department'] = user.department  # ✅ THÊM DÒNG NÀY
+            flash('Đăng nhập thành công!', 'success')
+            return redirect(url_for('index'))
         else:
-            flash("❌ Sai tài khoản hoặc mật khẩu. Vui lòng liên hệ admin.", "danger")
-    return render_template('login.html')
+            flash('Sai tên đăng nhập hoặc mật khẩu.', 'danger')
+            return redirect(url_for('login'))  # ✅ return khi sai
+
+    return render_template('login.html')  # ✅ return khi GET
 
 @app.route('/logout')
+@login_required
 def logout():
-    session.clear()
-    return redirect('/login')
+    logout_user()
+    flash("Bạn đã đăng xuất.", "info")
+    return redirect(url_for('login'))
+
+@app.route('/leaves')
+@login_required
+def view_leaves():
+    from models.leave_request import LeaveRequest
+
+    user_id = session.get('user_id')
+    role = session.get('role')
+
+    if role in ['admin', 'manager']:
+        leaves = LeaveRequest.query.order_by(LeaveRequest.start_date.desc()).all()
+    else:
+        leaves = LeaveRequest.query.filter_by(user_id=user_id).order_by(LeaveRequest.start_date.desc()).all()
+
+    return render_template('leaves.html', leaves=leaves)
+
+from flask_migrate import Migrate
+from extensions import db
+
+migrate = Migrate(app, db)
+
+@app.route('/leaves/add', methods=['GET', 'POST'])
+@login_required
+def add_leave():
+    from models.leave_request import LeaveRequest
+
+    user_role = session.get('role')
+    user_dept = session.get('department')
+    current_user_id = session.get('user_id')
+
+    # ✅ Phân quyền hiển thị danh sách khoa
+    if user_role == 'admin':
+        departments = [d[0] for d in db.session.query(User.department).filter(User.department != None).distinct().all()]
+    else:
+        departments = [user_dept]
+
+    # ✅ Chọn khoa: admin có thể chọn, user thường thì cố định
+    selected_department = (
+        request.form.get('department')
+        if user_role == 'admin'
+        else user_dept
+    )
+
+    # ✅ Admin: chọn user theo khoa. User thường: chỉ chính mình
+    if user_role == 'admin':
+        users = User.query.filter(User.department == selected_department).order_by(User.name).all() if selected_department else []
+    else:
+        users = [User.query.get(current_user_id)]
+
+    if request.method == 'POST' and 'user_id' in request.form:
+        user_id = int(request.form['user_id'])
+        start_date = datetime.strptime(request.form['start_date'], '%Y-%m-%d').date()
+        end_date = datetime.strptime(request.form['end_date'], '%Y-%m-%d').date()
+        reason = request.form.get('reason')
+        location = request.form.get('location')
+
+        # Nhận ngày sinh
+        birth_day = request.form.get('birth_day')
+        birth_month = request.form.get('birth_month')
+        birth_year = request.form.get('birth_year')
+        birth_date_str = f"{birth_year}-{birth_month.zfill(2)}-{birth_day.zfill(2)}"
+
+        # Nhận năm vào công tác
+        start_work_year = int(request.form.get('start_work_year'))
+
+        # Cập nhật năm vào công tác cho user
+        user = User.query.get(user_id)
+        user.start_year = start_work_year
+
+        # Lưu đơn nghỉ phép
+        leave = LeaveRequest(
+            user_id=user_id,
+            start_date=start_date,
+            end_date=end_date,
+            reason=reason,
+            location=location,
+            birth_date=datetime.strptime(birth_date_str, '%Y-%m-%d').date()
+        )
+        db.session.add(leave)
+        db.session.commit()
+        flash("✅ Đã tạo đơn nghỉ phép thành công.", "success")
+        return redirect('/leaves')
+
+    return render_template(
+        'add_leave.html',
+        departments=departments,
+        selected_department=selected_department,
+        users=users
+    )
+
+from models.leave_request import LeaveRequest
+
+from datetime import datetime
+
+
+@property
+def full_name(self):
+    return self.user.name
+
+@property
+def position(self):
+    return self.user.position
+
+@property
+def birth_year(self):
+    return self.birth_date.year if self.birth_date else ""
+
+@property
+def start_work_year(self):
+    return self.user.start_year if hasattr(self.user, 'start_year') else ""
+
+@property
+def leave_days(self):
+    return (self.end_date - self.start_date).days + 1
+
+@app.route('/leaves/delete/<int:leave_id>')
+def delete_leave(leave_id):
+    leave = LeaveRequest.query.get_or_404(leave_id)
+    db.session.delete(leave)
+    db.session.commit()
+    flash('Đã xoá đơn nghỉ phép thành công.', 'success')
+    return redirect(url_for('view_leaves'))
+
+from flask import request, render_template, redirect, session
+from collections import defaultdict
+import csv
+import os
+from models import User  # ✅ đúng
+
+@app.route("/yeu-cau-xu-ly-cong-viec", methods=["GET", "POST"])
+def yeu_cau_xu_ly_cong_viec():
+    if request.method == "POST":
+        ngay_thang = request.form.get("ngay_thang")
+        khoa = request.form.get("khoa")
+        nguoi_yeu_cau = request.form.get("nguoi_yeu_cau")
+        chu_ky = request.form.get("chu_ky")
+        loi = request.form.get("loi")
+        so_ho_so = request.form.get("so_ho_so", "")
+        so_phieu = request.form.get("so_phieu", "")
+        noi_dung = request.form.get("noi_dung", "")
+        xac_nhan = request.form.get("xac_nhan")
+
+        def mark(name):
+            return "✓" if xac_nhan == name else "✗"
+        mark_hoa = mark("Hòa")
+        mark_hiep = mark("Hiệp")
+        mark_anh = mark("Ánh")
+        mark_nam = mark("Nam")
+
+        file_exists = os.path.isfile("data.csv")
+        with open("data.csv", "a", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f)
+            if not file_exists:
+                writer.writerow([
+                    "NGÀY THÁNG", "KHOA / PHÒNG", "LỖI", "SỐ HỒ SƠ", "SỐ PHIẾU", "NỘI DUNG YÊU CẦU CV",
+                    "TÊN NGƯỜI YÊU CẦU", "CHỮ KÝ", "HOÀ", "HIỆP", "ÁNH", "NAM"
+                ])
+            writer.writerow([
+                ngay_thang, khoa, loi, so_ho_so, so_phieu, noi_dung,
+                nguoi_yeu_cau, chu_ky, mark_hoa, mark_hiep, mark_anh, mark_nam
+            ])
+        return redirect("/yeu-cau-xu-ly-cong-viec")
+
+    # ✅ Tạo dict nhân sự theo khoa
+    staff_by_unit = defaultdict(list)
+    users = User.query.filter(User.department != None).all()
+    for user in users:
+        if user.name and user.department:
+            staff_by_unit[user.department].append(user.name)
+    for dept in staff_by_unit:
+        staff_by_unit[dept].sort()
+
+    user_role = session.get('role')
+    user_dept = session.get('department')
+
+    if user_role in ['user', 'manager']:
+        staff_by_unit_filtered = {user_dept: staff_by_unit.get(user_dept, [])}
+        current_department = user_dept
+    else:
+        staff_by_unit_filtered = dict(staff_by_unit)
+        current_department = ""
+
+    return render_template(
+        "form.html",
+        staff_by_unit=staff_by_unit_filtered,
+        current_department=current_department
+    )
+
+@app.route('/api/user-phones')
+def api_user_phones():
+    users = User.query.filter(User.department == 'Phòng Kế hoạch TH - CNTT').all()
+    result = {user.name: user.phone for user in users if user.phone}
+    return result
+
+
+@app.route("/danh-sach-yeu-cau")
+def danh_sach_yeu_cau():
+    import csv
+
+    data = []
+    if os.path.exists("data.csv"):
+        with open("data.csv", "r", encoding="utf-8") as f:
+            reader = csv.reader(f)
+            headers = next(reader, [])
+            for row in reader:
+                if row:
+                    try:
+                        # Chuyển định dạng cột ngày (cột 0) nếu là yyyy-mm-dd
+                        dt_parts = row[0].split("-")
+                        if len(dt_parts) == 3:
+                            row[0] = f"{dt_parts[2]}/{dt_parts[1]}/{dt_parts[0]}"
+                    except:
+                        pass
+                    data.append(row)
+
+    else:
+        headers = []
+
+    month = datetime.today().month
+    return render_template("danh_sach_yeu_cau.html", headers=headers, data=data, month=month)
+
+from flask import send_file
+import pandas as pd
+
+@app.route('/xuat-excel')
+def xuat_excel():
+    try:
+        df = pd.read_csv("data.csv", encoding="utf-8")
+        file_path = "yeu_cau_cong_viec.xlsx"
+        df.to_excel(file_path, index=False)
+        return send_file(file_path, as_attachment=True)
+    except Exception as e:
+        return f"Lỗi khi xuất Excel: {str(e)}"
+
+from flask import render_template
+from datetime import datetime
+from models.leave_request import LeaveRequest
+import os
+
+@app.route('/leaves/print/<int:leave_id>')
+def print_leave(leave_id):
+    leave = LeaveRequest.query.get_or_404(leave_id)
+    return render_template('leave/leave_print.html', leave=leave, now=datetime.now())
+
+from flask import send_file
+from io import BytesIO
+from docx import Document
+from docx.shared import Pt
+from docx.oxml import OxmlElement
+from docx.oxml.ns import qn
+from docx.enum.text import WD_ALIGN_PARAGRAPH
+
+@app.route('/leaves/word/<int:leave_id>')
+def export_leave_word(leave_id):
+    from models.leave_request import LeaveRequest
+    from models.user import User
+
+    leave = LeaveRequest.query.get_or_404(leave_id)
+    user = User.query.get(leave.user_id)
+
+    document = Document()
+
+    # Đặt font chữ mặc định cho toàn bộ văn bản
+    style = document.styles['Normal']
+    font = style.font
+    font.name = 'Times New Roman'
+    font.size = Pt(14)
+    font.element.rPr.rFonts.set(qn('w:eastAsia'), 'Times New Roman')
+
+    # Header: bảng 2 cột
+    table = document.add_table(rows=1, cols=2)
+    table.autofit = False
+    table.columns[0].width = Pt(260)
+    table.columns[1].width = Pt(260)
+    cells = table.rows[0].cells
+
+    # BÊNH VIỆN NHI TỈNH GIA LAI + Phòng ban (in hoa, in đậm, border bottom)
+    p_left = cells[0].paragraphs[0]
+    p_left.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    run = p_left.add_run("BỆNH VIỆN NHI TỈNH GIA LAI\n")
+    run.bold = True
+    run.font.size = Pt(13)
+    run = p_left.add_run(user.department.upper())
+    run.bold = True
+    run.font.size = Pt(14)
+
+    # Border bottom cho đoạn bên trái
+    p = p_left._p
+    pPr = p.get_or_add_pPr()
+    pBdr = OxmlElement('w:pBdr')
+    bottom = OxmlElement('w:bottom')
+    bottom.set(qn('w:val'), 'single')
+    bottom.set(qn('w:sz'), '4')
+    bottom.set(qn('w:space'), '1')
+    bottom.set(qn('w:color'), '000000')
+    pBdr.append(bottom)
+    pPr.append(pBdr)
+
+    # CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM + Độc lập - Tự do - Hạnh phúc
+    p_right = cells[1].paragraphs[0]
+    p_right.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    run = p_right.add_run("CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM\n")
+    run.bold = True
+    run.font.size = Pt(14)
+    run = p_right.add_run("Độc lập - Tự do - Hạnh phúc")
+    run.bold = True
+    run.italic = True
+    run.font.size = Pt(14)
+    run.font.underline = True
+
+    document.add_paragraph()  # Dòng trống
+
+    # Tiêu đề chính giữa
+    title = document.add_paragraph("ĐƠN XIN NGHỈ PHÉP")
+    title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    run_title = title.runs[0]
+    run_title.bold = True
+    run_title.font.size = Pt(14)
+    run_title.text = run_title.text.upper()
+
+    # Kính gửi (in nghiêng, đậm, thụt lề 1cm)
+    p_kg = document.add_paragraph()
+    p_kg.paragraph_format.left_indent = Pt(28)
+    run_kg = p_kg.add_run("Kính gửi:")
+    run_kg.bold = True
+    run_kg.italic = True
+    run_kg.font.size = Pt(14)
+
+    # Danh sách kính gửi, thụt lề 3cm
+    p_list = document.add_paragraph()
+    p_list.paragraph_format.left_indent = Pt(85)
+    p_list.paragraph_format.line_spacing = 1.4
+    p_list.add_run("- Giám đốc Bệnh viện Nhi tỉnh Gia Lai\n")
+    p_list.add_run("- Phòng Tổ chức - Hành chính quản trị\n")
+    p_list.add_run(f"- {user.department}")
+
+    # Thông tin người làm đơn
+    p_name = document.add_paragraph()
+    p_name.add_run("Tên tôi là: ").font.size = Pt(14)
+    run_name = p_name.add_run(user.name.upper())
+    run_name.bold = True
+    run_name.font.size = Pt(14)
+    p_name.add_run("    Sinh ngày: ").font.size = Pt(14)
+    run_birth = p_name.add_run(leave.birth_date.strftime('%d/%m/%Y') if leave.birth_date else '')
+    run_birth.bold = True
+    run_birth.font.size = Pt(14)
+
+    p_pos = document.add_paragraph()
+    p_pos.add_run(f"Chức vụ: {user.position}    ").font.size = Pt(14)
+    p_pos.add_run("Năm vào công tác: ......................").font.size = Pt(14)
+
+    p_dep = document.add_paragraph(f"Đơn vị công tác: {user.department} - Bệnh viện Nhi tỉnh Gia Lai")
+    p_dep.style.font.size = Pt(14)
+
+    # Nội dung đơn
+    document.add_paragraph(
+        "Nay tôi làm đơn này trình Ban Giám đốc, Phòng Tổ chức - Hành chính quản trị xem xét và sắp xếp cho tôi được nghỉ phép.")
+    document.add_paragraph(
+        f"Thời gian nghỉ: từ ngày {leave.start_date.strftime('%d/%m/%Y')} đến ngày {leave.end_date.strftime('%d/%m/%Y')}.")
+    document.add_paragraph(f"Lý do: {leave.reason}")
+    document.add_paragraph(f"Nơi nghỉ phép: {leave.location}")
+    document.add_paragraph("Tôi xin cam đoan sẽ bàn giao công việc đầy đủ và trở lại làm việc đúng thời gian quy định.")
+    document.add_paragraph("Vậy kính mong các cấp giải quyết, tôi xin chân thành cảm ơn./.")
+
+    # Footer ngày tháng căn phải, in nghiêng
+    date_str = leave.start_date.strftime("Gia Lai, ngày %d tháng %m năm %Y") if leave.start_date else ""
+    p_footer = document.add_paragraph(date_str)
+    p_footer.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+    p_footer.runs[0].italic = True
+    p_footer.runs[0].font.size = Pt(14)
+
+    # Bảng ký tên 3 cột căn giữa
+    sign_table = document.add_table(rows=2, cols=3)
+    sign_table.autofit = False
+    widths = [Pt(180), Pt(180), Pt(180)]
+    for idx, width in enumerate(widths):
+        sign_table.columns[idx].width = width
+
+    # Dòng 1
+    cells = sign_table.rows[0].cells
+    cells[0].text = user.department.upper()
+    cells[1].text = "Người làm đơn"
+    cells[2].text = "Giám đốc\nPhòng Tổ chức – HC QT"
+    for cell in cells:
+        for p in cell.paragraphs:
+            p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            for run in p.runs:
+                run.font.size = Pt(14)
+                run.bold = True
+
+    # Dòng 2
+    cells = sign_table.rows[1].cells
+    cells[0].text = ""
+    cells[1].text = "(Ký và ghi rõ họ tên)"
+    cells[2].text = ""
+    for cell in cells:
+        for p in cell.paragraphs:
+            p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            for run in p.runs:
+                run.font.size = Pt(14)
+                run.italic = True
+
+    # Tên người làm đơn căn giữa phía dưới bảng ký
+    p_name_sign = document.add_paragraph(user.name.upper())
+    p_name_sign.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    p_name_sign.runs[0].font.size = Pt(14)
+
+    # Xuất file Word
+    stream = BytesIO()
+    document.save(stream)
+    stream.seek(0)
+
+    return send_file(
+        stream,
+        as_attachment=True,
+        download_name=f"don_nghi_phep_{leave.id}.docx",
+        mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    )
+
+@app.route('/test-export')
+def test_export():
+    return "Route hoạt động"
 
 @app.route('/assign', methods=['GET', 'POST'])
 def assign_schedule():
     from flask import flash
     from datetime import datetime, timedelta
+    from models.leave_request import LeaveRequest
 
     user_role = session.get('role')
     user_dept = session.get('department')
@@ -137,10 +561,17 @@ def assign_schedule():
     users = User.query.filter_by(department=selected_department).all() if selected_department else []
     shifts = Shift.query.all()
 
+    leaves = []  # mặc định
     if request.method == 'POST':
         start_date = datetime.strptime(request.form['start_date'], '%Y-%m-%d').date()
         end_date = datetime.strptime(request.form['end_date'], '%Y-%m-%d').date()
         duplicated_entries = []
+
+        # Lấy danh sách nghỉ phép trong khoảng thời gian
+        leaves = LeaveRequest.query.filter(
+            LeaveRequest.start_date <= end_date,
+            LeaveRequest.end_date >= start_date
+        ).all()
 
         for checkbox in request.form.getlist('schedule'):
             user_id, shift_id = checkbox.split('-')
@@ -167,7 +598,13 @@ def assign_schedule():
 
         return redirect('/assign?department=' + selected_department)
 
-    return render_template('assign.html', departments=departments, selected_department=selected_department, users=users, shifts=shifts)
+    return render_template('assign.html',
+        departments=departments,
+        selected_department=selected_department,
+        users=users,
+        shifts=shifts,
+        leaves=leaves
+    )
 
 @app.route('/auto-assign')
 def auto_assign_page():
@@ -185,24 +622,147 @@ def auto_assign_page():
                            users=users,
                            shifts=shifts)
 
+def get_departments():
+    return [d[0] for d in db.session.query(User.department).distinct().all() if d[0]]
+
+@app.route('/auto-attendance', methods=['GET', 'POST'])
+def auto_attendance_page():
+    from models.user import User
+    from models.shift import Shift
+    from models.schedule import Schedule  # model lịch trực
+    from models.attendance import Attendance
+    from datetime import datetime, timedelta
+    from flask import request, redirect, url_for, flash, render_template
+
+    departments = get_departments()
+
+    if request.method == 'POST':
+        selected_department = request.form.get('department')
+    else:
+        selected_department = request.args.get('department')
+
+    day_shifts = Shift.query.filter(Shift.name.ilike('%làm ngày%')).all()
+
+    if selected_department:
+        users = User.query.filter_by(department=selected_department).order_by(User.name).all()
+    else:
+        users = []
+
+    if request.method == 'POST':
+        selected_department = request.form.get('department')
+        start_date_str = request.form.get('start_date')
+        end_date_str = request.form.get('end_date')
+        shift_code = request.form.get('shift_code')
+        staff_ids = request.form.getlist('staff_ids')
+
+        if not (selected_department and start_date_str and end_date_str and shift_code and staff_ids):
+            flash('Vui lòng chọn đầy đủ thông tin.', 'danger')
+            return redirect(url_for('auto_attendance_page'))
+
+        start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+        end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+
+        shift = Shift.query.filter_by(code=shift_code).first()
+        if not shift:
+            flash('Ca làm không hợp lệ.', 'danger')
+            return redirect(url_for('auto_attendance_page'))
+
+        staff_members = User.query.filter(User.id.in_(staff_ids)).all()
+
+        current_date = start_date
+        try:
+            while current_date <= end_date:
+                for staff in staff_members:
+                    schedule = Schedule(
+                        user_id=staff.id,
+                        work_date=current_date,
+                        shift_id=shift.id
+                    )
+                    db.session.add(schedule)
+                current_date += timedelta(days=1)
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Lỗi khi lưu lịch trực: {e}', 'danger')
+            return redirect(url_for('auto_attendance_page', department=selected_department))
+
+        flash(f'Đã tạo lịch trực cho {len(staff_members)} nhân viên từ {start_date} đến {end_date}.', 'success')
+        return redirect(url_for('auto_attendance_page', department=selected_department))
+
+    return render_template('auto_attendance.html',
+                           departments=departments,
+                           selected_department=selected_department,
+                           users=users,
+                           day_shifts=day_shifts)
+
+@app.route('/sync-attendance', methods=['POST'])
+def sync_attendance():
+    from models.schedule import Schedule
+    from models.attendance import Attendance
+    from models.user import User
+    from datetime import datetime
+    from flask import request, flash, redirect, url_for
+    from extensions import db
+
+    start_date_str = request.form.get('start_date')
+    end_date_str = request.form.get('end_date')
+    department = request.form.get('department')
+
+    if not (start_date_str and end_date_str and department):
+        flash('Vui lòng cung cấp đủ thông tin: khoa, từ ngày, đến ngày.', 'danger')
+        return redirect(url_for('auto_attendance_page'))
+
+    start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+    end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+
+    # Lấy tất cả lịch trực trong khoảng ngày và khoa được chọn
+    schedules = Schedule.query.join(Schedule.user).filter(
+        User.department == department,
+        Schedule.work_date >= start_date,
+        Schedule.work_date <= end_date
+    ).all()
+
+    # Xóa dữ liệu Attendance cũ trong khoảng thời gian và khoa để tránh trùng lặp
+    Attendance.query.filter(
+        Attendance.department == department,
+        Attendance.date >= start_date,
+        Attendance.date <= end_date
+    ).delete()
+
+    # Thêm dữ liệu Attendance mới dựa trên Schedule
+    for schedule in schedules:
+        attendance = Attendance(
+            user_id=schedule.user_id,
+            date=schedule.work_date,
+            shift_id=schedule.shift_id,
+            department=department,
+            status='Công'
+        )
+        db.session.add(attendance)
+
+    db.session.commit()
+    flash(f'Đã đồng bộ {len(schedules)} bản ghi lịch trực sang bảng chấm công.', 'success')
+    return redirect(url_for('auto_attendance_page', department=department))
+
+from flask import Flask, request, render_template, redirect, url_for, flash, session
+from datetime import datetime, timedelta
+from extensions import db
+from models.user import User
+from models.shift import Shift
+from models.schedule import Schedule
+
 @app.route('/schedule', methods=['GET', 'POST'])
 def view_schedule():
     selected_department = request.args.get('department')
     user_role = session.get('role')
     user_dept = session.get('department')
 
-    # Giới hạn department nếu là manager/user
     if user_role in ['manager', 'user']:
         selected_department = user_dept
 
-    # Lấy danh sách khoa
-    if user_role == 'admin':
-        departments = [d[0] for d in db.session.query(User.department)
-                       .filter(User.department.isnot(None)).distinct().all()]
-    else:
-        departments = [user_dept]
+    departments = [d[0] for d in db.session.query(User.department)
+                   .filter(User.department.isnot(None)).distinct().all()] if user_role == 'admin' else [user_dept]
 
-    # Ngày bắt đầu và kết thúc
     start_date_str = request.args.get('start_date')
     end_date_str = request.args.get('end_date')
     if start_date_str and end_date_str:
@@ -212,7 +772,6 @@ def view_schedule():
         start_date = datetime.today().date()
         end_date = start_date + timedelta(days=6)
 
-    # Truy vấn lịch
     query = Schedule.query.join(User).join(Shift)\
         .filter(Schedule.work_date.between(start_date, end_date))
 
@@ -222,7 +781,6 @@ def view_schedule():
     schedules = query.order_by(Schedule.work_date).all()
     date_range = sorted({s.work_date for s in schedules})
 
-    # Tổ chức lại dữ liệu
     schedule_data = {}
     for s in schedules:
         u = s.user
@@ -241,37 +799,23 @@ def view_schedule():
             'shift_name': s.shift.name
         }
 
-    # Lọc dữ liệu cần in
     filtered_for_print = {
         uid: data for uid, data in schedule_data.items()
-        if any("trực" in s['shift_name'].lower() for s in data['shifts_full'].values())
+        if any(s['shift_name'].strip().lower().startswith("trực") for s in data['shifts_full'].values())
     }
 
-    # Kiểm tra chữ ký
     signature = ScheduleSignature.query.filter_by(
         department=selected_department,
         from_date=start_date,
         to_date=end_date
     ).first()
-    is_signed = bool(signature)
-    signed_at = signature.signed_at if signature else None
 
-    # Kiểm tra khóa
     lock = ScheduleLock.query.filter_by(
         department=selected_department,
         start_date=start_date,
         end_date=end_date
     ).first()
-    
-    locked = bool(lock)
 
-    user = {
-        'role': session.get('role'),
-        'department': session.get('department'),
-        'name': session.get('name')
-    }
-
-    # Truyền thông tin vào template
     return render_template(
         'schedule.html',
         departments=departments,
@@ -282,12 +826,12 @@ def view_schedule():
         start_date=start_date,
         end_date=end_date,
         now=datetime.now(),
-        is_signed=is_signed,
-        signed_at=signed_at,
-        locked=locked,
+        is_signed=bool(signature),
+        signed_at=signature.signed_at if signature else None,
+        locked=bool(lock),
         user={
-            'role': session.get('role'),
-            'department': session.get('department'),
+            'role': user_role,
+            'department': user_dept,
             'name': session.get('name')
         }
     )
@@ -494,10 +1038,13 @@ def users_by_department():
         else:
             users = User.query.order_by(User.department, User.name).all()
 
-    return render_template('users_by_department.html',
-                           users=users,
-                           departments=departments,
-                           selected_department=selected_department)
+    return render_template(
+        'users_by_department.html',
+        users=users,
+        departments=departments,
+        selected_department=selected_department,
+        current_user_role=user_role  # Truyền vào để template biết đang là role gì
+    )
 
 @app.route('/export-by-department', methods=['GET', 'POST'])
 def export_by_department():
@@ -537,6 +1084,8 @@ def export_by_department():
 
 @app.route('/generate_schedule', methods=['GET', 'POST'])
 def generate_schedule_route():
+    from models.leave_request import LeaveRequest
+
     try:
         department = request.form.get('department')
         start_date = datetime.strptime(request.form['start_date'], '%Y-%m-%d').date()
@@ -548,28 +1097,46 @@ def generate_schedule_route():
             flash("⚠️ Vui lòng chọn ít nhất 1 người và 1 ca trực.", "danger")
             return redirect(request.referrer)
 
-        shift_id = int(shift_ids[0])  # chỉ dùng ca đầu tiên được chọn
-        date_range = [start_date + timedelta(days=i) for i in range((end_date - start_date).days + 1)]
+        user_ids = [int(uid) for uid in user_ids]
+        shift_ids = [int(sid) for sid in shift_ids]
+        user_count = len(user_ids)
 
+        date_range = [start_date + timedelta(days=i) for i in range((end_date - start_date).days + 1)]
         assignments = []
         conflicts = []
 
-        user_ids = [int(uid) for uid in user_ids]
-        user_count = len(user_ids)
-        for idx, work_date in enumerate(date_range):
-            uid = user_ids[idx % user_count]
+        # 📥 Lấy danh sách nghỉ phép
+        leaves = LeaveRequest.query.filter(
+            LeaveRequest.start_date <= end_date,
+            LeaveRequest.end_date >= start_date
+        ).all()
 
-            existing = Schedule.query.filter_by(user_id=uid, work_date=work_date).first()
-            if existing:
-                user = User.query.get(uid)
-                conflicts.append(f"🔁 {user.name} đã có lịch ngày {work_date.strftime('%d/%m/%Y')}")
-            else:
+        # 🧠 Vòng lặp theo từng ngày và từng ca
+        for date_idx, work_date in enumerate(date_range):
+            for shift_idx, shift_id in enumerate(shift_ids):
+                user_index = (date_idx * len(shift_ids) + shift_idx) % user_count
+                uid = user_ids[user_index]
+
+                # ❌ Nếu user đang nghỉ phép
+                if any(leave.user_id == uid and leave.start_date <= work_date <= leave.end_date for leave in leaves):
+                    user = User.query.get(uid)
+                    conflicts.append(f"📆 {user.name} đang nghỉ phép ngày {work_date.strftime('%d/%m/%Y')}")
+                    continue
+
+                # ❌ Kiểm tra lịch trùng (cùng người, cùng ca, cùng ngày)
+                exists = Schedule.query.filter_by(user_id=uid, shift_id=shift_id, work_date=work_date).first()
+                if exists:
+                    user = User.query.get(uid)
+                    conflicts.append(f"🔁 {user.name} đã có lịch trực {int(exists.shift.duration)}h ngày {work_date.strftime('%d/%m/%Y')}")
+                    continue
+
+                # ✅ Thêm lịch mới
                 assignments.append(Schedule(user_id=uid, shift_id=shift_id, work_date=work_date))
 
         if assignments:
             db.session.add_all(assignments)
             db.session.commit()
-            flash("✅ Đã tạo lịch tự động theo tua thành công.", "success")
+            flash("✅ Đã tạo lịch trực tự động thành công.", "success")
 
         for msg in conflicts:
             flash(msg, "danger")
@@ -614,7 +1181,6 @@ def list_shifts():
 from flask import render_template, request, redirect, flash
 from datetime import datetime
 from models import Shift  # đảm bảo đã import đúng
-from app import db
 
 def parse_time_string(time_str):
     for fmt in ("%H:%M:%S", "%H:%M"):
@@ -793,6 +1359,8 @@ def edit_user(user_id):
 
 @app.route('/users/add', methods=['GET', 'POST'])
 def add_user():
+    current_role = session.get('role')
+
     if request.method == 'POST':
         name = request.form['name']
         username = request.form['username']
@@ -803,6 +1371,10 @@ def add_user():
         contract_type = request.form.get('contract_type')
         phone = request.form.get('phone')
         email = request.form.get('email')
+
+        # ⚠️ Nếu là manager thì luôn ép vai trò nhân viên mới là 'user'
+        if current_role == 'manager':
+            role = 'user'
 
         # Kiểm tra trùng username
         existing_user = User.query.filter_by(username=username).first()
@@ -844,17 +1416,20 @@ def import_users():
             for idx, row in enumerate(sheet.iter_rows(min_row=2, values_only=True), start=2):
                 if not any(row):
                     continue
-                row = row[:9]  # Lấy đúng 9 cột
-                if len(row) < 6:
-                    continue
-
-                name, username, password, role, department, position = row[:6]
+                # Gán đúng thứ tự theo file:
+                name          = row[0]
+                username      = row[1]
+                password      = row[2]
+                role          = row[3]
+                department    = row[4]
+                position      = row[5]
                 contract_type = row[6] if len(row) > 6 else None
                 email         = row[7] if len(row) > 7 else None
                 phone         = row[8] if len(row) > 8 else None
 
-                if User.query.filter_by(username=username).first():
-                    skipped_users.append(username)
+                # Bỏ qua nếu thiếu tên đăng nhập hoặc đã tồn tại
+                if not username or User.query.filter_by(username=username).first():
+                    skipped_users.append(username or f"Hàng {idx}")
                     continue
 
                 user = User(
@@ -875,22 +1450,26 @@ def import_users():
                 db.session.commit()
             except IntegrityError:
                 db.session.rollback()
-                flash("❌ Lỗi khi lưu dữ liệu. Vui lòng kiểm tra file Excel.", "danger")
+                flash("❌ Lỗi khi lưu dữ liệu. Vui lòng kiểm tra nội dung file Excel.", "danger")
                 return redirect('/users-by-department')
 
-            # ✅ Gửi thông báo kết quả
             if skipped_users:
-                flash(f"⚠️ Đã nhập {imported_count} người dùng. Các tài khoản bị bỏ qua do trùng tên đăng nhập: {', '.join(skipped_users)}", "warning")
+                flash(f"⚠️ Đã nhập {imported_count} người dùng. Bỏ qua: {', '.join(skipped_users)}", "warning")
             else:
                 flash(f"✅ Đã nhập thành công {imported_count} người dùng.", "success")
 
             return redirect('/users-by-department')
-
         else:
-            flash("❌ Vui lòng chọn file Excel định dạng .xlsx", "danger")
+            flash("❌ Vui lòng chọn file Excel (.xlsx)", "danger")
             return redirect('/import-users')
 
     return render_template('import_users.html')
+
+import logging
+from datetime import datetime
+
+# Thiết lập file log
+logging.basicConfig(filename='phanquyen.log', level=logging.INFO)
 
 @app.route('/roles', methods=['GET', 'POST'])
 def manage_roles():
@@ -903,16 +1482,64 @@ def manage_roles():
         for user in users:
             role = request.form.get(f'role_{user.id}')
             dept = request.form.get(f'department_{user.id}')
-            if role and dept:
+            position = request.form.get(f'position_{user.id}')
+            if role and dept and position:
+                # Ghi nhật ký nếu có thay đổi
+                if (user.role != role) or (user.department != dept) or (user.position != position):
+                    logging.info(f"{datetime.now()} | Admin ID {session['user_id']} cập nhật: {user.username} → "
+                                 f"Role: {user.role} → {role}, Dept: {user.department} → {dept}, Position: {user.position} → {position}")
                 user.role = role
                 user.department = dept
+                user.position = position
         db.session.commit()
+        flash("✅ Đã lưu thay đổi phân quyền người dùng.", "success")
         return redirect('/roles')
 
     departments = [d[0] for d in db.session.query(User.department).distinct().all() if d[0]]
-    roles = ['admin', 'manager', 'user']  # cập nhật quyền hệ thống
-    positions = ['Bác sĩ', 'Điều dưỡng', 'Kỹ thuật viên']  # chức danh chuyên môn
-    return render_template('manage_roles.html', users=users, departments=departments, roles=roles, positions=positions)
+    roles = ['admin', 'manager', 'user']
+    positions = ['Bác sĩ', 'Điều dưỡng', 'Kỹ thuật viên']
+    return render_template('manage_roles.html',
+                           users=users,
+                           departments=departments,
+                           roles=roles,
+                           positions=positions)
+
+@app.route("/view-log")
+def view_log():
+    try:
+        # Cố gắng đọc bằng UTF-8 thông thường
+        with open("log.txt", "r", encoding="utf-8") as f:
+            log_lines = f.readlines()
+    except UnicodeDecodeError:
+        # Nếu lỗi, đọc lại bằng UTF-8-SIG và thay ký tự lỗi
+        with open("log.txt", "r", encoding="utf-8-sig", errors="replace") as f:
+            log_lines = f.readlines()
+    except FileNotFoundError:
+        log_lines = ["⚠️ Không tìm thấy file log.txt"]
+
+    return render_template("log.html", log_lines=log_lines)
+
+from flask import send_file
+
+@app.route('/download-log')
+def download_log():
+    if session.get('role') != 'admin':
+        return "Bạn không có quyền tải nhật ký hệ thống."
+    try:
+        return send_file('phanquyen.log', as_attachment=True, download_name='nhatky_phanquyen.txt')
+    except FileNotFoundError:
+        return "Không tìm thấy file nhật ký."
+
+@app.route('/clear-log', methods=['POST'])
+def clear_log():
+    if session.get('role') != 'admin':
+        return "Bạn không có quyền xóa nhật ký."
+    try:
+        open('phanquyen.log', 'w').close()  # Xóa nội dung file
+        flash("🗑️ Đã xóa toàn bộ nội dung nhật ký.", "success")
+    except Exception as e:
+        flash(f"Lỗi khi xóa nhật ký: {str(e)}", "danger")
+    return redirect('/view-log')
 
 @app.route('/users/delete/<int:user_id>', methods=['POST', 'GET'])
 def delete_user(user_id):
@@ -1127,15 +1754,6 @@ def bang_cham_cong():
                     now=now
     )
 
-from flask import send_file, request
-from io import BytesIO
-import openpyxl
-
-from flask import request, send_file
-from io import BytesIO
-import openpyxl
-from datetime import datetime
-
 from flask import request, send_file
 from io import BytesIO
 import openpyxl
@@ -1254,6 +1872,7 @@ from io import BytesIO
 def report_all():
     start_str = request.args.get('start')
     end_str = request.args.get('end')
+
     if start_str and end_str:
         start_date = datetime.strptime(start_str, '%Y-%m-%d').date()
         end_date = datetime.strptime(end_str, '%Y-%m-%d').date()
@@ -1261,35 +1880,78 @@ def report_all():
         start_date = datetime.today().date()
         end_date = start_date + timedelta(days=6)
 
-    schedules = Schedule.query.join(User).join(Shift) \
-        .filter(Schedule.work_date.between(start_date, end_date)) \
-        .order_by(Schedule.user_id, Schedule.work_date).all()
-
-    print(f"[DEBUG] Found {len(schedules)} schedule entries")  # 🚧 debug
+    schedules = Schedule.query.join(User).join(Shift).filter(
+        Schedule.work_date.between(start_date, end_date),
+        Schedule.shift_id != None,
+        User.department != None
+    ).order_by(User.department, Schedule.work_date).all()
 
     grouped = {}
+
     for s in schedules:
-        key = (s.user.department or 'Khác', s.user.position or '')
-        day_key = s.work_date.strftime('%a %d/%m')
+        shift_name = s.shift.name.strip().lower()
 
-        # Lọc chỉ những ca có từ "trực"
-        if 'trực' in s.shift.name.lower():
-            grouped.setdefault(key, {})
-            grouped[key].setdefault(day_key, "")
-            grouped[key][day_key] += f"{s.user.name} ({s.shift.name})\n"
+        # ✅ Chỉ lấy các ca thật sự là "trực", bỏ "làm ngày", "nghỉ phép",...
+        if not shift_name.startswith('trực'):
+            continue
 
-    # Loại bỏ các dòng không có nội dung ca trực nào
-    grouped = {k: v for k, v in grouped.items() if any(v.values())}
+        dept = s.user.department.strip() if s.user.department else 'Khác'
+        key = s.work_date.strftime('%a %d/%m')
+        position = s.user.position.strip() if s.user.position else ''
+        name = s.user.name.strip()
 
+        # ✅ Gắn chức vụ nếu tên chưa có sẵn
+        display_name = name if name.startswith(position) else f"{position}. {name}" if position else name
+
+        # ✅ Tên ca trực ngắn gọn
+        if 'thường trú' in shift_name:
+            ca_text = 'Trực thường trú'
+        elif '24' in shift_name:
+            ca_text = 'Trực 24h'
+        elif '16' in shift_name:
+            ca_text = 'Trực 16h'
+        elif '8' in shift_name:
+            ca_text = 'Trực 8h'
+        else:
+            ca_text = f"Trực {int(s.shift.duration)}h"
+
+        line = f"{display_name} ({ca_text})"
+
+        grouped.setdefault(dept, {})
+        grouped[dept].setdefault(key, [])
+        grouped[dept][key].append((position, line))
+
+    # ✅ Sắp xếp từng ngày theo chức vụ
+    grouped_by_dept = {
+        dept: {
+            day: sorted(entries, key=lambda x: x[0]) for day, entries in dept_data.items()
+        }
+        for dept, dept_data in grouped.items() if any(dept_data.values())
+    }
+
+    # ✅ Ban giám đốc đứng đầu, sau đó là các khoa còn lại
+    def sort_priority(name):
+        name = name.lower()
+        if 'giám đốc' in name:
+            return '1_' + name
+        elif 'ban giám' in name:
+            return '1_' + name
+        elif 'khoa' in name:
+            return '2_' + name
+        else:
+            return '3_' + name
+
+    dept_ordered = sorted(grouped_by_dept.keys(), key=sort_priority)
     date_range = [start_date + timedelta(days=i) for i in range((end_date - start_date).days + 1)]
 
-    print("[DEBUG] Grouped keys:", grouped.keys())
-
-    return render_template('report_all.html',
-                           grouped=grouped,
-                           date_range=date_range,
-                           start_date=start_date,
-                           end_date=end_date)
+    return render_template(
+        'report_all.html',
+        grouped_by_dept=grouped_by_dept,
+        dept_ordered=dept_ordered,
+        date_range=date_range,
+        start_date=start_date,
+        end_date=end_date
+    )
 
 @app.route('/export-report-all')
 def export_report_all():
@@ -1409,130 +2071,86 @@ from models.ca import Ca
 
 @app.route('/generate-ca', methods=['GET', 'POST'])
 def generate_ca_schedule_route():
-    if session.get('role') not in ['admin', 'manager']:
-        return "Chỉ admin hoặc manager được phép tạo lịch ca trực."
+    from models import Ca, Schedule, Shift, CaConfiguration, User
 
-    user_role = session.get('role')
-    user_dept = session.get('department')
+    selected_department = request.args.get('department') or request.form.get('department')
+    model_type = request.form.get('model_type')
+    start_date_str = request.form.get('start_date')
+    end_date_str = request.form.get('end_date')
 
-    if user_role == 'admin':
-        departments = [d[0] for d in db.session.query(User.department).filter(User.department != None).distinct().all()]
-    else:
-        departments = [user_dept]
+    # Lấy danh sách khoa có trong hệ thống
+    departments = [d[0] for d in db.session.query(User.department).filter(User.department != None).distinct().all()]
+    selected_config = None
+    if selected_department:
+        selected_config = CaConfiguration.query.filter_by(department=selected_department).first()
 
-    selected_department = (
-        request.form.get('department') if request.method == 'POST'
-        else request.args.get('department') or (departments[0] if departments else None)
-    )
-
-    if user_role != 'admin':
-        selected_department = user_dept
-
-    selected_config = CaConfiguration.query.filter_by(department=selected_department).first() if selected_department else None
-
-    model_type = request.form.get('model_type') if request.method == 'POST' else None
-    start_date_str = request.form.get('start_date') if request.method == 'POST' else None
-    end_date_str = request.form.get('end_date') if request.method == 'POST' else None
-
-    if request.method == 'POST':
-        if not start_date_str or not end_date_str:
-            return render_template('generate_ca_form.html',
-                                   departments=departments,
-                                   selected_department=selected_department,
-                                   selected_config=selected_config,
-                                   model_type=model_type,
-                                   start_date=start_date_str,
-                                   end_date=end_date_str,
-                                   message="Vui lòng chọn đầy đủ ngày bắt đầu và kết thúc.")
-
-        try:
-            start = datetime.strptime(start_date_str, '%Y-%m-%d').date()
-            end = datetime.strptime(end_date_str, '%Y-%m-%d').date()
-        except ValueError:
-            return render_template('generate_ca_form.html',
-                                   departments=departments,
-                                   selected_department=selected_department,
-                                   selected_config=selected_config,
-                                   model_type=model_type,
-                                   start_date=start_date_str,
-                                   end_date=end_date_str,
-                                   message="Định dạng ngày không hợp lệ.")
-
-        if not selected_config:
-            return render_template('generate_ca_form.html',
-                                   departments=departments,
-                                   selected_department=selected_department,
-                                   selected_config=None,
-                                   model_type=model_type,
-                                   start_date=start_date_str,
-                                   end_date=end_date_str,
-                                   message="Chưa cấu hình ca cho khoa này.")
+    # Nếu là POST và đủ dữ liệu thì tiến hành tạo lịch
+    if request.method == 'POST' and selected_department and start_date_str and end_date_str:
+        start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+        end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+        days = (end_date - start_date).days + 1
 
         cas = Ca.query.filter_by(department=selected_department).all()
         shifts = Shift.query.all()
-        if not cas or not shifts:
-            return render_template('generate_ca_form.html',
-                                   departments=departments,
-                                   selected_department=selected_department,
-                                   selected_config=selected_config,
-                                   model_type=model_type,
-                                   start_date=start_date_str,
-                                   end_date=end_date_str,
-                                   message="Chưa có ca hoặc ca trực (shift) nào được tạo cho khoa này.")
 
-        def generate_2ca3kip_pattern(i):
+        if len(cas) < 3:
+            flash("Phải có ít nhất 3 ca để chạy lịch 2 ca 3 kíp", "danger")
+            return redirect(request.url)
+
+        # Tạo mô hình 2 ca 3 kíp
+        def pattern_2ca3kip(i):
             cycle = [
-                [("Ca 1", "day"), ("Ca 2", "night")],
-                [("Ca 3", "day"), ("Ca 1", "night")],
-                [("Ca 2", "day"), ("Ca 3", "night")],
+                [("Ca 1", "Làm ngày"), ("Trực Ca 2", "Trực đêm"), ("Ca 3", "Nghỉ")],
+                [("Ca 3", "Làm ngày"), ("Trực Ca 1", "Trực đêm"), ("Ca 2", "Nghỉ")],
+                [("Ca 2", "Làm ngày"), ("Trực Ca 3", "Trực đêm"), ("Ca 1", "Nghỉ")]
             ]
             return cycle[i % 3]
 
-        def generate_3ca4kip_pattern(i):
-            cycle = [
-                [("Ca 1", "morning"), ("Ca 2", "afternoon"), ("Ca 3", "night")],
-                [("Ca 4", "morning"), ("Ca 1", "afternoon"), ("Ca 2", "night")],
-                [("Ca 3", "morning"), ("Ca 4", "afternoon"), ("Ca 1", "night")],
-                [("Ca 2", "morning"), ("Ca 3", "afternoon"), ("Ca 4", "night")],
-            ]
-            return cycle[i % 4]
-
-        date_range = [start + timedelta(days=i) for i in range((end - start).days + 1)]
         assignments = []
-        ca_index = 0
+        for i in range(days):
+            current_date = start_date + timedelta(days=i)
+            day_shift_name, night_shift_name = pattern_2ca3kip(i)
 
-        for i, day in enumerate(date_range):
-            if model_type == '2ca3kip':
-                shift_names = generate_2ca3kip_pattern(i)
-            elif model_type == '3ca4kip':
-                shift_names = generate_3ca4kip_pattern(i)
-            else:
-                shift_names = [s.name for s in shifts[:selected_config.num_shifts]]
+            day_shift = next((s for s in shifts if s.name.lower() == day_shift_name[0].lower()), None)
+            night_shift = next((s for s in shifts if s.name.lower() == night_shift_name[0].lower()), None)
 
-            for name in shift_names:
-                shift = next((s for s in shifts if s.name == name), None)
-                if not shift:
-                    continue
-                ca = cas[ca_index % len(cas)]
-                assignments.extend([
-                    Schedule(user_id=ca.doctor_id, shift_id=shift.id, work_date=day),
-                    Schedule(user_id=ca.nurse1_id, shift_id=shift.id, work_date=day),
-                    Schedule(user_id=ca.nurse2_id, shift_id=shift.id, work_date=day),
-                ])
-                ca_index += 1
+            if not day_shift or not night_shift:
+                continue
+
+            ca_day = cas[i % len(cas)]
+            ca_night = cas[(i + 1) % len(cas)]
+
+            # Phân công ca ngày
+            assignments.extend([
+                Schedule(user_id=ca_day.doctor_id, shift_id=day_shift.id, work_date=current_date),
+                Schedule(user_id=ca_day.nurse1_id, shift_id=day_shift.id, work_date=current_date),
+                Schedule(user_id=ca_day.nurse2_id, shift_id=day_shift.id, work_date=current_date),
+            ])
+
+            # Phân công ca đêm
+            assignments.extend([
+                Schedule(user_id=ca_night.doctor_id, shift_id=night_shift.id, work_date=current_date),
+                Schedule(user_id=ca_night.nurse1_id, shift_id=night_shift.id, work_date=current_date),
+                Schedule(user_id=ca_night.nurse2_id, shift_id=night_shift.id, work_date=current_date),
+            ])
 
         db.session.add_all(assignments)
         db.session.commit()
-        flash("✅ Đã tạo lịch tự động theo tua thành công.", "success")
-        return redirect('/schedule')
 
-    return render_template('generate_ca_form.html',
-                           departments=departments,
-                           selected_department=selected_department,
-                           selected_config=selected_config,
-                           model_type=model_type,
-                           start_date=start_date_str,
-                           end_date=end_date_str)
+        flash("Tạo lịch trực 2 ca 3 kíp thành công", "success")
+        return redirect(url_for('view_schedule', department=selected_department,
+                                start_date=start_date_str, end_date=end_date_str))
+
+    # GET hoặc POST thiếu thông tin -> hiển thị lại form
+    return render_template(
+        "generate_ca.html",
+        department=selected_department,
+        departments=departments,
+        selected_config=selected_config,
+        model_type=model_type,
+        start_date=start_date_str,
+        end_date=end_date_str
+    )
 
 @app.route('/configure-ca', methods=['GET', 'POST'])
 def configure_ca():
@@ -1654,6 +2272,117 @@ def update_clinic_room(room_id):
     db.session.commit()
     return redirect('/clinic-rooms')
 
+from collections import defaultdict
+
+from flask import send_file, request
+import openpyxl
+from openpyxl.styles import Alignment, Font
+from io import BytesIO
+from collections import defaultdict
+from datetime import datetime, timedelta
+from models import User, Shift, Schedule, ClinicRoom  # Đảm bảo bạn có các model này
+import re  # <== DÒNG CẦN THÊM
+
+@app.route('/export-clinic-schedule')
+def export_clinic_schedule():
+    # Bước 1: Nhận tham số ngày
+    start_str = request.args.get('start')
+    end_str = request.args.get('end')
+    if not start_str or not end_str:
+        return "Thiếu thông tin ngày", 400
+
+    start_date = datetime.strptime(start_str, '%Y-%m-%d').date()
+    end_date = datetime.strptime(end_str, '%Y-%m-%d').date()
+    date_range = [start_date + timedelta(days=i) for i in range((end_date - start_date).days + 1)]
+
+    # Bước 2: Lấy dữ liệu từ database
+    rooms = ClinicRoom.query.all()
+    schedules = Schedule.query.join(User).join(Shift).filter(Schedule.work_date.between(start_date, end_date)).all()
+
+    # Bước 3: Tổ chức dữ liệu lịch trực
+    clinic_schedule = {room.name: defaultdict(str) for room in rooms}
+    user_positions = {}
+
+    for s in schedules:
+        user = s.user
+        user_positions[user.name] = user.position
+        shift_key = s.shift.name.lower().replace(" ", "")
+        for room in rooms:
+            room_key = room.name.lower().replace(" ", "")
+            if room_key in shift_key:
+                clinic_schedule[room.name][s.work_date] += f"{user.name}\n"
+                break
+
+    # Bước 4: Tạo file Excel
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Lịch phòng khám"
+
+    # Dòng tiêu đề
+    ws.cell(row=1, column=1, value="Phòng Khám")
+    for col, d in enumerate(date_range, start=2):
+        ws.cell(row=1, column=col, value=d.strftime('%a %d/%m'))
+
+    # Nội dung từng phòng
+    for row_idx, (room, shifts) in enumerate(clinic_schedule.items(), start=2):
+        ws.cell(row=row_idx, column=1, value=room)
+        for col_idx, d in enumerate(date_range, start=2):
+            raw = shifts[d].strip()
+            formatted = []
+            for name in raw.split("\n"):
+                pos = user_positions.get(name, "").lower()
+                prefix = "BS." if "bs" in pos or "bác" in pos else "ĐD." if "đd" in pos or "điều" in pos else ""
+                if name.strip():
+                    formatted.append(f"{prefix} {name.strip()}")
+            value = "\n".join(formatted)
+            cell = ws.cell(row=row_idx, column=col_idx, value=value)
+            cell.alignment = Alignment(wrap_text=True, vertical="top")
+
+    # Căn giữa dòng tiêu đề
+    for col in ws[1]:
+        col.alignment = Alignment(horizontal="center", vertical="center")
+        col.font = Font(bold=True)
+
+    # Xuất file
+    output = BytesIO()
+    wb.save(output)
+    output.seek(0)
+    return send_file(output, as_attachment=True, download_name="lich_phong_kham.xlsx")
+
+@app.route('/change-password', methods=['GET', 'POST'])
+def change_password():
+    if 'user_id' not in session:
+        return redirect('/login')
+
+    user = db.session.get(User, session['user_id'])  # ✅ Dòng này đã cập 
+
+    if request.method == 'POST':
+        current_pw = request.form['current_password']
+        new_pw = request.form['new_password']
+        confirm_pw = request.form['confirm_password']
+
+        if current_pw != user.password:
+            flash("❌ Mật khẩu hiện tại không đúng.", "danger")
+        elif new_pw != confirm_pw:
+            flash("❌ Mật khẩu mới không khớp.", "danger")
+        else:
+            user.password = new_pw
+            db.session.commit()
+            flash("✅ Đổi mật khẩu thành công.", "success")
+            return redirect('/')
+
+    return render_template('change_password.html', user=user)
+
+@app.context_processor
+def inject_helpers():
+    return dict(get_titled_names=get_titled_names)
+
+import re
+from datetime import datetime, timedelta
+from collections import defaultdict
+from flask import render_template, request
+
+
 @app.route('/print-clinic-schedule')
 def print_clinic_schedule():
     from collections import defaultdict
@@ -1724,91 +2453,871 @@ def get_titled_names(raw_names, user_positions):
             result.append(f"{prefix}{name}")
     return "<br>".join(result)
 
-@app.route('/change-password', methods=['GET', 'POST'])
-def change_password():
-    if 'user_id' not in session:
-        return redirect('/login')
+@app.route('/print-clinic-dept-schedule')
+def print_clinic_dept_schedule():
+    from collections import defaultdict
+    import re
 
-    user = User.query.get(session['user_id'])
+    start_str = request.args.get('start')
+    end_str = request.args.get('end')
+    if not start_str or not end_str:
+        return "Thiếu thông tin ngày bắt đầu hoặc kết thúc.", 400
 
-    if request.method == 'POST':
-        current_pw = request.form['current_password']
-        new_pw = request.form['new_password']
-        confirm_pw = request.form['confirm_password']
+    start_date = datetime.strptime(start_str, '%Y-%m-%d').date()
+    end_date = datetime.strptime(end_str, '%Y-%m-%d').date()
+    date_range = [start_date + timedelta(days=i) for i in range((end_date - start_date).days + 1)]
 
-        if current_pw != user.password:
-            flash("❌ Mật khẩu hiện tại không đúng.", "danger")
-        elif new_pw != confirm_pw:
-            flash("❌ Mật khẩu mới không khớp.", "danger")
+    # Lấy danh sách phòng khám
+    all_rooms = ClinicRoom.query.all()
+    rooms_dict = {room.name.lower(): room.name for room in all_rooms if "tiếp đón" not in room.name.lower()}
+
+    # Khởi tạo dữ liệu lịch (dùng key 'phong_kham' viết thường)
+    clinic_schedule = {
+        "tiep_don": defaultdict(list),
+        "phong_kham": {name: defaultdict(list) for name in rooms_dict.values()}
+    }
+
+    # Lấy dữ liệu phân công
+    schedules = Schedule.query.join(User).join(Shift).filter(
+        Schedule.work_date.between(start_date, end_date),
+        Shift.name.ilike('%phòng khám%') | Shift.name.ilike('%tiếp đón%')
+    ).all()
+
+    # Tạo bảng chức vụ người dùng
+    user_positions = {}
+    for s in schedules:
+        name = s.user.name
+        user_positions[name] = s.user.position or ""
+        date = s.work_date
+        shift_name = s.shift.name.lower()
+
+        if "tiếp đón" in shift_name:
+            clinic_schedule["tiep_don"][date].append(name)
         else:
-            user.password = new_pw
-            db.session.commit()
-            flash("✅ Đổi mật khẩu thành công.", "success")
-            return redirect('/')
+            for room_key in rooms_dict:
+                if room_key in shift_name:
+                    room_name = rooms_dict[room_key]
+                    clinic_schedule["phong_kham"][room_name][date].append(name)
+                    break
 
-    return render_template('change_password.html', user=user)
+    # 1. Loại bỏ phòng trống
+    clinic_schedule["phong_kham"] = {
+        name: day_dict for name, day_dict in clinic_schedule["phong_kham"].items()
+        if any(day_dict[d] for d in date_range)
+    }
 
+    # 2. Sắp xếp phòng theo thứ tự chuẩn
+    desired_order = [
+        "phòng khám 1", "phòng khám 2", "phòng khám 3",
+        "phòng khám ngoại", "phòng khám tmh", "phòng khám rhm",
+        "phòng khám mắt", "phòng khám 8 (tc)", "phòng khám 9 (tc)"
+    ]
+    ordered_schedule = {}
+    for name in desired_order:
+        original_name = rooms_dict.get(name)
+        if original_name in clinic_schedule["phong_kham"]:
+            ordered_schedule[original_name] = clinic_schedule["phong_kham"][original_name]
+    clinic_schedule["phong_kham"] = ordered_schedule
+
+    # Tạo danh sách rooms từ lịch đã sắp xếp
+    rooms = list(clinic_schedule["phong_kham"].keys())
+
+    return render_template(
+        'print-clinic-dept-schedule.html',
+        start_date=start_date,
+        end_date=end_date,
+        date_range=date_range,
+        clinic_schedule=clinic_schedule,
+        user_positions=user_positions,
+        rooms=rooms,
+        now=datetime.now(),
+        get_titled_names=get_titled_names
+    )
+
+def get_titled_names(name_input, user_positions):
+    # Nếu đầu vào là chuỗi, chuyển sang danh sách
+    if isinstance(name_input, str):
+        names = [n.strip() for n in name_input.split(',') if n.strip()]
+    elif isinstance(name_input, list):
+        names = [n.strip() for n in name_input if n.strip()]
+    else:
+        return ''
+
+    titled = []
+    for name in names:
+        title = user_positions.get(name, '').strip().upper()
+        if title:
+            titled.append(f"{title}. {name}")
+        else:
+            titled.append(name)
+
+    return '<br>'.join(titled)
+
+
+
+
+# Đăng ký vào template
 @app.context_processor
 def inject_helpers():
     return dict(get_titled_names=get_titled_names)
 
-@app.route('/schedule/lock', methods=['POST'])
-def lock_schedule():
-    if 'user_id' not in session:
-        return "Unauthorized", 401
+from flask import render_template, request, redirect
+from models.shift_rate_config import ShiftRateConfig
 
-    department = request.form.get('department')
-    start_date = datetime.strptime(request.form.get('start_date'), '%Y-%m-%d').date()
-    end_date = datetime.strptime(request.form.get('end_date'), '%Y-%m-%d').date()
+@app.route('/shift-rate-config', methods=['GET', 'POST'])
+def shift_rate_config():
+    if session.get('role') != 'admin':
+        return "Chỉ admin mới được phép truy cập."
 
-    # Kiểm tra đã khóa trước đó chưa
-    existing = ScheduleLock.query.filter_by(department=department)\
-        .filter(ScheduleLock.start_date <= start_date, ScheduleLock.end_date >= end_date).first()
+    if request.method == 'POST':
+        ca_loai = request.form['ca_loai']
+        truc_loai = request.form['truc_loai']
+        ngay_loai = request.form['ngay_loai']
+        don_gia = int(request.form['don_gia'])
+        new_rate = ShiftRateConfig(ca_loai=ca_loai, truc_loai=truc_loai, ngay_loai=ngay_loai, don_gia=don_gia)
+        db.session.add(new_rate)
+        db.session.commit()
+        return redirect('/shift-rate-config')
 
-    if existing:
-        return "Đã khóa trước đó", 400
+    rates = ShiftRateConfig.query.all()
+    return render_template('shift_rate_config.html', rates=rates)
 
-    lock = ScheduleLock(
-        department=department,
+@app.route('/shift-rate-config/delete/<int:rate_id>')
+def delete_shift_rate(rate_id):
+    if session.get('role') != 'admin':
+        return "Không có quyền"
+    rate = ShiftRateConfig.query.get_or_404(rate_id)
+    db.session.delete(rate)
+    db.session.commit()
+    return redirect('/shift-rate-config')
+
+from models.hscc_department import HSCCDepartment  # Import đầu file
+
+@app.route('/configure-hscc', methods=['GET', 'POST'])
+def configure_hscc():
+    if session.get('role') != 'admin':
+        return "Chỉ admin được phép truy cập."
+
+    if request.method == 'POST':
+        new_dept = request.form.get('department').strip()
+        if new_dept and not HSCCDepartment.query.filter_by(department_name=new_dept).first():
+            hscc = HSCCDepartment(department_name=new_dept)
+            db.session.add(hscc)
+            db.session.commit()
+    departments = HSCCDepartment.query.all()
+    return render_template('configure_hscc.html', departments=departments)
+
+def classify_day(date):
+    if date.weekday() >= 5:  # Thứ 7, Chủ nhật
+        return "ngày_nghỉ"
+    elif date.day in [1, 30, 31] or date.month in [1]:  # Giả định ngày lễ đơn giản
+        return "ngày_lễ"
+    else:
+        return "ngày_thường"
+
+@app.route('/shift-payment-view')
+def shift_payment_view():
+    from calendar import month_name
+    from collections import defaultdict
+
+    def classify_day(date):
+        ngay_le = {'01-01', '04-30', '05-01', '09-02'}
+        mmdd = date.strftime('%m-%d')
+        weekday = date.weekday()
+        if mmdd in ngay_le:
+            return 'ngày_lễ'
+        elif weekday >= 5:
+            return 'ngày_nghỉ'
+        else:
+            return 'ngày_thường'
+        
+    ca_chon = request.args.get('mode', '16h')
+    selected_department = request.args.get('department', 'all')
+    start_date = request.args.get('start_date')
+    end_date = request.args.get('end_date')
+
+    # ✅ Nếu chưa có start/end thì tự động dùng tháng hiện tại
+    if not start_date or not end_date:
+        today = datetime.today()
+        start_date_dt = today.replace(day=1)
+        next_month = today.replace(day=28) + timedelta(days=4)
+        last_day = (next_month - timedelta(days=next_month.day)).day
+        end_date_dt = today.replace(day=last_day)
+        start_date = start_date_dt.strftime('%Y-%m-%d')
+        end_date = end_date_dt.strftime('%Y-%m-%d')
+    else:
+        start_date_dt = datetime.strptime(start_date, '%Y-%m-%d').date()
+        end_date_dt = datetime.strptime(end_date, '%Y-%m-%d').date()
+
+    departments = [d[0] for d in db.session.query(User.department).distinct().all() if d[0]]
+
+    hscc_depts = [d.department_name for d in HSCCDepartment.query.all()]
+    rates = {(r.ca_loai, r.truc_loai, r.ngay_loai): r.don_gia for r in ShiftRateConfig.query.all()}
+
+    query = (
+        Schedule.query
+        .join(User).join(Shift)
+        .filter(Schedule.work_date >= start_date_dt, Schedule.work_date <= end_date_dt)
+        .filter(Shift.duration == (16 if ca_chon == '16h' else 24))
+    )
+    if selected_department != 'all':
+        query = query.filter(User.department == selected_department)
+
+    schedules = query.all()
+
+    data = defaultdict(lambda: defaultdict(int))
+    for s in schedules:
+        user = s.user
+        shift = s.shift
+
+        # ❌ Bỏ qua ca trực thường trú
+        if "thường trú" in shift.name.strip().lower():
+            continue
+
+        ngay_loai = classify_day(s.work_date)
+        truc_loai = "HSCC" if user.department in hscc_depts else "thường"
+        key = (truc_loai, ngay_loai)
+        data[user][key] += 1
+
+    rows = []
+    co_ngay_le = False
+    for user, info in data.items():
+        row = {
+            'user': user,
+            'tong_ngay': sum(info.values()),
+            'tien_ca': 0,
+            'tien_an': sum(info.values()) * 15000,
+            'tong_tien': 0,
+            'is_contract': user.contract_type == "Hợp đồng",
+            'detail': {}
+        }
+
+        for key in [
+            ("thường", "ngày_thường"), ("HSCC", "ngày_thường"),
+            ("thường", "ngày_nghỉ"), ("HSCC", "ngày_nghỉ"),
+            ("thường", "ngày_lễ"), ("HSCC", "ngày_lễ")
+        ]:
+            so_ngay = info.get(key, 0)
+            if key[1] == 'ngày_lễ' and so_ngay > 0:
+                co_ngay_le = True
+            don_gia = rates.get((ca_chon, *key), 0)
+            row['detail'][key] = {'so_ngay': so_ngay, 'don_gia': don_gia}
+            row['tien_ca'] += so_ngay * don_gia
+
+        row['tong_tien'] = row['tien_ca'] + row['tien_an']
+        rows.append(row)
+
+    thang = start_date_dt.month
+    nam = start_date_dt.year
+
+    return render_template(
+        "shift_payment_view.html",
+        ca_chon=ca_chon,
+        rows=rows,
+        departments=departments,
+        selected_department=selected_department,
+        mode=ca_chon,
         start_date=start_date,
         end_date=end_date,
-        locked_by=session.get('user_id')
+        thang=thang,
+        nam=nam,
+        co_ngay_le=co_ngay_le
     )
-    db.session.add(lock)
+
+@app.route('/tong-hop-cong-truc-view')
+@login_required
+def tong_hop_cong_truc_view():
+    from collections import defaultdict
+    from models.user import User
+    from models.schedule import Schedule
+    from models.shift import Shift
+
+    selected_department = request.args.get('department', '')
+    start_date = request.args.get('start_date')
+    end_date = request.args.get('end_date')
+    mode = request.args.get('mode', '16h')  # '16h' hoặc '24h'
+
+    today = datetime.now()
+    try:
+        thang = int(start_date.split('-')[1])
+        nam = int(start_date.split('-')[0])
+    except:
+        thang = today.month
+        nam = today.year
+
+    query = Schedule.query.join(User).join(Shift).filter(Schedule.work_date.between(start_date, end_date))
+
+    if selected_department and selected_department != 'all':
+        query = query.filter(User.department.ilike(selected_department))
+
+    schedules = query.all()
+
+    result_by_user = defaultdict(lambda: defaultdict(lambda: {'so_ngay': 0}))
+    summary = defaultdict(int)
+
+    for s in schedules:
+        if not s.shift or not s.user:
+            continue
+
+        shift_name = s.shift.name.strip().lower()
+
+        # ➖ Bỏ qua ca Trực thường trú
+        if 'thường trú' in shift_name:
+            continue
+
+        # ⚠️ Bỏ qua ca không tính công trực
+        if shift_name in ['nghỉ trực', 'nghỉ phép', 'làm ngày', 'làm 1/2 ngày', 'làm 1/2 ngày c']:
+            continue
+
+        # Áp dụng theo chế độ
+        if mode == '24h' and '24h' not in shift_name:
+            continue
+        if mode == '16h' and '24h' in shift_name:
+            continue
+
+        # Phân loại ca
+        if any(x in shift_name for x in ['hscc', 'cấp cứu', 'cc']):
+            loai_ca = 'HSCC'
+        else:
+            loai_ca = 'thường'
+
+        # Phân loại ngày
+        mmdd = s.work_date.strftime('%m-%d')
+        weekday = s.work_date.weekday()
+
+        if mmdd in ['01-01', '04-30', '05-01', '09-02']:
+            loai_ngay = 'ngày_lễ'
+        elif weekday >= 5:
+            loai_ngay = 'ngày_nghỉ'
+        else:
+            loai_ngay = 'ngày_thường'
+
+        result_by_user[s.user_id][(loai_ca, loai_ngay)]['so_ngay'] += 1
+        summary[(loai_ca, loai_ngay)] += 1
+
+    user_ids = list(result_by_user.keys())
+    users = User.query.filter(User.id.in_(user_ids)).all() if user_ids else []
+
+    rows = []
+    for user in users:
+        detail = result_by_user[user.id]
+        rows.append({
+            'user': user,
+            'detail': detail,
+            'tong_ngay': sum([v['so_ngay'] for v in detail.values()]),
+            'ghi_chu': ''
+        })
+
+    sum_row = {
+        'detail': summary,
+        'tong_ngay': sum(summary.values())
+    }
+
+    departments = [d[0] for d in db.session.query(User.department).distinct() if d[0]]
+
+    return render_template('tong_hop_cong_truc_view.html',
+                           rows=rows,
+                           sum_row=sum_row,
+                           departments=departments,
+                           selected_department=selected_department,
+                           start_date=start_date,
+                           end_date=end_date,
+                           default_start=start_date,
+                           default_end=end_date,
+                           thang=thang,
+                           nam=nam,
+                           mode=mode)
+
+@app.route('/tong-hop-cong-truc-print')
+@login_required
+def tong_hop_cong_truc_print():
+    from collections import defaultdict
+    from models.user import User
+    from models.schedule import Schedule
+    from models.shift import Shift
+
+    selected_department = request.args.get('department', '')
+    start_date = request.args.get('start_date')
+    end_date = request.args.get('end_date')
+    mode = request.args.get('mode', '16h')
+
+    today = datetime.now()
+    try:
+        thang = int(start_date.split('-')[1])
+        nam = int(start_date.split('-')[0])
+    except:
+        thang = today.month
+        nam = today.year
+
+    query = Schedule.query.join(User).join(Shift).filter(Schedule.work_date.between(start_date, end_date))
+    if selected_department and selected_department != 'all':
+        query = query.filter(User.department.ilike(selected_department))
+
+    schedules = query.all()
+
+    result_by_user = defaultdict(lambda: defaultdict(lambda: {'so_ngay': 0}))
+    summary = defaultdict(int)
+
+    for s in schedules:
+        if not s.shift or not s.user:
+            continue
+
+        shift_name = s.shift.name.strip().lower()
+
+        # ❌ Bỏ ca trực thường trú
+        if 'thường trú' in shift_name:
+            continue
+
+        # ❌ Bỏ các ca không tính công trực
+        if shift_name in ['nghỉ trực', 'nghỉ phép', 'làm ngày', 'làm 1/2 ngày', 'làm 1/2 ngày c']:
+            continue
+
+        if mode == '24h' and '24h' not in shift_name:
+            continue
+        if mode == '16h' and '24h' in shift_name:
+            continue
+
+        loai_ca = 'HSCC' if any(x in shift_name for x in ['hscc', 'cấp cứu', 'cc']) else 'thường'
+        weekday = s.work_date.weekday()
+        mmdd = s.work_date.strftime('%m-%d')
+
+        if mmdd in ['01-01', '04-30', '05-01', '09-02']:
+            loai_ngay = 'ngày_lễ'
+        elif weekday >= 5:
+            loai_ngay = 'ngày_nghỉ'
+        else:
+            loai_ngay = 'ngày_thường'
+
+        result_by_user[s.user_id][(loai_ca, loai_ngay)]['so_ngay'] += 1
+        summary[(loai_ca, loai_ngay)] += 1
+
+    user_ids = list(result_by_user.keys())
+    users = User.query.filter(User.id.in_(user_ids)).all() if user_ids else []
+
+    rows = []
+    for user in users:
+        detail = result_by_user[user.id]
+        rows.append({
+            'user': user,
+            'detail': detail,
+            'tong_ngay': sum([v['so_ngay'] for v in detail.values()]),
+            'ghi_chu': ''
+        })
+
+    sum_row = {
+        'detail': summary,
+        'tong_ngay': sum(summary.values())
+    }
+
+    return render_template('tong_hop_cong_truc.html',
+        rows=rows,
+        sum_row=sum_row,
+        selected_department=selected_department,
+        start_date=start_date,
+        current_day=today.day,
+        current_month=today.month,
+        current_year=today.year,
+        thang=thang,
+        nam=nam,
+        mode=mode
+    )
+
+@app.route('/export-shift-payment-all')
+def export_shift_payment_all():
+    from calendar import month_name
+    from openpyxl.styles import Font, Alignment, Border, Side
+
+    def classify_day(date):
+        # Danh sách ngày lễ cố định (thêm nếu cần)
+        ngay_le = {'01-01', '04-30', '05-01', '09-02'}
+        mmdd = date.strftime('%m-%d')
+        weekday = date.weekday()
+        if mmdd in ngay_le:
+            return 'ngày_lễ'
+        elif weekday >= 5:
+            return 'ngày_nghỉ'
+        else:
+            return 'ngày_thường'
+        
+    # 📥 Tham số lọc
+    ca_chon = request.args.get('mode', '16h')
+    selected_department = request.args.get('department', 'all')
+    start_date = request.args.get('start_date', '2025-06-01')
+    end_date = request.args.get('end_date', '2025-06-30')
+
+    start_date_dt = datetime.strptime(start_date, '%Y-%m-%d').date()
+    end_date_dt = datetime.strptime(end_date, '%Y-%m-%d').date()
+    thang = start_date_dt.month
+    nam = start_date_dt.year
+
+    # 🔧 Dữ liệu
+    hscc_depts = [d.department_name for d in HSCCDepartment.query.all()]
+    rates = {(r.ca_loai, r.truc_loai, r.ngay_loai): r.don_gia for r in ShiftRateConfig.query.all()}
+
+    query = (
+        Schedule.query
+        .join(User).join(Shift)
+        .filter(Schedule.work_date >= start_date_dt, Schedule.work_date <= end_date_dt)
+        .filter(Shift.duration == (16 if ca_chon == '16h' else 24))
+    )
+    if selected_department != 'all':
+        query = query.filter(User.department == selected_department)
+
+    schedules = query.all()
+
+    # 📊 Gom dữ liệu
+    data = defaultdict(lambda: defaultdict(int))
+    for s in schedules:
+        user = s.user
+        ngay_loai = classify_day(s.work_date)
+        truc_loai = "HSCC" if user.department in hscc_depts else "thường"
+        key = (truc_loai, ngay_loai)
+        data[user][key] += 1
+
+    # 📄 Tạo Excel
+    wb = Workbook()
+    ws = wb.active
+    ws.title = f"BẢNG TRỰC {ca_chon}"
+
+    # 🎨 Định dạng chung
+    bold = Font(bold=True)
+    center = Alignment(horizontal="center", vertical="center", wrap_text=True)
+    thin_border = Border(left=Side(style='thin'), right=Side(style='thin'),
+                         top=Side(style='thin'), bottom=Side(style='thin'))
+
+    # 📝 Tiêu đề đầu trang
+    ws.merge_cells("A1:M1")
+    ws["A1"] = "SỞ Y TẾ TỈNH GIA LAI"
+    ws["A1"].font = bold
+
+    ws.merge_cells("A2:M2")
+    ws["A2"] = "BỆNH VIỆN NHI"
+    ws["A2"].font = bold
+
+    ws.merge_cells("A4:M4")
+    ws["A4"] = f"BẢNG THANH TOÁN TIỀN TRỰC THÁNG {thang:02d} NĂM {nam}"
+    ws["A4"].alignment = center
+    ws["A4"].font = Font(bold=True, size=13)
+
+    # 🧾 Tiêu đề bảng (gồm 2 dòng)
+    ws.append([
+        "STT", "HỌ TÊN",
+        "Trực thường\n(Ngày thường)", "Trực HSCC\n(Ngày thường)",
+        "Trực thường\n(Ngày nghỉ)", "Trực HSCC\n(Ngày nghỉ)",
+        "Trực thường\n(Ngày lễ)", "Trực HSCC\n(Ngày lễ)",
+        "Tổng số\nngày trực", "Tiền ca\n(QĐ 73)",
+        "Tiền ăn\n(15k/ngày)", "Tổng cộng", "Ghi chú"
+    ])
+    for cell in ws[6]:
+        cell.font = bold
+        cell.alignment = center
+        cell.border = thin_border
+
+    # 📥 Ghi dữ liệu từng nhân viên
+    for i, (user, info) in enumerate(data.items(), start=1):
+        total_day = sum(info.values())
+        tien_ca = 0
+
+        row_data = [i, user.name]
+
+        for key in [
+            ("thường", "ngày_thường"), ("HSCC", "ngày_thường"),
+            ("thường", "ngày_nghỉ"),   ("HSCC", "ngày_nghỉ"),
+            ("thường", "ngày_lễ"),     ("HSCC", "ngày_lễ")
+        ]:
+            so_ngay = info.get(key, 0)
+            don_gia = rates.get((ca_chon, *key), 0)
+            row_data.append(so_ngay)
+            tien_ca += so_ngay * don_gia
+
+        tien_an = total_day * 15000
+        tong_cong = tien_ca + tien_an
+
+        row_data += [total_day, tien_ca, tien_an, tong_cong]
+        row_data.append("HD" if user.contract_type == "Hợp đồng" else "")
+
+        ws.append(row_data)
+        for cell in ws[ws.max_row]:
+            cell.alignment = center
+            cell.border = thin_border
+
+    # 📤 Xuất file
+    stream = BytesIO()
+    wb.save(stream)
+    stream.seek(0)
+    filename = f"BANG_THANH_TOAN_{thang:02d}_{nam}_{ca_chon}.xlsx"
+    return send_file(stream, as_attachment=True, download_name=filename)
+
+@app.route('/print-shift-payment')
+def print_shift_payment():
+    from calendar import month_name
+    from collections import defaultdict
+    from datetime import datetime
+
+    def classify_day(date):
+        # Danh sách ngày lễ cố định (thêm nếu cần)
+        ngay_le = {'01-01', '04-30', '05-01', '09-02'}
+        mmdd = date.strftime('%m-%d')
+        weekday = date.weekday()
+        if mmdd in ngay_le:
+            return 'ngày_lễ'
+        elif weekday >= 5:
+            return 'ngày_nghỉ'
+        else:
+            return 'ngày_thường'
+        
+    ca_chon = request.args.get('mode', '16h')
+    selected_department = request.args.get('department', 'all')
+    start_date = request.args.get('start_date', '2025-06-01')
+    end_date = request.args.get('end_date', '2025-06-30')
+
+    start_date_dt = datetime.strptime(start_date, '%Y-%m-%d').date()
+    end_date_dt = datetime.strptime(end_date, '%Y-%m-%d').date()
+    thang = start_date_dt.month
+    nam = start_date_dt.year
+
+    # 👇 Thêm dòng này để lấy ngày in hiện tại
+    today = datetime.now()
+    current_day = today.day
+    current_month = today.month
+    current_year = today.year
+
+    hscc_depts = [d.department_name for d in HSCCDepartment.query.all()]
+    rates = {(r.ca_loai, r.truc_loai, r.ngay_loai): r.don_gia for r in ShiftRateConfig.query.all()}
+
+    query = (
+        Schedule.query
+        .join(User).join(Shift)
+        .filter(Schedule.work_date >= start_date_dt, Schedule.work_date <= end_date_dt)
+        .filter(Shift.duration == (16 if ca_chon == '16h' else 24))
+    )
+    if selected_department != 'all':
+        query = query.filter(User.department == selected_department)
+
+    schedules = query.all()
+
+    data = defaultdict(lambda: defaultdict(int))
+    for s in schedules:
+        user = s.user
+        shift = s.shift
+        # ✅ Bỏ qua ca "Trực thường trú"
+        if "thường trú" in shift.name.strip().lower():
+            continue
+
+        ngay_loai = classify_day(s.work_date)
+        truc_loai = "HSCC" if user.department in hscc_depts else "thường"
+        key = (truc_loai, ngay_loai)
+        data[user][key] += 1
+
+    rows = []
+    sum_row = {
+        'tong_ngay': 0,
+        'tien_ca': 0,
+        'tien_an': 0,
+        'tong_tien': 0,
+        'detail': {
+            ("thường", "ngày_thường"): 0,
+            ("HSCC", "ngày_thường"): 0,
+            ("thường", "ngày_nghỉ"): 0,
+            ("HSCC", "ngày_nghỉ"): 0,
+            ("thường", "ngày_lễ"): 0,
+            ("HSCC", "ngày_lễ"): 0
+        }
+    }
+
+    for user, info in data.items():
+        row = {
+            'user': user,
+            'tong_ngay': sum(info.values()),
+            'tien_ca': 0,
+            'tien_an': sum(info.values()) * 15000,
+            'tong_tien': 0,
+            'is_contract': user.contract_type == "Hợp đồng",
+            'ghi_chu': 'HĐ' if user.contract_type == 'Hợp đồng' else '',
+            'detail': {}
+        }
+
+        for key in sum_row['detail'].keys():
+            so_ngay = info.get(key, 0)
+            don_gia = rates.get((ca_chon, *key), 0)
+            row['detail'][key] = {'so_ngay': so_ngay, 'don_gia': don_gia}
+            row['tien_ca'] += so_ngay * don_gia
+            sum_row['detail'][key] += so_ngay
+
+        row['tong_tien'] = row['tien_ca'] + row['tien_an']
+
+        sum_row['tong_ngay'] += row['tong_ngay']
+        sum_row['tien_ca'] += row['tien_ca']
+        sum_row['tien_an'] += row['tien_an']
+        sum_row['tong_tien'] += row['tong_tien']
+
+        rows.append(row)
+
+    return render_template(
+        "shift_payment_print.html",
+        ca_chon=ca_chon,
+        rows=rows,
+        sum_row=sum_row,
+        selected_department=selected_department,
+        mode=ca_chon,
+        start_date=start_date,
+        end_date=end_date,
+        thang=thang,
+        nam=nam,
+        current_day=current_day,
+        current_month=current_month,
+        current_year=current_year,
+        tong_tien_bang_chu=num2text(int(sum_row['tong_tien']))
+    )
+
+from utils import num2text
+
+text = num2text(1530000)
+# Kết quả: "Một triệu năm trăm ba mươi nghìn đồng"
+
+from datetime import datetime  # Đảm bảo đã import ở đầu file
+
+@app.route('/print-shift-payment-summary')
+def print_shift_payment_summary():
+    from collections import defaultdict
+
+    def classify_day(date):
+        # Danh sách ngày lễ cố định (thêm nếu cần)
+        ngay_le = {'01-01', '04-30', '05-01', '09-02'}
+        mmdd = date.strftime('%m-%d')
+        weekday = date.weekday()
+        if mmdd in ngay_le:
+            return 'ngày_lễ'
+        elif weekday >= 5:
+            return 'ngày_nghỉ'
+        else:
+            return 'ngày_thường'
+        
+    def roman(num):
+        roman_map = zip(
+            (1000, 900, 500, 400, 100, 90, 50, 40, 10, 9, 5, 4, 1),
+            ("M", "CM", "D", "CD", "C", "XC", "L", "XL", "X", "IX", "V", "IV", "I")
+        )
+        result = ''
+        for i, r in roman_map:
+            while num >= i:
+                result += r
+                num -= i
+        return result
+
+    ca_chon = request.args.get('mode', '16h')
+    start_date = request.args.get('start_date', '2025-06-01')
+    end_date = request.args.get('end_date', '2025-06-30')
+    start_dt = datetime.strptime(start_date, '%Y-%m-%d').date()
+    end_dt = datetime.strptime(end_date, '%Y-%m-%d').date()
+
+    hscc_depts = [d.department_name for d in HSCCDepartment.query.all()]
+    rates = {(r.ca_loai, r.truc_loai, r.ngay_loai): r.don_gia for r in ShiftRateConfig.query.all()}
+
+    schedules = (
+        Schedule.query.join(User).join(Shift)
+        .filter(Schedule.work_date >= start_dt, Schedule.work_date <= end_dt)
+        .filter(Shift.duration == (16 if ca_chon == '16h' else 24))
+        .all()
+    )
+
+    grouped = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
+
+    for s in schedules:
+        user = s.user
+        dept = user.department or 'Không rõ'
+        key = ("HSCC" if dept in hscc_depts else "thường", classify_day(s.work_date))
+        grouped[dept][user][key] += 1
+
+    summary_rows = []
+    total = defaultdict(int)
+
+    for i, (dept, users) in enumerate(grouped.items(), start=1):
+        summary_rows.append({
+            'is_dept': True,
+            'index_label': f"{roman(i)}.",
+            'department': dept
+        })
+
+        for j, (user, counts) in enumerate(users.items(), start=1):
+            row = {
+                'is_dept': False,
+                'index_label': str(j),
+                'department': dept,
+                'full_name': user.name,
+                'is_contract': user.contract_type and 'hợp đồng' in user.contract_type.lower(),
+                'thuong_thuong': 0,
+                'hscc_thuong': 0,
+                'thuong_nghi': 0,
+                'hscc_nghi': 0,
+                'thuong_le': 0,
+                'hscc_le': 0,
+                'total_shifts': 0,
+                'tien_qd73': 0,
+                'tien_an': 0,
+                'tong_tien': 0
+            }
+
+            for key, so_ngay in counts.items():
+                loai_truc, ngay_loai = key
+                don_gia = rates.get((ca_chon, loai_truc, ngay_loai), 0)
+                tien = so_ngay * don_gia
+
+                if (loai_truc, ngay_loai) == ('thường', 'ngày_thường'):
+                    row['thuong_thuong'] = so_ngay
+                elif (loai_truc, ngay_loai) == ('HSCC', 'ngày_thường'):
+                    row['hscc_thuong'] = so_ngay
+                elif (loai_truc, ngay_loai) == ('thường', 'ngày_nghỉ'):
+                    row['thuong_nghi'] = so_ngay
+                elif (loai_truc, ngay_loai) == ('HSCC', 'ngày_nghỉ'):
+                    row['hscc_nghi'] = so_ngay
+                elif (loai_truc, ngay_loai) == ('thường', 'ngày_lễ'):
+                    row['thuong_le'] = so_ngay
+                elif (loai_truc, ngay_loai) == ('HSCC', 'ngày_lễ'):
+                    row['hscc_le'] = so_ngay
+
+                row['tien_qd73'] += tien
+                row['total_shifts'] += so_ngay
+
+            row['tien_an'] = row['total_shifts'] * 15000
+            row['tong_tien'] = row['tien_qd73'] + row['tien_an']
+
+            for k in ['thuong_thuong', 'hscc_thuong', 'thuong_nghi', 'hscc_nghi', 'thuong_le', 'hscc_le',
+                      'total_shifts', 'tien_qd73', 'tien_an', 'tong_tien']:
+                total[k] += row[k]
+
+            summary_rows.append(row)
+
+    now = datetime.now()  # ✅ Dùng thời điểm hiện tại để in
+
+    return render_template(
+        'shift_payment_summary_print.html',
+        summary_rows=summary_rows,
+        total_shifts=total['total_shifts'],
+        total_qd73=total['tien_qd73'],
+        total_an=total['tien_an'],
+        total_sum=total['tong_tien'],
+        sum_thuong_thuong=total['thuong_thuong'],
+        sum_hscc_thuong=total['hscc_thuong'],
+        sum_thuong_nghi=total['thuong_nghi'],
+        sum_hscc_nghi=total['hscc_nghi'],
+        sum_thuong_le=total['thuong_le'],
+        sum_hscc_le=total['hscc_le'],
+        tong_tien_bang_chu=num2text(int(total['tong_tien'])),
+        thang=start_dt.month,
+        nam=start_dt.year,
+        now=now,  # ✅ Truyền `now` vào template
+        mode=ca_chon
+    )
+
+@app.route('/configure-hscc/delete/<int:dept_id>', methods=['POST'])
+def delete_hscc(dept_id):
+    if session.get('role') != 'admin':
+        return "Không có quyền."
+    dept = HSCCDepartment.query.get_or_404(dept_id)
+    db.session.delete(dept)
     db.session.commit()
-    return redirect(f'/schedule?department={department}&start_date={start_date}&end_date={end_date}')
-
-@app.route('/schedule/unlock', methods=['POST'])
-def unlock_schedule():
-    department = request.form.get('department')
-    from_date = request.form.get('from_date')
-    to_date = request.form.get('to_date')
-
-    signature = ScheduleSignature.query.filter_by(
-        department=department,
-        from_date=from_date,
-        to_date=to_date
-    ).first()
-
-    if not signature:
-        flash('Không tìm thấy bản đã ký.', 'danger')
-        return redirect(url_for('view_schedule', department=department, start_date=from_date, end_date=to_date))
-
-    # Xoá bản ghi xác nhận
-    db.session.delete(signature)
-
-    # Mở khoá nếu có
-    lock = ScheduleLock.query.filter_by(
-        department=department,
-        start_date=from_date,
-        end_date=to_date
-    ).first()
-    if lock:
-        db.session.delete(lock)
-
-    db.session.commit()
-    flash('Đã hủy ký và mở khóa lịch trực.', 'success')
-    return redirect(url_for('view_schedule', department=department, start_date=from_date, end_date=to_date))
+    return redirect('/configure-hscc')
 
 from models.user import User
 

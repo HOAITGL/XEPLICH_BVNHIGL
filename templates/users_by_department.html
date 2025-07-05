@@ -21,7 +21,7 @@
   {% if user.role == 'admin' %}
   <form method="GET" class="mb-3">
     <label for="department">Chọn khoa/phòng:</label>
-    <select name="department" class="form-control w-auto d-inline-block ms-2" onchange="this.form.submit()">
+    <select name="department" id="department" class="form-control w-auto d-inline-block ms-2">
       <option value="">-- Tất cả --</option>
       {% for dept in departments %}
         <option value="{{ dept }}" {% if dept == selected_department %}selected{% endif %}>{{ dept }}</option>
@@ -54,9 +54,15 @@
       <tr>
          <td>{{ user.name }}</td>
          <td>{{ user.username }}</td>
-         <td>{{ user.role }}</td>
+         <td>
+           {% if user.role == 'admin' %}Quản trị
+           {% elif user.role == 'manager' %}Trưởng khoa
+           {% elif user.role == 'user' %}Nhân viên
+           {% else %}{{ user.role }}
+           {% endif %}
+         </td>
          <td>{{ user.department }}</td>
-         <td>{{ user.position }}</td>
+         <td>{{ user.position or '' }}</td>
          <td>{{ user.contract_type or '' }}</td>
          <td>{{ user.phone or '' }}</td>
          <td>{{ user.email or '' }}</td>
@@ -69,5 +75,10 @@
     </tbody>
   </table>
 </div>
-{% endblock %}
 
+<script>
+  document.getElementById("department")?.addEventListener("change", function () {
+    this.form.submit();
+  });
+</script>
+{% endblock %}

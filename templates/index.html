@@ -3,18 +3,22 @@
 
 {% block content %}
 <div class="d-flex flex-column align-items-center justify-content-center" style="min-height: 80vh; text-align: center;">
-  <img src="{{ url_for('static', filename='logo.png') }}" alt="Logo đơn vị"
-       style="height: 400px; max-width: 100%; margin-bottom: 25px;">
+  <img src="{{ url_for('static', filename='logo.png') }}"
+       alt="Logo đơn vị"
+       class="img-fluid mb-4"
+       style="max-height: 300px;">
 
-  <h2 class="mb-3">👋 Chào mừng đến hệ thống xếp lịch trực</h2>
-  <p style="font-size: 1.2rem;">Chọn chức năng từ menu bên trái.</p>
+  <h2 class="mb-3 text-primary">👋 Chào mừng đến hệ thống xếp lịch trực</h2>
+  <p class="lead">Vui lòng chọn chức năng từ menu bên trái.</p>
 </div>
 
 <!-- Dòng thông tin liên hệ chạy ngang -->
-<marquee behavior="scroll" direction="left" scrollamount="5" style="background-color: #f8f9fa; padding: 10px; font-weight: bold; color: #333;">
-  📞 Thông tin chi tiết liên hệ Mr: Trương Minh Hòa – SĐT: 0935.456.115 - Bệnh viện Nhi tỉnh Gia Lai
+<marquee behavior="scroll" direction="left" scrollamount="5"
+         class="bg-light py-2 px-3 fw-bold text-dark border-top border-bottom">
+  📞 Mọi thắc mắc liên hệ Mr: Trương Minh Hòa – ☎ 0935.456.115 - Bệnh viện Nhi tỉnh Gia Lai
 </marquee>
 {% endblock %}
+
 
 
 

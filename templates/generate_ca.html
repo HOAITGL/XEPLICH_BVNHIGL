@@ -1,0 +1,61 @@
+{% extends "layout.html" %}
+{% block title %}Tạo lịch Ca (kíp) trực{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+  <h2 class="mb-4">Tạo lịch Ca (kíp) trực theo khoa</h2>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for category, message in messages %}
+      <div class="alert alert-{{ 'danger' if category == 'danger' else category }} mt-2">
+        {{ message }}
+      </div>
+    {% endfor %}
+  {% endwith %}
+
+  <form method="POST" class="border p-4 rounded bg-light shadow-sm">
+
+    <div class="mb-3">
+      <label class="form-label">Chọn khoa:</label>
+      <select name="department" class="form-select" required>
+        <option value="">-- Chọn khoa --</option>
+        {% for dept in departments %}
+          <option value="{{ dept }}" {% if dept == department %}selected{% endif %}>{{ dept }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="mb-3">
+      <label class="form-label">Chọn mô hình:</label>
+      <select name="model_type" class="form-select" required>
+        <option value="2ca3kip" {% if model_type == '2ca3kip' %}selected{% endif %}>2 ca 3 kíp</option>
+        <option value="3ca4kip" {% if model_type == '3ca4kip' %}selected{% endif %}>3 ca 4 kíp</option>
+        <option value="custom" {% if model_type == 'custom' %}selected{% endif %}>Tuỳ chỉnh theo cấu hình</option>
+      </select>
+    </div>
+
+    {% if selected_config %}
+      <div class="alert alert-info">
+        <strong>Cấu hình:</strong><br>
+        Số ca/ngày: {{ selected_config.num_shifts }}<br>
+        Tổ/ca: {{ selected_config.cas_per_shift }}<br>
+        Bác sĩ/tổ: {{ selected_config.doctors_per_ca }}<br>
+        Điều dưỡng/tổ: {{ selected_config.nurses_per_ca }}
+      </div>
+    {% endif %}
+
+    <div class="row">
+      <div class="col-md-6">
+        <label class="form-label">Từ ngày:</label>
+        <input type="date" name="start_date" class="form-control" value="{{ start_date or '' }}" required>
+      </div>
+      <div class="col-md-6">
+        <label class="form-label">Đến ngày:</label>
+        <input type="date" name="end_date" class="form-control" value="{{ end_date or '' }}" required>
+      </div>
+    </div>
+
+    <button type="submit" class="btn btn-success mt-3">Tạo lịch</button>
+  </form>
+</div>
+{% endblock %}

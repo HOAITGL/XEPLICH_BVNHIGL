@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <title>Bảng lịch trực phòng khám</title>
+  <style>
+    body {
+      font-family: 'Times New Roman', Times, serif;
+      font-size: 12px;
+      margin: 0.5cm;
+    }
+
+    .header-row {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+
+    .header-left, .header-right {
+      width: 45%;
+      text-align: center;
+    }
+
+    .header-left div:first-child,
+    .header-right div:first-child {
+      font-weight: bold;
+    }
+
+    .header-left span,
+    .header-right span {
+      font-weight: bold;
+      text-decoration: underline;
+      display: inline-block;
+    }
+
+    .header-right .date {
+      font-style: italic;
+      margin-top: 4px;
+    }
+
+    h4 {
+      text-align: center;
+      text-transform: uppercase;
+      margin: 12px 0 4px;
+    }
+
+    p {
+      text-align: center;
+      margin: 0 0 12px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+
+    th, td {
+      border: 1px solid black;
+      padding: 2px 4px;
+      text-align: center;
+      vertical-align: top;
+      white-space: pre-line;
+    }
+
+    .footer {
+      margin-top: 18px;
+      width: 100%;
+    }
+
+    .footer td {
+      border: none;
+      text-align: center;
+      font-size: 12px;
+    }
+
+    .footer .left {
+      text-align: left;
+      vertical-align: top;
+    }
+
+    @media print {
+      @page {
+        size: A4 landscape;
+        margin: 0.5cm;
+      }
+    }
+  </style>
+</head>
+<body>
+
+<div class="header-row">
+  <div class="header-left">
+    <div>BỆNH VIỆN NHI TỈNH GIA LAI</div>
+    <div><span>KHOA KHÁM - CẤP CỨU</span></div>
+  </div>
+  <div class="header-right">
+    <div>CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</div>
+    <div><span>Độc lập - Tự do - Hạnh phúc</span></div>
+    <div class="date">Gia Lai, ngày {{ start_date.strftime('%d') }} tháng {{ start_date.strftime('%m') }} năm {{ start_date.strftime('%Y') }}</div>
+  </div>
+</div>
+
+<h4>BẢNG LỊCH TRỰC PHÒNG KHÁM</h4>
+<p>Lịch trực tuần ngày {{ start_date.strftime('%d/%m/%Y') }} đến ngày {{ end_date.strftime('%d/%m/%Y') }}</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Phòng khám</th>
+      {% for d in date_range %}
+        <th>{{ d.strftime('%a') }}<br>{{ d.strftime('%d/%m') }}</th>
+      {% endfor %}
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Khu tiếp đón - Đóng dấu - Dẫn BN</td>
+      {% for d in date_range %}
+        <td>{{ get_titled_names(clinic_schedule["tiep_don"].get(d, []), user_positions) | safe }}</td>
+      {% endfor %}
+    </tr>
+    {% for room in rooms %}
+    <tr>
+      <td>{{ room }}</td>
+      {% for d in date_range %}
+        <td>{{ get_titled_names(clinic_schedule["phong_kham"].get(room, {}).get(d, []), user_positions) | safe }}</td>
+      {% endfor %}
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<table class="footer">
+  <tr>
+    <td class="left">
+    <td><strong>Người lập bảng</strong><br><em>(Ký, ghi rõ họ tên)</em></td>
+    <td><strong>TRƯỞNG PHÒNG</strong><br><em>(Ký, ghi rõ họ tên)</em></td>
+    <td><strong>GIÁM ĐỐC</strong><br><em>(Ký, ghi rõ họ tên)</em></td>
+  </tr>
+</table>
+
+<script>
+  window.onload = function () {
+    window.print();
+  };
+</script>
+
+</body>
+</html>

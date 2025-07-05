@@ -3,38 +3,28 @@
 
 {% block content %}
 
-<!-- TIÊU ĐỀ CHUẨN CÔNG VĂN KHI IN -->
+<!-- PHẦN TIÊU ĐỀ KHI IN -->
 <div class="d-none d-print-block text-center mb-3">
   <div class="row">
-    <div class="col-6 text-center">
-      <div style="font-weight:bold;">BỆNH VIỆN NHI TỈNH GIA LAI</div>
-      <div style="margin-top: 4px;">
-        <span style="display: inline-block; font-weight: bold; border-bottom: 1px solid black;">
-          PHÒNG KHTH - CNTT
-        </span>
-      </div>
+    <div class="col-6 text-center fw-bold">
+      BỆNH VIỆN NHI TỈNH GIA LAI<br>
+      <span style="border-bottom: 1px solid;">PHÒNG KHTH - CNTT</span>
     </div>
-    <div class="col-6 text-center">
-      <strong>CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</strong><br>
-      <div style="margin-top: 4px;">
-        <span style="display: inline-block; font-style: bold; border-bottom: 1px solid black;">
-          Độc lập - Tự do - Hạnh phúc
-        </span>
-      </div>
-      <div style="margin-top: 4px;" class="fst-italic">
-        Gia Lai, ngày {{ start_date.strftime('%d') }} tháng {{ start_date.strftime('%m') }} năm {{ start_date.strftime('%Y') }}
-      </div>
+    <div class="col-6 text-center fw-bold">
+      CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM<br>
+      <span style="border-bottom: 1px solid;">Độc lập - Tự do - Hạnh phúc</span><br>
+      <em>Gia Lai, ngày {{ start_date.strftime('%d') }} tháng {{ start_date.strftime('%m') }} năm {{ start_date.strftime('%Y') }}</em>
     </div>
   </div>
 </div>
 
-<!-- TIÊU ĐỀ -->
+<!-- TIÊU ĐỀ BẢNG -->
 <div class="text-center mb-3 d-print-block">
   <h5><strong>BẢNG PHÂN TRỰC TUẦN</strong></h5>
   <p>Từ ngày {{ start_date.strftime('%d/%m/%Y') }} đến {{ end_date.strftime('%d/%m/%Y') }}</p>
 </div>
 
-<!-- FORM -->
+<!-- FORM LỌC -->
 <form method="get" class="d-flex gap-3 mb-3 d-print-none">
   <div>
     <label class="form-label mb-0">Từ ngày:</label>
@@ -49,69 +39,34 @@
   <button type="button" class="btn btn-secondary" onclick="window.print()">🖨 In Lịch Trực</button>
 </form>
 
-<!-- BẢNG -->
-<style>
-.table-scroll {
-  overflow: visible !important;
-  height: auto !important;
-}
-.table-scroll thead th {
-  position: sticky;
-  top: 0;
-  background-color: #212529;
-  color: white;
-  z-index: 2;
-}
-</style>
-
+<!-- BẢNG DỮ LIỆU -->
 <div class="table-scroll">
 <table class="table table-bordered text-center">
   <thead class="table-dark">
     <tr>
       <th>STT</th>
       <th>Khoa/Phòng</th>
-      <th>Cấp bậc/ chức vụ</th>
       {% for d in date_range %}
         <th>{{ d.strftime('%a %d/%m') }}</th>
       {% endfor %}
     </tr>
   </thead>
   <tbody>
-    {% set grouped_by_dept = {} %}
-    {% for (dept, pos), days in grouped.items() %}
-      {% if dept not in grouped_by_dept %}
-        {% set _ = grouped_by_dept.update({dept: []}) %}
-      {% endif %}
-      {% set _ = grouped_by_dept[dept].append((pos, days)) %}
-    {% endfor %}
-
-    {% for dept, entries in grouped_by_dept.items() %}
-      {% set rowspan = entries | length %}
-      {% set stt = loop.index %}
-      {% for i in range(rowspan) %}
-        <tr>
-          {% if i == 0 %}
-            <td rowspan="{{ rowspan }}">{{ stt }}</td>
-            <td rowspan="{{ rowspan }}"><strong>{{ dept }}</strong></td>
-          {% endif %}
-          <td>{{ entries[i][0] }}</td>
-          {% for d in date_range %}
-            {% set key = d.strftime('%a %d/%m') %}
-            <td>
-              {% set raw = entries[i][1].get(key, '') %}
-              {% for line in raw.split('\n') %}
-                {% if 'Trực' in line %}
-                  {{ line }}<br>
-                {% endif %}
-              {% endfor %}
-            </td>
+    {% for dept in dept_ordered %}
+    <tr>
+      <td>{{ loop.index }}</td>
+      <td><strong>{{ dept }}</strong></td>
+      {% for d in date_range %}
+        {% set key = d.strftime('%a %d/%m') %}
+        <td>
+          {% set items = grouped_by_dept[dept].get(key, []) %}
+          {% for position, line in items %}
+            {{ line }}<br>
           {% endfor %}
-        </tr>
+        </td>
       {% endfor %}
+    </tr>
     {% endfor %}
-    {% if grouped|length == 0 %}
-    <tr><td colspan="{{ date_range|length + 3 }}">Không có dữ liệu trong khoảng thời gian này.</td></tr>
-    {% endif %}
   </tbody>
 </table>
 </div>

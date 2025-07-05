@@ -1,0 +1,95 @@
+{% extends "layout.html" %}
+
+{% block title %}Bảng tổng hợp công trực{% endblock %}
+
+{% block content %}
+<h4 class="text-center mb-3">📊 BẢNG TỔNG HỢP CÔNG TRỰC THÁNG {{ thang }}/{{ nam }}</h4>
+
+<form class="row g-2 mb-3" method="get" action="{{ url_for('tong_hop_cong_truc_view') }}">
+  <div class="col-md-3">
+    <label class="form-label">Khoa/Phòng:</label>
+    <select name="department" class="form-select">
+      <option value="">Tất cả</option>
+      {% for dept in departments %}
+        <option value="{{ dept }}" {% if selected_department == dept %}selected{% endif %}>{{ dept }}</option>
+      {% endfor %}
+    </select>
+  </div>
+
+  <div class="col-md-2">
+    <label class="form-label">Chế độ:</label>
+    <select name="mode" class="form-select">
+      <option value="16h" {% if mode == '16h' %}selected{% endif %}>Tính theo giờ 16h</option>
+      <option value="24h" {% if mode == '24h' %}selected{% endif %}>Tính theo ca 24h</option>
+    </select>
+  </div>
+
+  <div class="col-md-2">
+    <label class="form-label">Từ ngày:</label>
+    <input type="date" class="form-control" name="start_date" value="{{ default_start or '' }}">
+  </div>
+
+  <div class="col-md-2">
+    <label class="form-label">Đến ngày:</label>
+    <input type="date" class="form-control" name="end_date" value="{{ default_end or '' }}">
+  </div>
+
+  <div class="col-md-3 d-flex align-items-end gap-2">
+    <button type="submit" formaction="{{ url_for('tong_hop_cong_truc_print') }}" formtarget="_blank" class="btn btn-primary">📄 In bảng</button>
+    <button type="submit" class="btn btn-secondary">👁️ Xem bảng</button>
+    <a href="{{ url_for('export_report_all', start_date=default_start, end_date=default_end, department=selected_department) }}" class="btn btn-success">⬇️ Xuất Excel</a>
+  </div>
+</form>
+
+{% if rows %}
+<div class="table-responsive">
+  <table class="table table-bordered table-sm text-center align-middle">
+    <thead class="table-light">
+      <tr>
+        <th rowspan="2">STT</th>
+        <th rowspan="2">HỌ TÊN</th>
+        <th colspan="2">Trực ngày thường</th>
+        <th colspan="2">Trực ngày nghỉ</th>
+        <th colspan="2">Trực ngày lễ</th>
+        <th rowspan="2">Tổng số<br>ngày trực</th>
+        <th rowspan="2">Ghi chú</th>
+      </tr>
+      <tr>
+        <th>Thường</th><th>HSCC</th>
+        <th>Thường</th><th>HSCC</th>
+        <th>Thường</th><th>HSCC</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in rows %}
+      <tr>
+        <td>{{ loop.index }}</td>
+        <td class="text-start">{{ r.user.name }}</td>
+        <td>{{ r.detail.get(('thường','ngày_thường'), {}).get('so_ngay', 0) }}</td>
+        <td>{{ r.detail.get(('HSCC','ngày_thường'), {}).get('so_ngay', 0) }}</td>
+        <td>{{ r.detail.get(('thường','ngày_nghỉ'), {}).get('so_ngay', 0) }}</td>
+        <td>{{ r.detail.get(('HSCC','ngày_nghỉ'), {}).get('so_ngay', 0) }}</td>
+        <td>{{ r.detail.get(('thường','ngày_lễ'), {}).get('so_ngay', 0) }}</td>
+        <td>{{ r.detail.get(('HSCC','ngày_lễ'), {}).get('so_ngay', 0) }}</td>
+        <td>{{ r.tong_ngay }}</td>
+        <td>{{ r.ghi_chu }}</td>
+      </tr>
+      {% endfor %}
+      <tr class="fw-bold">
+        <td colspan="2">Tổng cộng</td>
+        <td>{{ sum_row.detail.get(('thường','ngày_thường'), 0) }}</td>
+        <td>{{ sum_row.detail.get(('HSCC','ngày_thường'), 0) }}</td>
+        <td>{{ sum_row.detail.get(('thường','ngày_nghỉ'), 0) }}</td>
+        <td>{{ sum_row.detail.get(('HSCC','ngày_nghỉ'), 0) }}</td>
+        <td>{{ sum_row.detail.get(('thường','ngày_lễ'), 0) }}</td>
+        <td>{{ sum_row.detail.get(('HSCC','ngày_lễ'), 0) }}</td>
+        <td>{{ sum_row.tong_ngay }}</td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+{% else %}
+<p class="text-center text-muted">Không có dữ liệu để hiển thị.</p>
+{% endif %}
+{% endblock %}

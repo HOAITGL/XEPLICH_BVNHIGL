@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <title>Danh sách yêu cầu công việc</title>
+  <style>
+    @media print {
+      @page {
+        size: landscape;
+        margin: 1cm 1.5cm 1cm 1.5cm;
+      }
+      .no-print {
+        display: none !important;
+      }
+    }
+
+    body {
+      font-family: Arial, sans-serif;
+      margin: 30px;
+    }
+    .print-header {
+      display: flex;
+      justify-content: space-between;
+      font-size: 13px;
+    }
+    .print-header .left {
+      width: 40%;
+      text-align: center;
+      margin-left: 20px;
+    }
+    .print-header .center {
+      width: 20%;
+    }
+    .print-header .right {
+      width: 40%;
+      text-align: center;
+    }
+    .print-header .left p,
+    .print-header .right p {
+      margin: 2px 0;
+    }
+    .phong {
+      text-decoration: underline;
+    }
+    .doclap {
+      font-weight: bold;
+      text-decoration: underline;
+    }
+
+    h2 {
+      color: #007bff;
+      text-align: center;
+      margin-top: 0.6cm;
+      margin-bottom: 0.5cm;
+    }
+    .centered {
+      display: flex;
+      justify-content: center;
+    }
+    table {
+      border-collapse: collapse;
+      margin-top: 0;
+      width: auto;
+    }
+    th, td {
+      border: 1px solid #ccc;
+      padding: 8px 10px;
+      text-align: center;
+    }
+    th {
+      background-color: #f0f0f0;
+    }
+    tr:nth-child(even) {
+      background-color: #fafafa;
+    }
+    .btn {
+      display: inline-block;
+      padding: 8px 13px;
+      background: #007bff;
+      color: white;
+      text-decoration: none;
+      border-radius: 6px;
+      margin-left: 10px;
+    }
+    .header-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+    .signatures {
+      width: 100%;
+      font-size: 13px;
+      margin-top: 0.5cm;
+      display: flex;
+      justify-content: space-around;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <div class="print-header">
+    <div class="left">
+      <p><strong>BỆNH VIỆN NHI TỈNH GIA LAI</strong></p>
+      <p class="phong"><strong>PHÒNG KẾ HOẠCH TH-CNTT</strong></p>
+    </div>
+    <div class="center"></div>
+    <div class="right">
+      <p><strong>CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</strong></p>
+      <p class="doclap">Độc lập - Tự do - Hạnh phúc</p>
+      <p><em>Gia Lai, ngày 05 tháng 07 năm 2025</em></p>
+    </div>
+  </div>
+
+  <h2>DANH SÁCH YÊU CẦU CÔNG VIỆC tháng {{ month }}</h2>
+
+  <div class="header-row no-print">
+    <div></div>
+    <div>
+      <a href="/" class="btn">🏠 Về trang chủ</a>
+      <button onclick="window.print()" class="btn">🖨️ In bảng</button>
+      <a href="/xuat-excel" class="btn">📥 Xuất Excel</a>
+    </div>
+  </div>
+
+  <div class="centered">
+    <table id="yeuCauTable">
+      <thead>
+        <tr>
+          <th>NGÀY THÁNG</th>
+          <th>KHOA / PHÒNG</th>
+          <th>LỖI</th>
+          <th>SỐ HỒ SƠ</th>
+          <th>SỐ PHIẾU</th>
+          <th>NỘI DUNG YÊU CẦU CV</th>
+          <th>TÊN NGƯỜI YÊU CẦU</th>
+          <th>CHỮ KÝ</th>
+          <th>HOÀ</th>
+          <th>HIỆP</th>
+          <th>ÁNH</th>
+          <th>NAM</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in data %}
+          <tr>
+           {% for cell in row %}
+             <td>{{ cell }}</td>
+           {% endfor %}
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="signatures d-print-block">
+    <div>
+      <strong>NGƯỜI LẬP BẢNG</strong><br><em>(Ký, ghi rõ họ tên)</em>
+    </div>
+    <div>
+      <strong>TRƯỞNG PHÒNG</strong><br><em>(Ký, ghi rõ họ tên)</em>
+    </div>
+    <div>
+      <strong>PHÒNG TỔ CHỨC - HCQT</strong><br><em>(Ký, ghi rõ họ tên)</em>
+    </div>
+    <div>
+      <strong>GIÁM ĐỐC</strong><br><em>(Ký, ghi rõ họ tên)</em>
+    </div>
+  </div>
+</body>
+</html>

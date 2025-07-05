@@ -4,38 +4,18 @@
     <meta charset="UTF-8">
     <title>Bảng phân lịch phòng khám</title>
     <style>
-        body {
-            font-family: "Times New Roman", Times, serif;
-            font-size: 16px;
-        }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 15px;
-        }
-        th, td {
-            border: 1px solid black;
-            padding: 6px;
-            text-align: center;
-        }
-        .header-center {
-            text-align: center;
-            font-weight: bold;
-        }
-        .footer-note {
-            margin-top: 30px;
-        }
-        .footer-note td {
-            vertical-align: top;
-        }
+        body { font-family: "Times New Roman", Times, serif; font-size: 16px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        th, td { border: 1px solid black; padding: 6px; text-align: center; vertical-align: top; }
+        .header-center { text-align: center; font-weight: bold; }
+        .footer-note { margin-top: 30px; }
+        .footer-note td { vertical-align: top; }
     </style>
 </head>
 <body onload="window.print()">
     <table>
         <tr>
-            <td class="header-center" colspan="3">
-                <strong>BỆNH VIỆN NHI TỈNH GIA LAI</strong>
-            </td>
+            <td class="header-center" colspan="3"><strong>BỆNH VIỆN NHI TỈNH GIA LAI</strong></td>
             <td class="header-center" colspan="4">
                 <strong>CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</strong><br>
                 Độc lập - Tự do - Hạnh phúc<br>
@@ -57,17 +37,11 @@
             </tr>
         </thead>
         <tbody>
-            <tr>
-                <td><strong>Khu tiếp đón - Đóng dấu - Dẫn BN</strong></td>
-                {% for d in date_range %}
-                    <td>{{ clinic_schedule['tiep_don'][d] or '' }}</td>
-                {% endfor %}
-            </tr>
-            {% for room_name, shifts in clinic_schedule['phong_kham'].items() %}
+            {% for room_name, shifts in clinic_schedule.items() %}
             <tr>
                 <td><strong>{{ room_name }}</strong></td>
                 {% for d in date_range %}
-                    <td>{{ shifts[d] or '' }}</td>
+                    <td>{{ get_titled_names(shifts[d], user_positions)|safe }}</td>
                 {% endfor %}
             </tr>
             {% endfor %}
@@ -80,7 +54,8 @@
                 <strong>Nơi nhận:</strong><br>
                 - Ban Giám đốc<br>
                 - Các khoa phòng<br>
-                - Lưu: VT
+                - Đăng website<br>
+                - Lưu: VP, KH-CNTT
             </td>
             <td width="30%" style="text-align: center;">
                 <strong>NGƯỜI LẬP BẢNG</strong><br>

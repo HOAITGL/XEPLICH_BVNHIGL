@@ -1,0 +1,184 @@
+{% set thang = start_date.split('-')[1]|int %}
+{% set nam = start_date.split('-')[0]|int %}
+{% set ngay = current_day %}
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <title>In bảng thanh toán</title>
+    <style>
+      body {
+          font-family: "Times New Roman", serif;
+      }
+      table {
+          width: 100%;
+          border-collapse: collapse;
+      }
+      th, td {
+          border: 1px solid black;
+          padding: 5px;
+          text-align: center;
+      }
+      .ho-ten { width: 4.5cm; text-align: left; padding-left: 6px; }
+      .tien-an { width: 2.2cm; }
+      .header {
+          font-weight: bold;
+          text-align: center;
+          margin-top: 10px;
+          width: 100%;
+          display: block;
+      }
+      h2.header {
+          text-align: center;
+          margin: 0 auto;
+      }
+      .no-border { border: none; }
+      .italic { font-style: italic; }
+      .signature-block {
+          text-align: center;
+          margin-top: 1cm;
+      }
+      .text-right { text-align: right; }
+      .text-start { text-align: left; }
+      @media print {
+          @page { size: A4 landscape; margin: 1cm 1cm 1cm 1.5cm; }
+          button { display: none !important; }
+      }
+      .print-button {
+          text-align: right;
+          margin-bottom: 5px;
+      }
+    </style>
+  </head>
+<body>
+<div class="print-button">
+    <button onclick="window.print()">🖨️ In ngay</button>
+</div>
+
+<table style="float: left; width: 50%; text-align: center; border-collapse: collapse;">
+    <tr>
+        <td style="border: none;"><strong>BỆNH VIỆN NHI TỈNH GIA LAI</strong></td>
+    </tr>
+    <tr>
+        <td style="border: none;">
+            <div style="display: inline-block; border-bottom: 1px solid black; padding-bottom: 2px;">
+                {% if selected_department != 'all' %}
+                    {{ selected_department }}
+                {% else %}
+                    PHÒNG TÀI CHÍNH KẾ TOÁN
+                {% endif %}
+            </div>
+        </td>
+    </tr>
+</table>
+
+<table style="float: right; width: 50%; text-align: center; border-collapse: collapse;">
+    <tr>
+        <td style="border: none;"><strong>CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</strong></td>
+    </tr>
+    <tr>
+        <td style="border: none;">
+            <div style="display: inline-block; border-bottom: 1px solid black; padding-bottom: 2px;">
+                Độc lập - Tự do - Hạnh phúc
+            </div>
+        </td>
+    </tr>
+    <tr>
+        <td style="border: none;">
+            <span class="italic">Gia Lai, ngày {{ current_day }} tháng {{ current_month }} năm {{ current_year }}</span>
+        </td>
+    </tr>
+</table>
+
+<div style="clear: both;"></div>
+
+<h2 class="header">BẢNG THANH TOÁN TIỀN TRỰC THÁNG {{ thang }}/{{ nam }}</h2>
+<div class="header">Trực {{ '16h' if mode == '16h' else '24h' }}</div>
+
+<table>
+    <thead>
+        <tr>
+            <th rowspan="2">STT</th>
+            <th rowspan="2" class="ho-ten">HỌ TÊN</th>
+            <th colspan="2">Trực ngày thường</th>
+            <th colspan="2">Trực ngày nghỉ</th>
+            <th colspan="2">Trực ngày lễ</th>
+            <th rowspan="2">Tổng số<br>ngày trực</th>
+            <th rowspan="2">Thành tiền<br>QĐ 73</th>
+            <th rowspan="2">Tiền ăn<br>(15.000đ/ngày)</th>
+            <th rowspan="2">Tổng cộng<br>thành tiền</th>
+            <th rowspan="2">Ký nhận</th>
+            <th rowspan="2">Ghi chú</th>
+        </tr>
+        <tr>
+            <th>Thường</th><th>HSCC</th>
+            <th>Thường</th><th>HSCC</th>
+            <th>Thường</th><th>HSCC</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for r in rows %}
+        <tr>
+            <td>{{ loop.index }}</td>
+            <td class="ho-ten">{{ r.user.name }}</td>
+            <td>{{ r.detail[('thường', 'ngày_thường')].so_ngay }}</td>
+            <td>{{ r.detail[('HSCC', 'ngày_thường')].so_ngay }}</td>
+            <td>{{ r.detail[('thường', 'ngày_nghỉ')].so_ngay }}</td>
+            <td>{{ r.detail[('HSCC', 'ngày_nghỉ')].so_ngay }}</td>
+            <td>{{ r.detail[('thường', 'ngày_lễ')].so_ngay }}</td>
+            <td>{{ r.detail[('HSCC', 'ngày_lễ')].so_ngay }}</td>
+            <td>{{ r.tong_ngay }}</td>
+            <td>{{ "{:,.0f}".format(r.tien_ca).replace(",", ".") }}</td>
+            <td>{{ "{:,.0f}".format(r.tien_an).replace(",", ".") }}</td>
+            <td>{{ "{:,.0f}".format(r.tong_tien).replace(",", ".") }}</td>
+            <td></td>
+            <td>{{ r.ghi_chu }}</td>
+        </tr>
+        {% endfor %}
+        <tr style="font-weight: bold;">
+            <td colspan="2" class="text-start">Tổng cộng</td>
+            <td>{{ sum_row.detail[('thường', 'ngày_thường')] }}</td>
+            <td>{{ sum_row.detail[('HSCC', 'ngày_thường')] }}</td>
+            <td>{{ sum_row.detail[('thường', 'ngày_nghỉ')] }}</td>
+            <td>{{ sum_row.detail[('HSCC', 'ngày_nghỉ')] }}</td>
+            <td>{{ sum_row.detail[('thường', 'ngày_lễ')] }}</td>
+            <td>{{ sum_row.detail[('HSCC', 'ngày_lễ')] }}</td>
+            <td>{{ sum_row.tong_ngay }}</td>
+            <td>{{ "{:,.0f}".format(sum_row.tien_ca).replace(",", ".") }}</td>
+            <td>{{ "{:,.0f}".format(sum_row.tien_an).replace(",", ".") }}</td>
+            <td>{{ "{:,.0f}".format(sum_row.tong_tien).replace(",", ".") }}</td>
+            <td></td>
+            <td></td>
+        </tr>
+    </tbody>
+</table>
+
+<div class="italic" style="margin-top: 6px;">
+    Bằng chữ: {{ tong_tien_bang_chu }}.
+</div>
+
+<table class="no-border" style="width: 100%; margin-top: 0.5cm;">
+    <tr class="no-border">
+        <td class="no-border signature-block">
+            <strong>Người lập bảng</strong><br>
+            <em>(Ký, ghi rõ họ tên)</em>
+        </td>
+        <td class="no-border signature-block">
+            <strong>
+            {% if 'Phòng' in selected_department %}
+                Trưởng phòng
+            {% else %}
+                Trưởng khoa
+            {% endif %}
+            </strong><br>
+            <em>(Ký, ghi rõ họ tên)</em>
+        </td>
+        <td class="no-border signature-block">
+            <strong>Giám đốc</strong><br>
+            <em>(Ký, ghi rõ họ tên)</em>
+        </td>
+    </tr>
+</table>
+
+</body>
+</html>

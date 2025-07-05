@@ -1,0 +1,33 @@
+
+{% extends 'layout.html' %}
+{% block content %}
+
+<h2>Danh sách đơn nghỉ phép</h2>
+<a href="/leaves/add" class="btn btn-primary mb-3">Thêm đơn nghỉ phép</a>
+<table class="table table-bordered">
+    <thead>
+        <tr>
+            <th>Họ tên</th>
+            <th>Từ ngày</th>
+            <th>Đến ngày</th>
+            <th>Lý do</th>
+            <th>Hành động</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for leave in leaves %}
+        <tr>
+            <td>{{ leave.user.name }}</td>
+            <td>{{ leave.start_date.strftime('%d/%m/%Y') }}</td>
+            <td>{{ leave.end_date.strftime('%d/%m/%Y') }}</td>
+            <td>{{ leave.reason }}</td>
+            <td>
+                <a href="/leaves/print/{{ leave.id }}" class="btn btn-sm btn-primary">In đơn</a>
+    		<a href="{{ url_for('export_leave_word', leave_id=leave.id) }}">Xuất Word</a>
+    		<a href="/leaves/delete/{{ leave.id }}" onclick="return confirm('Xoá đơn nghỉ này?')" class="btn btn-sm btn-danger">🗑 Xoá</a>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}

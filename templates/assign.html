@@ -5,6 +5,7 @@
 <div class="d-flex align-items-center gap-3 mb-3">
   <h2>📅 Xếp lịch trực theo khoa</h2>
   <a href="{{ url_for('auto_assign_page') }}" class="btn btn-warning">⚙️ Tạo lịch tự động</a>
+  <a href="{{ url_for('auto_attendance_page') }}" class="btn btn-info">🗓️ Tạo bảng chấm công tự động</a>
 </div>
 
 <!-- Hiển thị cảnh báo nếu có -->
@@ -52,7 +53,6 @@
         overflow: auto;
         border: 1px solid #dee2e6;
       }
-
       .table thead th {
         position: sticky;
         top: 0;
@@ -61,36 +61,30 @@
         text-align: center;
         vertical-align: middle;
       }
-
       .table td, .table th {
         text-align: center;
         vertical-align: middle;
         padding: 6px;
       }
-
       .sticky-col {
         position: sticky;
         left: 0;
         background: white;
         z-index: 2;
       }
-
       .sticky-col-2 {
         position: sticky;
         left: 160px;
         background: white;
         z-index: 2;
       }
-
       th:first-child, td:first-child {
         min-width: 160px;
         text-align: left;
       }
-
       th:nth-child(2), td:nth-child(2) {
         min-width: 80px;
       }
-
       th:nth-child(n+3), td:nth-child(n+3) {
         min-width: 55px;
       }
@@ -110,7 +104,15 @@
         <tbody>
           {% for user in users %}
             <tr>
-              <td class="sticky-col">{{ user.name }}</td>
+              <td class="sticky-col">
+                {{ user.name }}
+                {% set leave = leaves | selectattr('user_id', 'equalto', user.id) | list | first %}
+                {% if leave %}
+                  <span class="badge bg-danger ms-1">
+                    Nghỉ {{ leave.start_date.strftime('%d/%m') }}-{{ leave.end_date.strftime('%d/%m') }}
+                  </span>
+                {% endif %}
+              </td>
               <td class="sticky-col-2">{{ user.position }}</td>
               {% for shift in shifts %}
                 <td><input type="checkbox" name="schedule" value="{{ user.id }}-{{ shift.id }}"></td>

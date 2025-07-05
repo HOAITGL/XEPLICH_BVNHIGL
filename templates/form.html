@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <title>Yêu cầu công việc</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      background-color: #f4f4f4;
+      display: flex;
+      justify-content: center;
+      padding: 40px 10px;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 700px;
+      background: white;
+      padding: 30px;
+      border-radius: 12px;
+      box-shadow: 0 0 15px rgba(0, 0, 0, 0.1);
+    }
+
+    h2 {
+      text-align: center;
+      margin-bottom: 25px;
+      color: #007bff;
+    }
+
+    label {
+      font-weight: bold;
+      margin-bottom: 5px;
+      display: block;
+    }
+
+    input, select, textarea {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 8px;
+      font-size: 14px;
+      border-radius: 6px;
+      border: 1px solid #ccc;
+    }
+
+    .form-group {
+      margin-top: 15px;
+    }
+
+    .row {
+      display: flex;
+      gap: 20px;
+      margin-top: 10px;
+    }
+
+    .column {
+      flex: 1;
+    }
+
+    .row.align-items-center {
+      display: flex;
+      align-items: center;
+      margin-top: 15px;
+      gap: 10px;
+    }
+
+    .radio-group {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 20px;
+      padding-left: 25px;
+    }
+
+    button {
+      margin-top: 25px;
+      width: 100%;
+      padding: 10px;
+      background: #007bff;
+      color: white;
+      font-size: 16px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background: #0056b3;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>BẢNG YÊU CẦU CÔNG VIỆC</h2>
+    <form method="POST">
+      <div class="form-group">
+        <label>Ngày tháng:</label>
+        <input type="date" name="ngay_thang" required>
+      </div>
+
+      <div class="row">
+        <div class="column">
+          <label>Khoa yêu cầu:</label>
+          <select name="khoa" id="khoaSelect" required>
+            {% if staff_by_unit|length == 1 %}
+              {% for khoa in staff_by_unit %}
+                <option value="{{ khoa }}">{{ khoa }}</option>
+              {% endfor %}
+            {% else %}
+              <option value="">-- Chọn khoa --</option>
+              {% for khoa in staff_by_unit %}
+                <option value="{{ khoa }}">{{ khoa }}</option>
+              {% endfor %}
+            {% endif %}
+          </select>
+        </div>
+        <div class="column">
+          <label>Tên người yêu cầu:</label>
+          <select name="nguoi_yeu_cau" id="nhanVienSelect" required>
+            <option value="">-- Chọn nhân viên --</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Loại lỗi:</label>
+        <select id="loaiLoiSelect" required>
+          <option value="">-- Chọn loại lỗi --</option>
+          <option value="phan_cung">Phần cứng</option>
+          <option value="phan_mem">Phần mềm</option>
+        </select>
+      </div>
+
+      <div class="form-group" id="loiPhanCung" style="display:none;">
+        <label>Chọn lỗi phần cứng:</label>
+        <select>
+          <option value="Lỗi mạng internet">Lỗi mạng internet</option>
+          <option value="Lỗi máy in">Lỗi máy in</option>
+          <option value="Lỗi máy tính">Lỗi máy tính</option>
+        </select>
+      </div>
+
+      <div class="form-group" id="loiPhanMem" style="display:none;">
+        <label>Chọn lỗi phần mềm:</label>
+        <select>
+          <option value="Lỗi HIS">Lỗi HIS</option>
+          <option value="Lỗi Dược">Lỗi Dược</option>
+          <option value="Lỗi chỉ định CLS">Lỗi chỉ định CLS</option>
+        </select>
+      </div>
+
+      <div class="form-group" id="group_so_ho_so" style="display:none;">
+        <label>Số hồ sơ:</label>
+        <input type="text" name="so_ho_so">
+      </div>
+
+      <div class="form-group" id="group_so_phieu" style="display:none;">
+        <label>Số phiếu:</label>
+        <input type="text" name="so_phieu">
+      </div>
+
+      <div class="form-group" id="group_noi_dung" style="display:none;">
+        <label>Nội dung công việc:</label>
+        <textarea name="noi_dung" rows="4"></textarea>
+      </div>
+
+      <div class="form-group">
+        <label>Xác nhận công việc:</label>
+        <input type="text" name="chu_ky" required>
+      </div>
+
+      <div class="row align-items-center">
+        <label><strong>CNTT xác nhận:</strong></label>
+        <div class="radio-group">
+          <label><input type="radio" name="xac_nhan" value="Hòa" required> Hòa</label>
+          <label><input type="radio" name="xac_nhan" value="Ánh"> Ánh</label>
+          <label><input type="radio" name="xac_nhan" value="Nam"> Nam</label>
+          <label><input type="radio" name="xac_nhan" value="Hiệp"> Hiệp</label>
+        </div>
+      </div>
+
+      <div class="form-group" style="margin-top: 10px;">
+        <label style="text-align: center; display: block;">Số điện thoại:</label>
+        <div id="so_dien_thoai" style="text-align: center; font-weight: bold; color: #007bff; margin-top: 5px;"></div>
+      </div>
+
+      <div class="d-flex justify-content-between mt-3">
+          <a href="{{ url_for('index') }}" class="btn btn-secondary">🏠 Về trang chủ</a>
+          <button type="submit" class="btn btn-primary">Gửi yêu cầu công việc</button>
+      </div>
+    </form>
+  </div>
+
+  <script>
+    const staffByUnit = {{ staff_by_unit | tojson }};
+    const khoaSelect = document.getElementById("khoaSelect");
+    const nhanVienSelect = document.getElementById("nhanVienSelect");
+
+    khoaSelect.addEventListener("change", () => {
+      const khoa = khoaSelect.value;
+      nhanVienSelect.innerHTML = '<option value="">-- Chọn nhân viên --</option>';
+      (staffByUnit[khoa] || []).forEach(name => {
+        const opt = document.createElement("option");
+        opt.value = name;
+        opt.textContent = name;
+        nhanVienSelect.appendChild(opt);
+      });
+    });
+
+    const loaiLoiSelect = document.getElementById("loaiLoiSelect");
+    const loiPhanCung = document.getElementById("loiPhanCung");
+    const loiPhanMem = document.getElementById("loiPhanMem");
+    const loiCungSelect = loiPhanCung.querySelector("select");
+    const loiMemSelect = loiPhanMem.querySelector("select");
+
+    const soHoSoGroup = document.getElementById("group_so_ho_so");
+    const soPhieuGroup = document.getElementById("group_so_phieu");
+    const noiDungGroup = document.getElementById("group_noi_dung");
+
+    loaiLoiSelect.addEventListener("change", function () {
+      if (this.value === "phan_cung") {
+        loiPhanCung.style.display = "block";
+        loiPhanMem.style.display = "none";
+        loiCungSelect.setAttribute("name", "loi");
+        loiMemSelect.removeAttribute("name");
+
+        soHoSoGroup.style.display = "none";
+        soPhieuGroup.style.display = "none";
+        noiDungGroup.style.display = "block";
+      } else if (this.value === "phan_mem") {
+        loiPhanCung.style.display = "none";
+        loiPhanMem.style.display = "block";
+        loiMemSelect.setAttribute("name", "loi");
+        loiCungSelect.removeAttribute("name");
+
+        soHoSoGroup.style.display = "block";
+        soPhieuGroup.style.display = "block";
+        noiDungGroup.style.display = "block";
+      } else {
+        loiPhanCung.style.display = "none";
+        loiPhanMem.style.display = "none";
+        loiCungSelect.removeAttribute("name");
+        loiMemSelect.removeAttribute("name");
+
+        soHoSoGroup.style.display = "none";
+        soPhieuGroup.style.display = "none";
+        noiDungGroup.style.display = "block";
+      }
+    });
+
+    document.addEventListener('DOMContentLoaded', function () {
+      const radios = document.querySelectorAll('input[name="xac_nhan"]');
+      const phoneDiv = document.getElementById('so_dien_thoai');
+
+      const shortToFullName = {
+        "Hòa": "Trương Minh Hòa",
+        "Ánh": "Bùi Thị Hồng Ánh",
+        "Hiệp": "Tạ Quang Hiệp",
+        "Nam": "Võ Thị Thanh Trúc"
+      };
+
+      let userPhones = {};
+
+      fetch('/api/user-phones')
+        .then(response => response.json())
+        .then(data => {
+          userPhones = data;
+
+          radios.forEach(radio => {
+            radio.addEventListener('change', function () {
+              const shortName = this.value.trim();
+              const fullName = shortToFullName[shortName];
+              const phone = userPhones[fullName] || 'Không có số điện thoại';
+              phoneDiv.textContent = phone;
+            });
+          });
+        });
+    });
+
+    document.addEventListener("DOMContentLoaded", function () {
+      const khoaSelect = document.getElementById("khoaSelect");
+      if (khoaSelect) {
+        khoaSelect.dispatchEvent(new Event("change"));
+      }
+    });
+  </script>
+</body>
+</html>

@@ -1,7 +1,16 @@
 {% extends 'layout.html' %}
 {% block title %}Phân quyền người dùng{% endblock %}
+
 {% block content %}
 <h2>🔐 Hệ thống phân quyền</h2>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% for category, message in messages %}
+    <div class="alert alert-{{ 'danger' if category == 'danger' else category }} mt-2">
+      {{ message }}
+    </div>
+  {% endfor %}
+{% endwith %}
 
 <form method="POST">
   <table class="table table-bordered">
@@ -16,7 +25,7 @@
     </thead>
     <tbody>
       {% for user in users %}
-        <tr>
+        <tr class="{% if user.role == 'admin' %}table-danger{% elif user.role == 'manager' %}table-warning{% else %}table-light{% endif %}">
           <td>{{ user.name }}</td>
           <td>{{ user.username }}</td>
           <td>
@@ -27,17 +36,22 @@
             </select>
           </td>
           <td>
-            <select name="role_{{ user.id }}" class="form-select">
-              <option value="admin" {% if user.role == 'admin' %}selected{% endif %}>Admin</option>
-              <option value="manager" {% if user.role == 'manager' %}selected{% endif %}>Manager</option>
-              <option value="user" {% if user.role == 'user' %}selected{% endif %}>User</option>
-            </select>
+            {% if user.id == session['user_id'] %}
+              <span class="badge bg-secondary">{{ user.role.capitalize() }}</span>
+              <input type="hidden" name="role_{{ user.id }}" value="{{ user.role }}">
+            {% else %}
+              <select name="role_{{ user.id }}" class="form-select">
+                {% for r in roles %}
+                  <option value="{{ r }}" {% if user.role == r %}selected{% endif %}>{{ r.capitalize() }}</option>
+                {% endfor %}
+              </select>
+            {% endif %}
           </td>
           <td>
             <select name="position_{{ user.id }}" class="form-select">
-              <option value="Bác sĩ" {% if user.position == 'Bác sĩ' %}selected{% endif %}>Bác sĩ</option>
-              <option value="Điều dưỡng" {% if user.position == 'Điều dưỡng' %}selected{% endif %}>Điều dưỡng</option>
-              <option value="Kỹ thuật viên" {% if user.position == 'Kỹ thuật viên' %}selected{% endif %}>Kỹ thuật viên</option>
+              {% for p in positions %}
+                <option value="{{ p }}" {% if user.position == p %}selected{% endif %}>{{ p }}</option>
+              {% endfor %}
             </select>
           </td>
         </tr>

@@ -1,0 +1,70 @@
+{% extends "layout.html" %}
+{% block title %}Tạo bảng chấm công tự động{% endblock %}
+{% block content %}
+
+<h2>🗓️ Tạo bảng chấm công tự động</h2>
+
+<form method="POST" id="attendanceForm">
+  <div class="mb-3">
+    <label for="department">Chọn khoa:</label>
+    <select name="department" id="department" class="form-select" required>
+      <option value="">-- Chọn khoa --</option>
+      {% for d in departments %}
+        <option value="{{ d }}" {% if d == selected_department %}selected{% endif %}>{{ d }}</option>
+      {% endfor %}
+    </select>
+  </div>
+
+  <div class="mb-3 d-flex gap-3">
+    <div>
+      <label for="start_date">Từ ngày:</label>
+      <input type="date" name="start_date" id="start_date" class="form-control" required>
+    </div>
+    <div>
+      <label for="end_date">Đến ngày:</label>
+      <input type="date" name="end_date" id="end_date" class="form-control" required>
+    </div>
+  </div>
+
+  <div class="mb-3">
+    <label for="shift_code">Chọn ca làm ngày:</label>
+    <select name="shift_code" id="shift_code" class="form-select" required>
+      {% for shift in day_shifts %}
+        <option value="{{ shift.code }}">{{ shift.name }}</option>
+      {% endfor %}
+    </select>
+  </div>
+
+  <div class="mb-3">
+    <label>Chọn nhân viên làm ngày:</label>
+    <div class="d-flex flex-wrap gap-2">
+      {% if users %}
+        {% for staff in users %}
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" name="staff_ids" value="{{ staff.id }}" id="staff{{ staff.id }}">
+            <label class="form-check-label" for="staff{{ staff.id }}">{{ staff.name }} ({{ staff.position }})</label>
+          </div>
+        {% endfor %}
+      {% else %}
+        <p>Chưa có nhân viên nào trong khoa này.</p>
+      {% endif %}
+    </div>
+  </div>
+
+  <button type="submit" class="btn btn-primary">Chấm công</button>
+</form>
+
+<script>
+  // Nếu muốn tự động submit form khi chọn khoa (để load lại trang với nhân viên theo khoa)
+  document.getElementById('department').addEventListener('change', function() {
+    // Gửi GET request để tải lại trang với tham số khoa được chọn
+    const selected = this.value;
+    if(selected) {
+      window.location.href = '{{ url_for("auto_attendance_page") }}?department=' + encodeURIComponent(selected);
+    } else {
+      window.location.href = '{{ url_for("auto_attendance_page") }}';
+    }
+  });
+</script>
+
+{% endblock %}

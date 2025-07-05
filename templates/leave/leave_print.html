@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <title>Đơn xin nghỉ phép</title>
+  <style>
+    body {
+      font-family: "Times New Roman", serif;
+      font-size: 14px;
+      margin: 2cm 2cm 2cm 2.5cm;
+      position: relative;
+    }
+    .print-button {
+      position: absolute;
+      top: 10px;
+      right: 20px;
+      z-index: 1000;
+    }
+    .font13 { font-size: 13px; }
+    .font14 { font-size: 14px; }
+    .row { display: flex; justify-content: space-between; }
+    .col-left, .col-right {
+      width: 50%;
+      text-align: center;
+    }
+    .bold { font-weight: bold; }
+    .italic { font-style: italic; }
+    .underline { text-decoration: underline; }
+    .bordered { border-bottom: 1px solid black; display: inline-block; padding-bottom: 2px; }
+    .center-title {
+      text-align: center;
+      font-weight: bold;
+      margin: 30px 0 20px;
+      font-size: 14px;
+      text-transform: uppercase;
+    }
+    .section { margin-top: 20px; line-height: 1.8; }
+    .signature {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 40px;
+      font-size: 14px;
+    }
+    .signature div {
+      width: 45%;
+      text-align: center;
+    }
+    .footer-align {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 40px;
+      font-size: 14px;
+    }
+    @media print {
+      .print-button { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+<button class="print-button" onclick="window.print()">🖨 In đơn</button>
+
+<div class="row">
+  <div class="col-left">
+    <div class="font13">BỆNH VIỆN NHI TỈNH GIA LAI</div>
+    <div class="bold font14" style="margin-top: 3px;">
+      <span class="bordered">{{ user.department }}</span>
+    </div>
+  </div>
+  <div class="col-right">
+    <div class="bold font14" style="white-space: nowrap;">CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</div>
+    <div style="margin-top: 3px;">
+      <span class="bold underline font14">Độc lập - Tự do - Hạnh phúc</span>
+    </div>
+  </div>
+</div>
+
+<div class="center-title">ĐƠN XIN NGHỈ PHÉP</div>
+
+<div class="section font14">
+  <p style="margin-left: 1cm;"><strong><em>Kính gửi:</em></strong></p>
+  <div style="margin-left: 3cm; line-height: 1.4;">
+    - Giám đốc Bệnh viện Nhi tỉnh Gia Lai<br>
+    - Phòng Tổ chức - Hành chính quản trị<br>
+    - {{ user.department }}
+  </div>
+
+  <p>Tên tôi là: <strong>{{ user.name|upper }}</strong>&nbsp;&nbsp;&nbsp;&nbsp;
+     Sinh ngày: <strong>{{ leave.birth_date.strftime('%d/%m/%Y') }}</strong></p>
+  <p>Chức vụ: {{ user.position }}&nbsp;&nbsp;&nbsp;&nbsp;
+     Năm vào công tác: <strong>{{ user.start_year }}</strong></p>
+  <p>Đơn vị công tác: {{ user.department }} - Bệnh viện Nhi tỉnh Gia Lai</p>
+  <p>Nay tôi làm đơn này trình Ban Giám đốc, Phòng Tổ chức - Hành chính quản trị xem xét và sắp xếp cho tôi được nghỉ phép.</p>
+  <p>Thời gian nghỉ: từ ngày {{ leave.start_date.strftime('%d/%m/%Y') }} đến ngày {{ leave.end_date.strftime('%d/%m/%Y') }}</p>
+  <p>Lý do: {{ leave.reason }}</p>
+  <p>Nơi nghỉ phép: {{ leave.location }}</p>
+  <p>Tôi xin cam đoan sẽ bàn giao công việc đầy đủ và trở lại làm việc đúng thời gian quy định.</p>
+  <p>Vậy kính mong các cấp giải quyết, tôi xin chân thành cảm ơn./.</p>
+</div>
+
+<table style="width: 100%; margin-top: 40px;">
+  <tr>
+    <!-- BÊN TRÁI -->
+    <td style="width: 50%; text-align: left; vertical-align: top;">
+      <div style="margin-top: 20px;" class="bold">{{ leave.user.department|upper }}</div>
+    </td>
+
+    <!-- BÊN PHẢI - CANH GIỮA -->
+    <td style="width: 50%; text-align: center;">
+      Gia Lai, ngày {{ leave.start_date.strftime('%d') }} tháng {{ leave.start_date.strftime('%m') }} năm {{ leave.start_date.strftime('%Y') }}<br>
+      <span class="bold">Người làm đơn</span><br>
+      <em>(Ký và ghi rõ họ tên)</em><br><br><br>
+      <div style="height: 1.5cm;"></div>
+      <span class="bold">{{ user.name|upper }}</span>
+    </td>
+  </tr>
+</table>
+
+<div class="footer-align">
+  <div class="bold">GIÁM ĐỐC</div>
+  <div class="bold">PHÒNG TỔ CHỨC – HC QT</div>
+</div>
+
+</body>
+</html>

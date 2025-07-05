@@ -1,0 +1,12 @@
+{% extends 'layout.html' %}
+{% block content %}
+<h3>📄 Xuất bảng thanh toán tiền trực</h3>
+<form method="get" action="{{ url_for('export_shift_payment_all') }}">
+  <label for="ca_loai">Chọn loại ca:</label>
+  <select name="ca_loai" id="ca_loai" class="form-select w-25 d-inline">
+    <option value="16h">Ca 16h</option>
+    <option value="24h">Ca 24h</option>
+  </select>
+  <button class="btn btn-primary">Xuất bảng</button>
+</form>
+{% endblock %}

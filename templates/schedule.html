@@ -2,44 +2,31 @@
 {% block title %}Lịch trực theo khoa{% endblock %}
 {% block content %}
 
-{% if user and user.name %}
-  <p class="user-greeting d-print-none">Xin chào {{ user.name }} ({{ user.role }})</p>
-{% endif %}
-
-
-<!-- Thông báo flash -->
-{% with messages = get_flashed_messages(with_categories=true) %}
-  {% if messages %}
-    {% for category, message in messages %}
-      <div class="alert alert-{{ 'success' if category == 'success' else 'danger' }} alert-dismissible fade show" role="alert">
-        {{ message }}
-        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Đóng"></button>
-      </div>
-    {% endfor %}
-  {% endif %}
-{% endwith %}
-
-<!-- TIÊU ĐỀ CHUẨN CÔNG VĂN -->
+<!-- TIÊU ĐỀ IN -->
 <div class="d-none d-print-block text-center mb-3">
   <div class="row">
-    <div class="col-6 text-start">
-      <strong>BỆNH VIỆN NHI TỈNH GIA LAI</strong><br>
-      {% if selected_department %}
-      <span style="display:inline-block; font-weight:bold; border-bottom:1px solid black; margin-left:25px;">
-        {{ selected_department.upper() }}
-      </span>
-      {% endif %}
+    <div class="col-6">
+      <div class="text-center">
+        <div><strong>BỆNH VIỆN NHI TỈNH GIA LAI</strong></div>
+        {% if selected_department %}
+        <div>
+          <span style="font-weight:bold; border-bottom:1px solid black;">
+            {{ selected_department.upper() }}
+          </span>
+        </div>
+        {% endif %}
+      </div>
     </div>
     <div class="col-6 text-center">
       <strong>CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</strong><br>
       <div style="margin-top: 4px;">
-        <span style="display: inline-block; font-style: italic; border-bottom: 1px solid black;">
-          Độc lập - Tự do - Hạnh phúc
+  	<span style="display: inline-block; font-weight: bold; border-bottom: 1px solid black;">
+    	  Độc lập - Tự do - Hạnh phúc
         </span>
       </div>
       {% if now %}
       <div style="margin-top: 4px;">
-        Gia Lai, ngày {{ now.strftime('%d') }} tháng {{ now.strftime('%m') }} năm {{ now.strftime('%Y') }}
+        <em>Gia Lai, ngày {{ now.strftime('%d') }} tháng {{ now.strftime('%m') }} năm {{ now.strftime('%Y') }}</em>
       </div>
       {% endif %}
     </div>
@@ -53,6 +40,7 @@
   Lịch trực tuần ngày {{ start_date.strftime('%d/%m/%Y') }} đến ngày {{ end_date.strftime('%d/%m/%Y') }}
 </p>
 
+<!-- FORM CHỌN KHOẢNG NGÀY & KHOA -->
 <div class="container-fluid px-0">
   <form method="GET" class="row g-2 align-items-end">
     <div class="col-md-3">
@@ -78,71 +66,28 @@
   </form>
 </div>
 
+<!-- CÁC NÚT CHỨC NĂNG -->
 <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
   <div class="d-flex gap-2">
-    <button class="btn btn-outline-primary" onclick="window.print()">🖨 In lịch trực</button>
+    <button class="btn btn-outline-primary" onclick="window.print()">🖨 In lịch trực khoa</button>
+    <a href="{{ url_for('print_clinic_dept_schedule', start=start_date, end=end_date, department='Khoa khám - cấp cứu') }}" target="_blank" class="btn btn-outline-danger">In lịch khoa khám</a>
     <form method="POST" action="/export-template">
       <input type="hidden" name="department" value="{{ selected_department }}">
       <input type="hidden" name="start_date" value="{{ start_date }}">
       <input type="hidden" name="end_date" value="{{ end_date }}">
       <button type="submit" class="btn btn-outline-success">📥 Xuất Excel theo mẫu</button>
-      <a href="/print-clinic-schedule?start={{ start_date }}&end={{ end_date }}" class="btn btn-outline-primary" target="_blank">🖨 In phân lịch phòng khám</a>
+      <a href="/print-clinic-schedule?start={{ start_date }}&end={{ end_date }}" class="btn btn-outline-primary" target="_blank">🖨 In phân lịch phòng khám-KHTH</a>
     </form>
-  </div>
-  <div>
-    {% if not is_signed and user.role == 'manager' %}
-      <!-- Chỉ manager mới được ký xác nhận -->
-      <form method="POST" action="/schedule/sign"
-          onsubmit="return confirm('Xác nhận ký và khóa bảng lịch trực?');">
-        <input type="hidden" name="department" value="{{ selected_department }}">
-        <input type="hidden" name="from_date" value="{{ start_date }}">
-        <input type="hidden" name="to_date" value="{{ end_date }}">
-        <button class="btn btn-warning">🔏 Ký xác nhận</button>
-      </form>
-    {% elif is_signed %}
-      <div class="d-flex gap-2 align-items-center">
-        {% if signed_at %}
-          <span class="text-success">✅ Đã ký lúc {{ signed_at.strftime('%H:%M %d/%m/%Y') }}</span>
-        {% else %}
-          <span class="text-success">✅ Đã ký</span>
-        {% endif %}
-        {% if user.role == 'admin' %}
-          <!-- Chỉ admin được hủy ký -->
-          <form method="POST" action="/schedule/unlock"
-                onsubmit="return confirm('Bạn có chắc chắn muốn hủy ký và mở khóa lịch trực?');">
-            <input type="hidden" name="department" value="{{ selected_department }}">
-            <input type="hidden" name="from_date" value="{{ start_date }}">
-            <input type="hidden" name="to_date" value="{{ end_date }}">
-            <button class="btn btn-sm btn-danger">❌ Hủy ký</button>
-          </form>
-        {% endif %}
-      </div>
-    {% endif %}
   </div>
 </div>
 
-<style>
-.table-scroll {
-  max-height: 550px;
-  overflow-y: auto;
-  border: 1px solid #dee2e6;
-}
-.table-scroll thead th {
-  position: sticky;
-  top: 0;
-  background-color: #212529;
-  color: white;
-  z-index: 2;
-}
-</style>
-
+<!-- BẢNG DỮ LIỆU -->
 <div class="table-scroll">
 <table class="table table-bordered table-striped">
   <thead class="table-dark">
     <tr>
       <th>Họ tên</th>
       <th>Cấp bậc/ chức vu</th>
-      <th>Khoa</th>
       {% for d in date_range %}
         <th>{{ d.strftime('%d/%m') }}</th>
       {% endfor %}
@@ -154,7 +99,6 @@
     <tr class="user-row">
       <td>{{ u.name }}</td>
       <td>{{ u.position }}</td>
-      <td>{{ u.department }}</td>
       {% for d in date_range %}
       {% set ca = u.shifts_full.get(d) %}
       <td class="{% if ca and not ca.shift_name.startswith('Trực') %}non-duty{% endif %}">
@@ -183,39 +127,26 @@
     </tr>
     {% endfor %}
   </tbody>
-  </table>
+</table>
 </div>
 
 <!-- CHÂN IN -->
-<div class="d-none d-print-block" style="margin-top: 6px;">
+<div class="d-none d-print-block mt-3">
   <div class="row">
-    <div class="col-3">
-      <strong>Nơi nhận:</strong><br>
-      - Ban Giám đốc<br>
-      - Các khoa/phòng<br>
-      - Đăng website<br>
-      - Lưu: VP, KH-CNTT
+    <div class="col-4">
+      <strong>Người lập bảng</strong><br><em>(Ký, ghi rõ họ tên)</em>
     </div>
-    <div class="col-3 text-center">
-      <strong>Người lập bảng</strong><br>
+    <div class="col-4 text-center">
+      <strong>{% if selected_department and 'khoa' in selected_department.lower() %}TRƯỞNG KHOA{% else %}TRƯỞNG PHÒNG{% endif %}</strong><br>
       <em>(Ký, ghi rõ họ tên)</em>
     </div>
-    <div class="col-3 text-center">
-      <strong>
-        {% if selected_department and 'khoa' in selected_department.lower() %}
-        TRƯỞNG KHOA
-        {% else %}
-        TRƯỞNG PHÒNG
-        {% endif %}
-      </strong>
-    </div>
-    <div class="col-3 text-center">
-      <strong>GIÁM ĐỐC</strong><br>
-      <em>(Ký, ghi rõ họ tên)</em>
+    <div class="col-4 text-center">
+      <strong>GIÁM ĐỐC</strong><br><em>(Ký, ghi rõ họ tên)</em>
     </div>
   </div>
 </div>
 
+<!-- CSS IN -->
 <style>
 @media print {
   .d-print-block { display: block !important; }

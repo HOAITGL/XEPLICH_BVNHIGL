@@ -1,0 +1,29 @@
+{% extends "layout.html" %}
+{% block title %}Nhật ký hệ thống{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+  <h2>📜 Nhật ký thay đổi phân quyền</h2>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for category, message in messages %}
+      <div class="alert alert-{{ 'danger' if category == 'danger' else category }} mt-2">
+        {{ message }}
+      </div>
+    {% endfor %}
+  {% endwith %}
+
+  <div class="mb-3 d-flex gap-2">
+    <a href="{{ url_for('download_log') }}" class="btn btn-secondary">⬇️ Tải file nhật ký</a>
+    <form method="POST" action="{{ url_for('clear_log') }}" onsubmit="return confirm('Bạn có chắc chắn muốn xóa toàn bộ nhật ký không?');">
+      <button type="submit" class="btn btn-danger">🗑️ Xóa toàn bộ nhật ký</button>
+    </form>
+  </div>
+
+  <div class="bg-light border p-3 rounded" style="max-height: 600px; overflow-y: auto; font-family: monospace;">
+    {% for line in log_lines %}
+      <div>{{ line }}</div>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}
