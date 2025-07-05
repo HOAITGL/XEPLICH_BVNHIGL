@@ -4,3 +4,4 @@ openpyxl
 Flask-Login
 gunicorn
 flask_migrate
+pandas
