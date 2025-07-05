@@ -6,3 +6,4 @@ gunicorn
 flask_migrate
 pandas
 python-docx
+psycopg2-binary
