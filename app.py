@@ -99,21 +99,22 @@ def login():
     if request.method == 'POST':
         username = request.form['username']
         password = request.form['password']
-        user = User.query.filter_by(username=username, password=password).first()
-        session['department'] = user.department  # ✅ Bổ sung dòng này
-        
-        if user:
-            login_user(user)
-            session['user_id'] = user.id
-            session['role'] = user.role
-            session['department'] = user.department  # ✅ THÊM DÒNG NÀY
-            flash('Đăng nhập thành công!', 'success')
-            return redirect(url_for('index'))
-        else:
-            flash('Sai tên đăng nhập hoặc mật khẩu.', 'danger')
-            return redirect(url_for('login'))  # ✅ return khi sai
+        user = User.query.filter_by(username=username).first()
 
-    return render_template('login.html')  # ✅ return khi GET
+        if not user:
+            return "Không tìm thấy tài khoản"
+
+        if user.password != password:
+            return f"Mật khẩu không đúng. Đúng là: {user.password}"
+
+        login_user(user)  # ✅ Dòng này là BẮT BUỘC khi dùng Flask-Login
+        session['user_id'] = user.id
+        session['role'] = user.role
+        session['department'] = user.department
+        flash('Đăng nhập thành công!', 'success')
+        return redirect(url_for('index'))
+
+    return render_template('login.html')
 
 @app.route('/logout')
 @login_required
@@ -1049,13 +1050,27 @@ def users_by_department():
 
 @app.route('/users/delete-all', methods=['POST'])
 def delete_all_users():
-    if session.get('role') != 'admin':
-        return "Không có quyền"
+    if 'user_id' not in session or session.get('role') != 'admin':
+        flash("Không có quyền thực hiện chức năng này.", "danger")
+        return redirect('/login')
 
-    from models.user import User
-    # Xoá tất cả trừ admin
-    User.query.filter(User.username != 'admin').delete()
-    db.session.commit()
+    try:
+        from models.user import User
+        users_to_delete = User.query.filter(User.username != 'admin').all()
+        print(f"🧹 Xoá {len(users_to_delete)} nhân sự...")  # ← ghi log số lượng
+
+        for u in users_to_delete:
+            print(f"→ Xoá: {u.username}")
+            db.session.delete(u)
+
+        db.session.commit()
+        print("✅ Xoá xong.")
+        flash("Đã xoá toàn bộ nhân sự (trừ admin).", "success")
+    except Exception as e:
+        db.session.rollback()
+        print(f"❌ Lỗi khi xoá: {str(e)}")  # ← chắc chắn sẽ in ra nếu lỗi
+        flash(f"Lỗi khi xoá: {str(e)}", "danger")
+
     return redirect('/users-by-department')
 
 @app.route('/export-by-department', methods=['GET', 'POST'])
@@ -3352,20 +3367,25 @@ def internal_error(error):
 
 if __name__ == '__main__':
     with app.app_context():
+        db.create_all()  # KHÔNG drop_all để giữ dữ liệu khác
+
         from models.user import User
-        db.drop_all()  # ❌ Xóa toàn bộ bảng
-        db.create_all()  # ✅ Tạo lại bảng
-        # Tạo lại admin duy nhất
-        from models import db
-        admin = User(
-            name="Quản trị viên",
-            username="admin",
-            password="admin",
-            role="admin",
-            department="Phòng CNTT",
-            position="Bác sĩ"
-        )
-        db.session.add(admin)
-        db.session.commit()
-        print("Đã xoá sạch dữ liệu và tạo admin mới.")
+
+        # Kiểm tra nếu chưa có admin thì thêm
+        if not User.query.filter_by(username='admin').first():
+            admin = User(
+                name="Quản trị viên",
+                username="admin",
+                password="admin",  # Không mã hoá (dùng tạm)
+                role="admin",
+                department="Phòng CNTT",
+                position="Bác sĩ"
+            )
+            db.session.add(admin)
+            db.session.commit()
+            print("✅ Đã tạo tài khoản admin.")
+        else:
+            print("⚠️ Tài khoản admin đã tồn tại.")
+
     app.run(debug=False)
+
