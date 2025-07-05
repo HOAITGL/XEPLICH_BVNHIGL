@@ -1498,7 +1498,7 @@ def manage_roles():
 
     departments = [d[0] for d in db.session.query(User.department).distinct().all() if d[0]]
     roles = ['admin', 'manager', 'user']
-    positions = ['Bác sĩ', 'Điều dưỡng', 'Kỹ thuật viên']
+    positions = [p[0] for p in db.session.query(User.position).filter(User.position != None).distinct().all()]
     return render_template('manage_roles.html',
                            users=users,
                            departments=departments,
@@ -3334,6 +3334,10 @@ def run_seed():
         return "✅ Đã chạy seed.py thành công!"
     except Exception as e:
         return f"❌ Lỗi khi chạy seed.py: {str(e)}"
+
+@app.errorhandler(500)
+def internal_error(error):
+    return render_template('500.html'), 500
 
 if __name__ == '__main__':
     with app.app_context():

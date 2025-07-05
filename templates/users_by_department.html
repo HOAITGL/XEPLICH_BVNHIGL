@@ -6,7 +6,6 @@
 <div class="container mt-4">
   <h2>Danh sách nhân sự theo khoa/phòng</h2>
 
-  <!-- Hiển thị các thông báo -->
   {% with messages = get_flashed_messages(with_categories=true) %}
     {% if messages %}
       {% for category, message in messages %}
@@ -40,7 +39,7 @@
        <tr>
         <th>Họ tên</th>
         <th>Tên đăng nhập</th>
-        <th>Vai trò</th>
+        <th>Vai trò hệ thống</th>
         <th>Khoa/Phòng</th>
         <th>Cấp bậc chức vụ</th>
         <th>Loại hợp đồng</th>
@@ -54,13 +53,7 @@
       <tr>
          <td>{{ user.name }}</td>
          <td>{{ user.username }}</td>
-         <td>
-           {% if user.role == 'admin' %}Quản trị
-           {% elif user.role == 'manager' %}Trưởng khoa
-           {% elif user.role == 'user' %}Nhân viên
-           {% else %}{{ user.role }}
-           {% endif %}
-         </td>
+         <td>{{ user.role or '' }}</td>
          <td>{{ user.department }}</td>
          <td>{{ user.position or '' }}</td>
          <td>{{ user.contract_type or '' }}</td>
