@@ -3327,6 +3327,11 @@ def init_db():
     db.create_all()
     return "Đã tạo bảng vào PostgreSQL"
 
+@app.route('/run-seed')
+def run_seed():
+    import seed
+    return "Đã chạy seed.py thành công!"
+
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()
