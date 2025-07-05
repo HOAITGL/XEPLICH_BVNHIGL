@@ -23,6 +23,7 @@ from extensions import db  # Sử dụng đối tượng db đã khởi tạo tr
 from flask import session
 from openpyxl import Workbook
 from io import BytesIO
+import os
 
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL')
