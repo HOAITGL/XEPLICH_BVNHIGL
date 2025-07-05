@@ -32,6 +32,11 @@
   {% if user.role in ['admin', 'manager'] %}
   <a href="/users/add" class="btn btn-success mb-3">➕ Thêm nhân viên</a>
   <a href="/import-users" class="btn btn-outline-secondary ms-2">📤 Import từ Excel</a>
+  {% if user.role == 'admin' %}
+  <form method="POST" action="/users/delete-all" onsubmit="return confirm('Bạn có chắc chắn muốn xóa toàn bộ nhân sự (trừ admin)?');" class="d-inline">
+    <button type="submit" class="btn btn-danger ms-2">🗑️ Xoá toàn bộ nhân sự</button>
+  </form>
+  {% endif %}
   {% endif %}
 
   <table class="table table-bordered">

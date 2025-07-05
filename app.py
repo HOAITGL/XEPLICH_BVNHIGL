@@ -1047,6 +1047,17 @@ def users_by_department():
         current_user_role=user_role  # Truyền vào để template biết đang là role gì
     )
 
+@app.route('/users/delete-all', methods=['POST'])
+def delete_all_users():
+    if session.get('role') != 'admin':
+        return "Không có quyền"
+
+    from models.user import User
+    # Xoá tất cả trừ admin
+    User.query.filter(User.username != 'admin').delete()
+    db.session.commit()
+    return redirect('/users-by-department')
+
 @app.route('/export-by-department', methods=['GET', 'POST'])
 def export_by_department():
     from sqlalchemy import distinct
