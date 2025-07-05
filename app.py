@@ -3322,6 +3322,11 @@ def delete_hscc(dept_id):
 
 from models.user import User
 
+@app.route('/init-db')
+def init_db():
+    db.create_all()
+    return "Đã tạo bảng vào PostgreSQL"
+
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()
