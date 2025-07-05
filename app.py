@@ -3341,5 +3341,20 @@ def internal_error(error):
 
 if __name__ == '__main__':
     with app.app_context():
-        db.create_all()
-    app.run(debug=True)
+        from models.user import User
+        db.drop_all()  # ❌ Xóa toàn bộ bảng
+        db.create_all()  # ✅ Tạo lại bảng
+        # Tạo lại admin duy nhất
+        from models import db
+        admin = User(
+            name="Quản trị viên",
+            username="admin",
+            password="admin",
+            role="admin",
+            department="Phòng CNTT",
+            position="Bác sĩ"
+        )
+        db.session.add(admin)
+        db.session.commit()
+        print("Đã xoá sạch dữ liệu và tạo admin mới.")
+    app.run(debug=False)
