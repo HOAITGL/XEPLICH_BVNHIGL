@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="vi">
 <head>
@@ -61,6 +60,7 @@
       padding: 2px 4px;
       text-align: center;
       vertical-align: top;
+      white-space: pre-line;
     }
 
     .footer {
@@ -92,7 +92,7 @@
 <div class="header-row">
   <div class="header-left">
     <div>BỆNH VIỆN NHI TỈNH GIA LAI</div>
-    <div><span>PHÒNG KHTH - CNTT</span></div>
+    <div><span>KHOA KHÁM - CẤP CỨU</span></div>
   </div>
   <div class="header-right">
     <div>CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</div>
@@ -117,14 +117,14 @@
     <tr>
       <td>Khu tiếp đón - Đóng dấu - Dẫn BN</td>
       {% for d in date_range %}
-        <td>{{ get_titled_names(clinic_schedule["tiep_don"].get(d, ""), user_positions)|safe }}</td>
+        <td>{{ get_titled_names(clinic_schedule["tiep_don"].get(d, []), user_positions) | safe }}</td>
       {% endfor %}
     </tr>
-    {% for room, daily in clinic_schedule["phong_kham"].items() %}
+    {% for room in rooms %}
     <tr>
       <td>{{ room }}</td>
       {% for d in date_range %}
-        <td>{{ get_titled_names(daily.get(d, ""), user_positions)|safe }}</td>
+        <td>{{ get_titled_names(clinic_schedule["phong_kham"].get(room, {}).get(d, []), user_positions) | safe }}</td>
       {% endfor %}
     </tr>
     {% endfor %}

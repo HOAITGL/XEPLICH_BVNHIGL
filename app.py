@@ -26,7 +26,7 @@ from io import BytesIO
 import os
 
 app = Flask(__name__)
-app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL')
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///database.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.secret_key = 'lichtruc2025'
 
@@ -2446,35 +2446,60 @@ def print_clinic_schedule():
     end_date = datetime.strptime(end_str, '%Y-%m-%d').date()
     date_range = [start_date + timedelta(days=i) for i in range((end_date - start_date).days + 1)]
 
-    # Lấy danh sách phòng khám, loại bỏ phòng "tiếp đón" để tránh trùng
-    rooms = [room for room in ClinicRoom.query.all() if "tiếp đón" not in room.name.lower()]
+    # Lấy danh sách phòng khám
+    all_rooms = ClinicRoom.query.all()
+    rooms_dict = {room.name.lower(): room.name for room in all_rooms if "tiếp đón" not in room.name.lower()}
 
-    # Chuẩn bị dữ liệu lịch
+    # Khởi tạo dữ liệu lịch (dùng key 'phong_kham' viết thường)
     clinic_schedule = {
-        "tiep_don": defaultdict(str),
-        "phong_kham": {room.name: defaultdict(str) for room in rooms}
+        "tiep_don": defaultdict(list),
+        "phong_kham": {name: defaultdict(list) for name in rooms_dict.values()}
     }
 
-    # Truy xuất lịch trực cho ca có tên chứa "phòng khám" hoặc "tiếp đón"
+    # Lấy dữ liệu phân công
     schedules = Schedule.query.join(User).join(Shift).filter(
         Schedule.work_date.between(start_date, end_date),
         Shift.name.ilike('%phòng khám%') | Shift.name.ilike('%tiếp đón%')
     ).all()
 
-    user_positions = {}  # <-- Tạo từ điển tên -> chức danh
+    # Tạo bảng chức vụ người dùng
+    user_positions = {}
     for s in schedules:
-        user_name = s.user.name
-        user_positions[user_name] = s.user.position
+        name = s.user.name
+        user_positions[name] = s.user.position or ""
+        date = s.work_date
         shift_name = s.shift.name.lower()
-        day = s.work_date
 
         if "tiếp đón" in shift_name:
-            clinic_schedule["tiep_don"][day] += f"{user_name}\n"
-        elif "phòng khám" in shift_name:
-            for room in rooms:
-                if room.name.lower() in shift_name:
-                    clinic_schedule["phong_kham"][room.name][day] += f"{user_name}\n"
+            clinic_schedule["tiep_don"][date].append(name)
+        else:
+            for room_key in rooms_dict:
+                if room_key in shift_name:
+                    room_name = rooms_dict[room_key]
+                    clinic_schedule["phong_kham"][room_name][date].append(name)
                     break
+
+    # 1. Loại bỏ phòng trống
+    clinic_schedule["phong_kham"] = {
+        name: day_dict for name, day_dict in clinic_schedule["phong_kham"].items()
+        if any(day_dict[d] for d in date_range)
+    }
+
+    # 2. Sắp xếp phòng theo thứ tự chuẩn
+    desired_order = [
+        "phòng khám 1", "phòng khám 2", "phòng khám 3",
+        "phòng khám ngoại", "phòng khám tmh", "phòng khám rhm",
+        "phòng khám mắt", "phòng khám 8 (tc)", "phòng khám 9 (tc)"
+    ]
+    ordered_schedule = {}
+    for name in desired_order:
+        original_name = rooms_dict.get(name)
+        if original_name in clinic_schedule["phong_kham"]:
+            ordered_schedule[original_name] = clinic_schedule["phong_kham"][original_name]
+    clinic_schedule["phong_kham"] = ordered_schedule
+
+    # Tạo danh sách rooms từ lịch đã sắp xếp
+    rooms = list(clinic_schedule["phong_kham"].keys())
 
     return render_template(
         'print-clinic-schedule.html',
@@ -2482,8 +2507,10 @@ def print_clinic_schedule():
         end_date=end_date,
         date_range=date_range,
         clinic_schedule=clinic_schedule,
-        user_positions=user_positions,  # <-- Truyền vào template
-        now=datetime.now()
+        user_positions=user_positions,
+        rooms=rooms,
+        now=datetime.now(),
+        get_titled_names=get_titled_names
     )
 
 # Các route như /print-clinic-schedule ở trên...
