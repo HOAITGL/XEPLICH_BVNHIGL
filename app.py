@@ -343,6 +343,29 @@ def danh_sach_yeu_cau():
     month = datetime.today().month
     return render_template("danh_sach_yeu_cau.html", headers=headers, data=data, month=month)
 
+@app.route("/xoa-yeu-cau/<int:index>", methods=["POST"])
+def xoa_yeu_cau(index):
+    import csv
+    file_path = "data.csv"
+
+    if not os.path.exists(file_path):
+        return redirect("/danh-sach-yeu-cau")
+
+    with open(file_path, "r", encoding="utf-8") as f:
+        rows = list(csv.reader(f))
+        headers = rows[0]
+        data = rows[1:]
+
+    if 0 <= index < len(data):
+        del data[index]  # Xóa dòng dữ liệu theo chỉ số
+
+        with open(file_path, "w", encoding="utf-8", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow(headers)
+            writer.writerows(data)
+
+    return redirect("/danh-sach-yeu-cau")
+
 from flask import send_file
 import pandas as pd
 

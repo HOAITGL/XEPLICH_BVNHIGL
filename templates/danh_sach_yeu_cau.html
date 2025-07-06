@@ -96,6 +96,13 @@
       justify-content: space-around;
       text-align: center;
     }
+    .delete-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 16px;
+      color: red;
+    }
   </style>
 </head>
 <body>
@@ -127,26 +134,23 @@
     <table id="yeuCauTable">
       <thead>
         <tr>
-          <th>NGÀY THÁNG</th>
-          <th>KHOA / PHÒNG</th>
-          <th>LỖI</th>
-          <th>SỐ HỒ SƠ</th>
-          <th>SỐ PHIẾU</th>
-          <th>NỘI DUNG YÊU CẦU CV</th>
-          <th>TÊN NGƯỜI YÊU CẦU</th>
-          <th>CHỮ KÝ</th>
-          <th>HOÀ</th>
-          <th>HIỆP</th>
-          <th>ÁNH</th>
-          <th>NAM</th>
+          {% for h in headers %}
+            <th>{{ h }}</th>
+          {% endfor %}
+          <th class="no-print">XÓA</th>
         </tr>
       </thead>
       <tbody>
         {% for row in data %}
           <tr>
-           {% for cell in row %}
-             <td>{{ cell }}</td>
-           {% endfor %}
+            {% for cell in row %}
+              <td>{{ cell }}</td>
+            {% endfor %}
+            <td class="no-print">
+              <form method="post" action="/xoa-yeu-cau/{{ loop.index0 }}" onsubmit="return confirm('Bạn chắc chắn muốn xóa mục này?');">
+                <button type="submit" class="delete-btn">🗑️</button>
+              </form>
+            </td>
           </tr>
         {% endfor %}
       </tbody>
