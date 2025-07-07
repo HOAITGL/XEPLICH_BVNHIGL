@@ -3431,18 +3431,19 @@ def run_seed():
 def internal_error(error):
     return render_template('500.html'), 500
 
+import os
+
 if __name__ == '__main__':
     with app.app_context():
-        db.create_all()  # KHÔNG drop_all để giữ dữ liệu khác
+        db.create_all()
 
         from models.user import User
 
-        # Kiểm tra nếu chưa có admin thì thêm
         if not User.query.filter_by(username='admin').first():
             admin = User(
                 name="Quản trị viên",
                 username="admin",
-                password="admin",  # Không mã hoá (dùng tạm)
+                password="admin",
                 role="admin",
                 department="Phòng CNTT",
                 position="Bác sĩ"
@@ -3453,5 +3454,7 @@ if __name__ == '__main__':
         else:
             print("⚠️ Tài khoản admin đã tồn tại.")
 
-    app.run(debug=False)
+    # ✅ CHỈNH CHO RENDER CHẠY ĐÚNG
+    port = int(os.environ.get('PORT', 5000))  # Render sẽ tự động set biến PORT = 10000
+    app.run(host='0.0.0.0', port=port)
 
