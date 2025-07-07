@@ -662,8 +662,8 @@ def auto_assign_page():
     users = User.query.filter_by(department=selected_department).all() if selected_department else []
     shifts = Shift.query.all()
 
-    if selected_department:
-        app.logger.info(f"[AUTO_ASSIGN_VIEW] User '{user_name}' mở trang phân lịch nhanh cho khoa '{selected_department}'")
+    user_name = session.get('name')  # ✅ Thêm dòng này
+    app.logger.info(f"[AUTO_ASSIGN_VIEW] User '{user_name}' mở trang phân lịch nhanh cho khoa '{selected_department}'")
 
     return render_template('auto_assign.html',
                            departments=departments,
@@ -1110,6 +1110,7 @@ def report_by_department():
 def users_by_department():
     user_role = session.get('role')
     user_dept = session.get('department')
+    user_name = session.get('name')  # Thêm dòng này
 
     if user_role in ['manager', 'user']:
         users = User.query.filter(User.department == user_dept).order_by(User.name).all()
@@ -1122,7 +1123,8 @@ def users_by_department():
             users = User.query.filter(User.department == selected_department).order_by(User.name).all()
         else:
             users = User.query.order_by(User.department, User.name).all()
-
+    
+    user_name = session.get('name')
     app.logger.info(f"[USER_VIEW] User '{user_name}' ({user_role}) xem danh sách nhân sự khoa '{selected_department}'")
 
     return render_template(
@@ -1629,42 +1631,39 @@ def manage_roles():
                            roles=roles,
                            positions=positions)
 
+from flask import send_file
+
 @app.route('/view-log')
 def view_log():
     if session.get('role') != 'admin':
-        flash("Bạn không có quyền truy cập chức năng này.", "danger")
-        return redirect('/')
+        return "Không có quyền truy cập", 403
 
     log_path = os.path.join('logs', 'activity.log')
     if not os.path.exists(log_path):
-        return "Chưa có log nào."
+        return render_template('view_log.html', log_lines=[])
 
     with open(log_path, 'r', encoding='utf-8') as f:
-        log_content = f.read()
+        lines = f.readlines()
 
-    return render_template('view_log.html', log_content=log_content)
-
-from flask import send_file
+    return render_template('view_log.html', log_lines=lines)
 
 @app.route('/download-log')
 def download_log():
     if session.get('role') != 'admin':
-        return "Bạn không có quyền tải nhật ký hệ thống."
-    try:
-        return send_file('phanquyen.log', as_attachment=True, download_name='nhatky_phanquyen.txt')
-    except FileNotFoundError:
-        return "Không tìm thấy file nhật ký."
+        return "Không có quyền tải log", 403
+
+    log_path = os.path.join('logs', 'activity.log')
+    return send_file(log_path, as_attachment=True)
 
 @app.route('/clear-log', methods=['POST'])
 def clear_log():
     if session.get('role') != 'admin':
-        return "Bạn không có quyền xóa nhật ký."
-    try:
-        open('phanquyen.log', 'w').close()  # Xóa nội dung file
-        flash("🗑️ Đã xóa toàn bộ nội dung nhật ký.", "success")
-    except Exception as e:
-        flash(f"Lỗi khi xóa nhật ký: {str(e)}", "danger")
+        return "Không có quyền xoá log", 403
+
+    log_path = os.path.join('logs', 'activity.log')
+    open(log_path, 'w').close()
     return redirect('/view-log')
+
 
 @app.route('/users/delete/<int:user_id>', methods=['POST', 'GET'])
 def delete_user(user_id):

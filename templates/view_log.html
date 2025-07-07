@@ -1,9 +1,25 @@
 {% extends "layout.html" %}
-{% block title %}Xem Log Hoạt Động{% endblock %}
-
 {% block content %}
-<h4 class="mb-3">📋 Log hoạt động hệ thống</h4>
-<pre style="white-space: pre-wrap; background-color: #f8f9fa; padding: 1rem; border: 1px solid #ccc; border-radius: 5px; max-height: 600px; overflow-y: auto;">
-{{ log_content }}
-</pre>
+<div class="container mt-4">
+    <h4><i class="fas fa-clipboard-list"></i> Log hoạt động hệ thống</h4>
+
+    <div class="d-flex justify-content-end mb-2">
+        <a href="{{ url_for('download_log') }}" class="btn btn-sm btn-success me-2">
+            <i class="fas fa-download"></i> Tải xuống
+        </a>
+        <form action="{{ url_for('clear_log') }}" method="POST" onsubmit="return confirm('Bạn có chắc chắn xoá toàn bộ log không?')">
+            <button type="submit" class="btn btn-sm btn-danger">
+                <i class="fas fa-trash"></i> Xoá log
+            </button>
+        </form>
+    </div>
+
+    {% if log_lines %}
+        <pre class="bg-light p-3 border rounded" style="height: 500px; overflow-y: scroll;">
+{{ log_lines | join('') }}
+        </pre>
+    {% else %}
+        <div class="alert alert-warning mt-3">Không có nội dung log.</div>
+    {% endif %}
+</div>
 {% endblock %}
