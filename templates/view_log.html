@@ -1,0 +1,9 @@
+{% extends "layout.html" %}
+{% block title %}Xem Log Hoạt Động{% endblock %}
+
+{% block content %}
+<h4 class="mb-3">📋 Log hoạt động hệ thống</h4>
+<pre style="white-space: pre-wrap; background-color: #f8f9fa; padding: 1rem; border: 1px solid #ccc; border-radius: 5px; max-height: 600px; overflow-y: auto;">
+{{ log_content }}
+</pre>
+{% endblock %}

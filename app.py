@@ -24,11 +24,28 @@ from flask import session
 from openpyxl import Workbook
 from io import BytesIO
 import os
+import logging
+from logging.handlers import RotatingFileHandler
+
+def setup_logging(app):
+    if not os.path.exists('logs'):
+        os.mkdir('logs')
+
+    log_handler = RotatingFileHandler('logs/activity.log', maxBytes=1000000, backupCount=5)
+    log_handler.setLevel(logging.INFO)
+    log_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+    log_handler.setFormatter(log_formatter)
+
+    if not app.logger.handlers:
+        app.logger.addHandler(log_handler)
+    app.logger.setLevel(logging.INFO)
 
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv("DATABASE_URL") or 'sqlite:///database.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.secret_key = 'lichtruc2025'
+
+setup_logging(app) # 🔥 Bật ghi log tại đây
 
 # Khởi tạo db và migrate
 db.init_app(app)
@@ -100,6 +117,8 @@ def login():
         username = request.form['username']
         password = request.form['password']
         user = User.query.filter_by(username=username).first()
+
+        app.logger.info(f"[LOGIN] User '{username}' đăng nhập từ IP {request.remote_addr}")
 
         if not user:
             return "Không tìm thấy tài khoản"
@@ -592,6 +611,8 @@ def assign_schedule():
         end_date = datetime.strptime(request.form['end_date'], '%Y-%m-%d').date()
         duplicated_entries = []
 
+        app.logger.info(f"[ASSIGN] User '{user_name}' bắt đầu phân lịch khoa '{selected_department}' từ {start_date} đến {end_date}")
+
         # Lấy danh sách nghỉ phép trong khoảng thời gian
         leaves = LeaveRequest.query.filter(
             LeaveRequest.start_date <= end_date,
@@ -641,6 +662,9 @@ def auto_assign_page():
     users = User.query.filter_by(department=selected_department).all() if selected_department else []
     shifts = Shift.query.all()
 
+    if selected_department:
+        app.logger.info(f"[AUTO_ASSIGN_VIEW] User '{user_name}' mở trang phân lịch nhanh cho khoa '{selected_department}'")
+
     return render_template('auto_assign.html',
                            departments=departments,
                            selected_department=selected_department,
@@ -680,6 +704,8 @@ def auto_attendance_page():
         shift_code = request.form.get('shift_code')
         staff_ids = request.form.getlist('staff_ids')
 
+        app.logger.info(f"[AUTO_ATTEND_START] User '{user_name}' bắt đầu tạo lịch trực {shift_code} cho khoa '{selected_department}' từ {start_date_str} đến {end_date_str} cho {len(staff_ids)} nhân viên.")
+
         if not (selected_department and start_date_str and end_date_str and shift_code and staff_ids):
             flash('Vui lòng chọn đầy đủ thông tin.', 'danger')
             return redirect(url_for('auto_attendance_page'))
@@ -706,8 +732,10 @@ def auto_attendance_page():
                     db.session.add(schedule)
                 current_date += timedelta(days=1)
             db.session.commit()
+            app.logger.info(f"[AUTO_ATTEND_DONE] Đã tạo lịch trực tự động thành công.")
         except Exception as e:
             db.session.rollback()
+            app.logger.error(f"[AUTO_ATTEND_ERROR] Lỗi khi tạo lịch trực: {e}")
             flash(f'Lỗi khi lưu lịch trực: {e}', 'danger')
             return redirect(url_for('auto_attendance_page', department=selected_department))
 
@@ -780,6 +808,7 @@ from models.schedule import Schedule
 def view_schedule():
     user_role = session.get('role')
     user_dept = session.get('department')
+    user_name = session.get('name')  # ✅ Thêm dòng này
 
     # Quyết định khoa được chọn
     if user_role == 'admin':
@@ -804,6 +833,9 @@ def view_schedule():
     else:
         start_date = datetime.today().date()
         end_date = start_date + timedelta(days=6)
+
+    # 🔎 Ghi log xem lịch
+    app.logger.info(f"[VIEW] User '{user_name}' ({user_role}) xem lịch khoa '{selected_department}' từ {start_date} đến {end_date}")
 
     # Lấy lịch trực
     query = Schedule.query.join(User).join(Shift)\
@@ -896,6 +928,13 @@ def edit_user_schedule(user_id):
             if new_shift_id and int(new_shift_id) != s.shift_id:
                 s.shift_id = int(new_shift_id)
         db.session.commit()
+
+         # 🔎 Ghi log nếu có chỉnh sửa
+        if edited_dates:
+            user_name = session.get('name')
+            for date, old_id, new_id in edited_dates:
+                app.logger.info(f"[EDIT] User '{user_name}' chỉnh sửa lịch user_id={user_id} - ngày {date}, từ ca {old_id} → ca {new_id}")
+        
         return redirect('/schedule')
 
     return render_template('edit_schedule.html', user=user, shifts=shifts, schedules=schedules)
@@ -937,6 +976,9 @@ def sign_schedule():
     from_date_str = request.form.get('from_date')
     to_date_str = request.form.get('to_date')
 
+    user_name = session.get('name')
+    app.logger.info(f"[SIGN] User '{user_name}' ký lịch trực cho khoa '{dept}' từ {start} đến {end}")
+
     if not department or not from_date_str or not to_date_str:
         flash("Thiếu thông tin để ký xác nhận.", "danger")
         return redirect('/schedule')
@@ -976,6 +1018,9 @@ def unsign_schedule():
     department = request.form['department']
     from_date = request.form['from_date']
     to_date = request.form['to_date']
+
+    user_name = session.get('name')
+    app.logger.info(f"[UNSIGN] Admin '{user_name}' hủy ký lịch khoa '{department}' từ {from_date} đến {to_date}")
 
     schedules = ScheduleAssignment.query.filter(
         ScheduleAssignment.department == department,
@@ -1078,6 +1123,8 @@ def users_by_department():
         else:
             users = User.query.order_by(User.department, User.name).all()
 
+    app.logger.info(f"[USER_VIEW] User '{user_name}' ({user_role}) xem danh sách nhân sự khoa '{selected_department}'")
+
     return render_template(
         'users_by_department.html',
         users=users,
@@ -1096,6 +1143,7 @@ def delete_all_users():
         from models.user import User
         users_to_delete = User.query.filter(User.username != 'admin').all()
         print(f"🧹 Xoá {len(users_to_delete)} nhân sự...")  # ← ghi log số lượng
+        app.logger.info(f"[USER_VIEW] User '{user_name}' ({user_role}) xem danh sách nhân sự khoa '{selected_department}'")
 
         for u in users_to_delete:
             print(f"→ Xoá: {u.username}")
@@ -1273,6 +1321,10 @@ def add_shift():
         shift = Shift(name=name, code=code, start_time=start_time, end_time=end_time, duration=duration)
         db.session.add(shift)
         db.session.commit()
+
+        user_name = session.get('name')
+        app.logger.info(f"[SHIFT_ADD] {user_name} thêm ca trực '{name}' (Mã: {code}, {start_time}-{end_time})")
+
         flash("✅ Đã thêm ca trực mới.", "success")
         return redirect('/shifts')
 
@@ -1312,6 +1364,10 @@ def edit_shift(id):
             shift.duration = float(old['duration'])
 
             db.session.commit()
+
+            user_name = session.get('name')
+            app.logger.info(f"[SHIFT_EDIT] {user_name} sửa ca trực ID={id} thành tên: {shift.name}, mã: {shift.code}, giờ: {shift.start_time}-{shift.end_time}")
+
             return redirect('/shifts')
 
         except ValueError as ve:
@@ -1324,6 +1380,10 @@ def delete_shift(shift_id):
     shift = Shift.query.get_or_404(shift_id)
     db.session.delete(shift)
     db.session.commit()
+
+    user_name = session.get('name')
+    app.logger.info(f"[SHIFT_DELETE] {user_name} đã xoá ca trực: {shift.name} (Mã: {shift.code})")
+
     return redirect('/shifts')
 
 @app.route('/export-shifts')
@@ -1569,20 +1629,20 @@ def manage_roles():
                            roles=roles,
                            positions=positions)
 
-@app.route("/view-log")
+@app.route('/view-log')
 def view_log():
-    try:
-        # Cố gắng đọc bằng UTF-8 thông thường
-        with open("log.txt", "r", encoding="utf-8") as f:
-            log_lines = f.readlines()
-    except UnicodeDecodeError:
-        # Nếu lỗi, đọc lại bằng UTF-8-SIG và thay ký tự lỗi
-        with open("log.txt", "r", encoding="utf-8-sig", errors="replace") as f:
-            log_lines = f.readlines()
-    except FileNotFoundError:
-        log_lines = ["⚠️ Không tìm thấy file log.txt"]
+    if session.get('role') != 'admin':
+        flash("Bạn không có quyền truy cập chức năng này.", "danger")
+        return redirect('/')
 
-    return render_template("log.html", log_lines=log_lines)
+    log_path = os.path.join('logs', 'activity.log')
+    if not os.path.exists(log_path):
+        return "Chưa có log nào."
+
+    with open(log_path, 'r', encoding='utf-8') as f:
+        log_content = f.read()
+
+    return render_template('view_log.html', log_content=log_content)
 
 from flask import send_file
 
