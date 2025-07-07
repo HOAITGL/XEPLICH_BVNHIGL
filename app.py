@@ -779,16 +779,24 @@ from models.schedule import Schedule
 
 @app.route('/schedule', methods=['GET', 'POST'])
 def view_schedule():
-    selected_department = request.args.get('department')
     user_role = session.get('role')
     user_dept = session.get('department')
 
-    if user_role in ['manager', 'user']:
+    # Quyết định khoa được chọn
+    if user_role == 'admin':
+        selected_department = request.args.get('department')
+    else:
+        # Manager và user luôn xem khoa của mình
         selected_department = user_dept
 
-    departments = [d[0] for d in db.session.query(User.department)
-                   .filter(User.department.isnot(None)).distinct().all()] if user_role == 'admin' else [user_dept]
+    # Danh sách khoa
+    if user_role == 'admin':
+        departments = [d[0] for d in db.session.query(User.department)
+                       .filter(User.department.isnot(None)).distinct().all()]
+    else:
+        departments = [user_dept] if user_dept else []
 
+    # Ngày bắt đầu và kết thúc
     start_date_str = request.args.get('start_date')
     end_date_str = request.args.get('end_date')
     if start_date_str and end_date_str:
@@ -798,15 +806,16 @@ def view_schedule():
         start_date = datetime.today().date()
         end_date = start_date + timedelta(days=6)
 
+    # Lấy lịch trực
     query = Schedule.query.join(User).join(Shift)\
         .filter(Schedule.work_date.between(start_date, end_date))
-
     if selected_department:
         query = query.filter(User.department == selected_department)
 
     schedules = query.order_by(Schedule.work_date).all()
     date_range = sorted({s.work_date for s in schedules})
 
+    # Chuẩn bị dữ liệu lịch trực
     schedule_data = {}
     for s in schedules:
         u = s.user
@@ -825,36 +834,42 @@ def view_schedule():
             'shift_name': s.shift.name
         }
 
+    # Dữ liệu lọc riêng cho in
     filtered_for_print = {
         uid: data for uid, data in schedule_data.items()
         if any(s['shift_name'].strip().lower().startswith("trực") for s in data['shifts_full'].values())
     }
 
+    # Kiểm tra chữ ký
     signature = ScheduleSignature.query.filter_by(
         department=selected_department,
         from_date=start_date,
         to_date=end_date
     ).first()
+    is_signed = bool(signature)
+    signed_at = signature.signed_at if signature else None
 
+    # Kiểm tra khóa
     lock = ScheduleLock.query.filter_by(
         department=selected_department,
         start_date=start_date,
         end_date=end_date
     ).first()
+    locked = bool(lock)
 
     return render_template(
         'schedule.html',
         departments=departments,
         selected_department=selected_department,
-        schedule_data=schedule_data,
-        print_data=filtered_for_print,
+        schedule_data=schedule_data,           # 👉 dữ liệu đầy đủ cho bảng chính
+        print_data=filtered_for_print,         # 👉 chỉ dùng khi cần riêng (Excel, xuất in khác)
         date_range=date_range,
         start_date=start_date,
         end_date=end_date,
         now=datetime.now(),
-        is_signed=bool(signature),
-        signed_at=signature.signed_at if signature else None,
-        locked=bool(lock),
+        is_signed=is_signed,
+        signed_at=signed_at,
+        locked=locked,
         user={
             'role': user_role,
             'department': user_dept,
