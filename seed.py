@@ -12,38 +12,20 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db.init_app(app)
 
 with app.app_context():
-    db.drop_all()
-    db.create_all()
+    db.create_all()  # ✅ chỉ tạo nếu chưa có bảng
 
-    # 👤 Thêm người dùng mẫu đầy đủ thông tin
-    admin = User(
-        name="Quản trị viên",
-        username="admin",
-        password="admin",
-        role="admin",
-        department="Phòng CNTT",
-        position="Bác sĩ",
-        start_year=2010
-    )
-    user1 = User(
-        name="Nguyễn Văn A",
-        username="nva",
-        password="123",
-        role="manager",
-        department="Khoa Nội",  # cần trùng với các lịch trực để nút ký hoạt động
-        position="Điều dưỡng",
-        start_year=2015
-    )
-    user2 = User(
-        name="Trần Thị B",
-        username="ttb",
-        password="123",
-        role="user",
-        department="Khoa Ngoại",
-        position="Kỹ thuật viên",
-        start_year=2018
-    )
-    db.session.add_all([admin, user1, user2])
+    # 👤 Chỉ thêm admin nếu chưa tồn tại
+    if not User.query.filter_by(username='admin').first():
+        admin = User(
+            name="Quản trị viên",
+            username="admin",
+            password="admin",
+            role="admin",
+            department="Phòng CNTT",
+            position="Bác sĩ",
+            start_year=2010
+        )
+        db.session.add(admin)
 
     # 💰 Thêm đơn giá trực
     rates = [
