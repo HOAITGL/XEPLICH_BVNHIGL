@@ -60,9 +60,6 @@ setup_logging(app) # 🔥 Bật ghi log tại đây
 db.init_app(app)
 migrate = Migrate(app, db)
 
-# 👇 Thêm đoạn này vào
-with app.app_context():
-    upgrade()
 
 # ✅ Định nghĩa admin_required
 from functools import wraps
