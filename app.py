@@ -22,24 +22,32 @@ from flask import Flask
 from extensions import db  # Sử dụng đối tượng db đã khởi tạo trong extensions.py
 from flask import session
 from openpyxl import Workbook
-from io import BytesIO
+from io import BytesIO  # ✅ Đúng
 import os
 import logging
 from logging.handlers import RotatingFileHandler
+from models.holiday import Holiday  # 👈 nếu chưa có model, mình có thể tạo giúp
 
 def setup_logging(app):
-    if not os.path.exists('logs'):
-        os.mkdir('logs')
+    if not os.path.exists('logs'):             # 🔍 Nếu chưa có thư mục logs/
+        os.mkdir('logs')                       # ➕ thì tạo mới thư mục đó
 
-    log_handler = RotatingFileHandler('logs/activity.log', maxBytes=1000000, backupCount=5)
-    log_handler.setLevel(logging.INFO)
-    log_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-    log_handler.setFormatter(log_formatter)
+    log_handler = RotatingFileHandler(
+        'logs/activity.log',                   # 📁 Ghi vào logs/activity.log
+        maxBytes=1000000,                      # 🔄 Tự động xoay vòng khi quá 1MB
+        backupCount=5                          # 🗂 Lưu tối đa 5 file log cũ
+    )
+    log_handler.setLevel(logging.INFO)         # 🟢 Ghi các log từ cấp INFO trở lên
 
-    if not app.logger.handlers:
+    log_formatter = logging.Formatter(
+        '%(asctime)s - %(levelname)s - %(message)s'
+    )
+    log_handler.setFormatter(log_formatter)    # 🧾 Định dạng log dòng
+
+    if not app.logger.handlers:                # 🔒 Tránh gắn lại nếu đã có handler
         app.logger.addHandler(log_handler)
     app.logger.setLevel(logging.INFO)
-
+    
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv("DATABASE_URL") or 'sqlite:///database.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
@@ -611,6 +619,7 @@ def assign_schedule():
         end_date = datetime.strptime(request.form['end_date'], '%Y-%m-%d').date()
         duplicated_entries = []
 
+        user_name = session.get('name')  # 👈 Thêm dòng này trước khi dùng user_name
         app.logger.info(f"[ASSIGN] User '{user_name}' bắt đầu phân lịch khoa '{selected_department}' từ {start_date} đến {end_date}")
 
         # Lấy danh sách nghỉ phép trong khoảng thời gian
@@ -681,7 +690,8 @@ def auto_attendance_page():
     from models.schedule import Schedule  # model lịch trực
     from models.attendance import Attendance
     from datetime import datetime, timedelta
-    from flask import request, redirect, url_for, flash, render_template
+    from flask import request, redirect, url_for, flash, render_template, session
+    from models.holiday import Holiday
 
     departments = get_departments()
 
@@ -699,6 +709,7 @@ def auto_attendance_page():
 
     if request.method == 'POST':
         selected_department = request.form.get('department')
+        user_name = session.get('name')  # 👈 Đặt lên đầu để tránh lỗi
         start_date_str = request.form.get('start_date')
         end_date_str = request.form.get('end_date')
         shift_code = request.form.get('shift_code')
@@ -722,17 +733,39 @@ def auto_attendance_page():
 
         current_date = start_date
         try:
+            created_count = 0
             while current_date <= end_date:
+                weekday = current_date.weekday()  # 0 = Thứ 2, ..., 6 = Chủ nhật
+
+                # Bỏ qua Thứ 7, CN
+                if weekday in [5, 6]:
+                    current_date += timedelta(days=1)
+                    continue
+
+                # Bỏ qua nếu là ngày lễ
+                if Holiday.query.filter_by(date=current_date).first():
+                    current_date += timedelta(days=1)
+                    continue
+
                 for staff in staff_members:
-                    schedule = Schedule(
+                    existing = Schedule.query.filter_by(
                         user_id=staff.id,
-                        work_date=current_date,
-                        shift_id=shift.id
-                    )
-                    db.session.add(schedule)
+                        work_date=current_date
+                    ).first()
+                    if not existing:
+                        schedule = Schedule(
+                            user_id=staff.id,
+                            work_date=current_date,
+                            shift_id=shift.id
+                        )
+                        db.session.add(schedule)
+                        created_count += 1
+
                 current_date += timedelta(days=1)
+
             db.session.commit()
-            app.logger.info(f"[AUTO_ATTEND_DONE] Đã tạo lịch trực tự động thành công.")
+            app.logger.info(f"[AUTO_ATTEND_DONE] Đã tạo {created_count} dòng chấm công tự động thành công.")
+
         except Exception as e:
             db.session.rollback()
             app.logger.error(f"[AUTO_ATTEND_ERROR] Lỗi khi tạo lịch trực: {e}")
@@ -747,6 +780,7 @@ def auto_attendance_page():
                            selected_department=selected_department,
                            users=users,
                            day_shifts=day_shifts)
+
 
 @app.route('/sync-attendance', methods=['POST'])
 def sync_attendance():
