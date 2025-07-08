@@ -27,6 +27,7 @@ import os
 import logging
 from logging.handlers import RotatingFileHandler
 from models.holiday import Holiday  # 👈 nếu chưa có model, mình có thể tạo giúp
+from flask_migrate import Migrate, upgrade
 
 def setup_logging(app):
     if not os.path.exists('logs'):             # 🔍 Nếu chưa có thư mục logs/
@@ -54,10 +55,14 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.secret_key = 'lichtruc2025'
 
 setup_logging(app) # 🔥 Bật ghi log tại đây
-
+    
 # Khởi tạo db và migrate
 db.init_app(app)
 migrate = Migrate(app, db)
+
+# 👇 Thêm đoạn này vào
+with app.app_context():
+    upgrade()
 
 # ✅ Định nghĩa admin_required
 from functools import wraps
