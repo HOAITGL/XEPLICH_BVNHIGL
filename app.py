@@ -15,50 +15,44 @@ from flask import Flask, render_template, request, redirect, url_for, flash, ses
 from flask_login import login_required
 from datetime import datetime, timedelta
 from flask_sqlalchemy import SQLAlchemy
-from flask_migrate import Migrate
+from flask_migrate import Migrate, upgrade
 from models import ScheduleSignature
 from models.ScheduleSignature import ScheduleSignature
-from flask import Flask
 from extensions import db  # Sử dụng đối tượng db đã khởi tạo trong extensions.py
-from flask import session
 from openpyxl import Workbook
-from io import BytesIO  # ✅ Đúng
+from io import BytesIO
 import os
 import logging
 from logging.handlers import RotatingFileHandler
 from models.holiday import Holiday  # 👈 nếu chưa có model, mình có thể tạo giúp
-from flask_migrate import Migrate, upgrade
 
 def setup_logging(app):
-    if not os.path.exists('logs'):             # 🔍 Nếu chưa có thư mục logs/
-        os.mkdir('logs')                       # ➕ thì tạo mới thư mục đó
-
-    log_handler = RotatingFileHandler(
-        'logs/activity.log',                   # 📁 Ghi vào logs/activity.log
-        maxBytes=1000000,                      # 🔄 Tự động xoay vòng khi quá 1MB
-        backupCount=5                          # 🗂 Lưu tối đa 5 file log cũ
-    )
-    log_handler.setLevel(logging.INFO)         # 🟢 Ghi các log từ cấp INFO trở lên
-
-    log_formatter = logging.Formatter(
-        '%(asctime)s - %(levelname)s - %(message)s'
-    )
-    log_handler.setFormatter(log_formatter)    # 🧾 Định dạng log dòng
-
-    if not app.logger.handlers:                # 🔒 Tránh gắn lại nếu đã có handler
+    if not os.path.exists('logs'):
+        os.mkdir('logs')
+    log_handler = RotatingFileHandler('logs/activity.log', maxBytes=1000000, backupCount=5)
+    log_handler.setLevel(logging.INFO)
+    log_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+    log_handler.setFormatter(log_formatter)
+    if not app.logger.handlers:
         app.logger.addHandler(log_handler)
     app.logger.setLevel(logging.INFO)
-    
+
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv("DATABASE_URL") or 'sqlite:///database.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.secret_key = 'lichtruc2025'
 
-setup_logging(app) # 🔥 Bật ghi log tại đây
-    
-# Khởi tạo db và migrate
+setup_logging(app)
+
 db.init_app(app)
 migrate = Migrate(app, db)
+
+with app.app_context():
+    try:
+        upgrade()
+        print("✅ Đã tự động chạy flask db upgrade.")
+    except Exception as e:
+        print(f"❌ Lỗi khi upgrade database: {e}")
 
 
 # ✅ Định nghĩa admin_required
