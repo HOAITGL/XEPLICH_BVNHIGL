@@ -3613,10 +3613,19 @@ def delete_hscc(dept_id):
 
 from models.user import User
 
+from sqlalchemy import inspect
+
 @app.route('/init-db')
 def init_db():
-    db.create_all()
-    return "Đã tạo bảng vào PostgreSQL"
+    inspector = inspect(db.engine)
+    existing_tables = inspector.get_table_names()
+
+    # Chỉ tạo bảng nếu chưa tồn tại
+    if 'user' not in existing_tables:
+        db.create_all()
+        return "✅ Đã tạo bảng vào PostgreSQL"
+    return "⚠️ Bảng đã tồn tại, không tạo lại."
+
 
 @app.route('/run-seed')
 def run_seed():
@@ -3663,15 +3672,21 @@ def add_multi_dept_setting():
 import os
 
 if __name__ == '__main__':
-    with app.app_context():
-        from sqlalchemy import inspect
-        inspector = inspect(db.engine)
-        if not inspector.has_table("user"):
-            db.create_all()
+    import os
+    from sqlalchemy import inspect
 
+    with app.app_context():
+        inspector = inspect(db.engine)
+        existing_tables = inspector.get_table_names()
+
+        # ✅ Chỉ tạo bảng nếu chưa tồn tại bảng 'user' (coi như đại diện cho hệ thống đã khởi tạo)
+        if 'user' not in existing_tables:
+            db.create_all()
+            print("✅ Đã tạo tất cả bảng.")
 
         from models.user import User
 
+        # ✅ Thêm admin nếu chưa có
         if not User.query.filter_by(username='admin').first():
             admin = User(
                 name="Quản trị viên",
@@ -3687,14 +3702,14 @@ if __name__ == '__main__':
         else:
             print("⚠️ Tài khoản admin đã tồn tại.")
 
-    # ✅ Hiển thị log lỗi chi tiết trên Render
+    # ✅ Hiển thị log lỗi chi tiết trên Render (nếu không chạy debug)
     if not app.debug:
         import logging
         logging.basicConfig(level=logging.DEBUG)
         app.logger.setLevel(logging.DEBUG)
 
-    # ✅ CHỈNH CHO RENDER CHẠY ĐÚNG
-    port = int(os.environ.get('PORT', 5000))  # Render sẽ tự động set biến PORT = 10000
+    # ✅ Khởi động ứng dụng
+    port = int(os.environ.get('PORT', 5000))  # Render sẽ dùng PORT=10000
     app.run(host='0.0.0.0', port=port, debug=True)
 
 
