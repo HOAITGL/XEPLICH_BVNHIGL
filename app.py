@@ -643,13 +643,18 @@ def assign_schedule():
                     db.session.add(new_schedule)
                 current += timedelta(days=1)
 
-        db.session.commit()
-
-        if duplicated_entries:
-            for message in duplicated_entries:
-                flash(f"⚠️ {message}", "danger")
-        else:
-            flash("✅ Đã lưu lịch thành công.", "success")
+        try:
+            db.session.commit()
+            if duplicated_entries:
+                for message in duplicated_entries:
+                    flash(f"⚠️ {message}", "danger")
+            else:
+                flash("✅ Đã lưu lịch thành công.", "success")
+        except Exception as e:
+            db.session.rollback()
+            app.logger.error(f"❌ Lỗi khi lưu lịch trực: {e}", exc_info=True)
+            flash("❌ Lỗi máy chủ: không thể lưu lịch trực.", "danger")
+            return redirect('/assign?department=' + selected_department)
 
         return redirect('/assign?department=' + selected_department)
 
