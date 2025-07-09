@@ -25,6 +25,7 @@ import os
 import logging
 from logging.handlers import RotatingFileHandler
 from flask_migrate import Migrate
+from models.department_setting import DepartmentSetting
 
 def setup_logging(app):
     if not os.path.exists('logs'):
@@ -589,6 +590,13 @@ def export_leave_word(leave_id):
 def test_export():
     return "Route hoạt động"
 
+@app.route("/check-setting")
+def check_setting():
+    from models.department_setting import DepartmentSetting
+    settings = DepartmentSetting.query.all()
+    return "<br>".join([f"{s.department_name}: {s.max_people_per_day}" for s in settings])
+
+
 @app.route('/assign', methods=['GET', 'POST'])
 def assign_schedule():
     user_role = session.get('role')
@@ -628,18 +636,22 @@ def assign_schedule():
             current = start_date
             while current <= end_date:
                 existing = Schedule.query.filter_by(user_id=user_id, shift_id=shift_id, work_date=current).first()
-                count_same_day = Schedule.query.join(User).filter(
+
+                count_same_shift = Schedule.query.join(User).filter(
                     Schedule.work_date == current,
+                    Schedule.shift_id == shift_id,
                     User.department == selected_department
                 ).count()
 
                 if existing:
                     duplicated_entries.append(f"{existing.user.name} đã có lịch ca {existing.shift.name} ngày {current.strftime('%d/%m/%Y')}")
-                elif count_same_day >= max_people:
-                    duplicated_entries.append(f"Ngày {current.strftime('%d/%m/%Y')} đã đủ người trực tối đa ({max_people})")
+                elif count_same_shift >= max_people:
+                    ca_name = Shift.query.get(shift_id).name
+                    duplicated_entries.append(f"Ngày {current.strftime('%d/%m/%Y')} ca {ca_name} đã đủ người trực tối đa ({max_people})")
                 else:
                     new_schedule = Schedule(user_id=user_id, shift_id=shift_id, work_date=current)
                     db.session.add(new_schedule)
+
                 current += timedelta(days=1)
 
         try:
@@ -667,25 +679,52 @@ def assign_schedule():
 
 @app.route('/create-dept-setting')
 def create_dept_setting():
-    try:
-        from models.department_setting import DepartmentSetting
-        from extensions import db
+    from models.department_setting import DepartmentSetting
+    from extensions import db
 
-        sample_settings = [
-            {"department_name": "Khoa Xét Nghiệm - GPB", "max_people_per_day": 3},
-            {"department_name": "Khoa Hồi sức - TCCD", "max_people_per_day": 2},
-        ]
-        for setting in sample_settings:
-            if not DepartmentSetting.query.filter_by(department_name=setting["department_name"]).first():
-                db.session.add(DepartmentSetting(**setting))
+    setting = DepartmentSetting.query.filter_by(department_name="Khoa Phẫu thuật - GMHS").first()
+    if setting:
+        return "⚠️ Cấu hình đã tồn tại."
 
+    new_setting = DepartmentSetting(
+        department_name="Khoa Phẫu thuật - GMHS",
+        max_people_per_day=6,  # ✅ Số người tối đa/ngày
+        num_shifts=2,
+        cas_per_shift=1,
+        doctors_per_ca=1,
+        nurses_per_ca=1
+    )
+    db.session.add(new_setting)
+    db.session.commit()
+    return "✅ Đã tạo cấu hình cho Khoa Phẫu thuật - GMHS."
+
+@app.route("/update-max-people")
+def update_max_people():
+    from models.department_setting import DepartmentSetting
+    dept = "Khoa Phẫu thuật - GMHS"
+    setting = DepartmentSetting.query.filter_by(department_name=dept).first()
+    if setting:
+        setting.max_people_per_day = 6  # 🔧 Thay số này nếu cần
         db.session.commit()
-        return "✅ Đã tạo dữ liệu mẫu cấu hình khoa thành công."
-    except Exception as e:
-        import traceback
-        print("❌ Lỗi khi tạo cấu hình:", e)
-        traceback.print_exc()  # Ghi log chi tiết vào console
-        return f"❌ Lỗi: {e}", 500
+        return f"✅ Đã cập nhật số người trực tối đa cho {dept} thành {setting.max_people_per_day}"
+    return "❌ Không tìm thấy khoa để cập nhật"
+
+@app.route('/add-dept-setting')
+def add_dept_setting():
+    from models.department_setting import DepartmentSetting
+
+    new_setting = DepartmentSetting(
+        department_name='Khoa Phẫu thuật - GMHS',
+        max_people_per_day=6,  # 👉 bạn có thể đổi tuỳ khoa
+        num_shifts=1,
+        cas_per_shift=1,
+        doctors_per_ca=0,
+        nurses_per_ca=0
+    )
+    db.session.add(new_setting)
+    db.session.commit()
+    return "✅ Đã thêm cấu hình khoa Khoa Phẫu thuật - GMHS"
+
 
 @app.route('/auto-assign')
 def auto_assign_page():
@@ -3587,6 +3626,40 @@ def run_seed():
     except Exception as e:
         return f"❌ Lỗi khi chạy seed.py: {str(e)}"
 
+@app.route('/add-multi-dept-setting')
+def add_multi_dept_setting():
+    from models.department_setting import DepartmentSetting
+
+    # Danh sách các khoa và cấu hình tối đa/ngày
+    settings = [
+        {"department_name": "Khoa Phẫu thuật - GMHS", "max_people_per_day": 6},
+        {"department_name": "Khoa Nội tổng hợp - YHCT", "max_people_per_day": 9},
+        {"department_name": "Khoa Nhi", "max_people_per_day": 5},
+        {"department_name": "Phòng khám", "max_people_per_day": 4},
+        {"department_name": "Khoa Hồi sức - TCCĐ", "max_people_per_day": 4},
+        {"department_name": "Khoa Bệnh Nhiệt đới", "max_people_per_day": 4},
+        {"department_name": "Khoa Ba chuyên khoa", "max_people_per_day": 4},
+        {"department_name": "Khoa Ngoại tổng hợp", "max_people_per_day": 6}
+    ]
+
+    added = 0
+    for s in settings:
+        existing = DepartmentSetting.query.filter_by(department_name=s["department_name"]).first()
+        if not existing:
+            setting = DepartmentSetting(
+                department_name=s["department_name"],
+                max_people_per_day=s["max_people_per_day"],
+                num_shifts=1,
+                cas_per_shift=1,
+                doctors_per_ca=0,
+                nurses_per_ca=0
+            )
+            db.session.add(setting)
+            added += 1
+
+    db.session.commit()
+    return f"✅ Đã thêm {added} cấu hình khoa (nếu chưa tồn tại)."
+
 import os
 
 if __name__ == '__main__':
@@ -3613,7 +3686,7 @@ if __name__ == '__main__':
             print("✅ Đã tạo tài khoản admin.")
         else:
             print("⚠️ Tài khoản admin đã tồn tại.")
-            
+
     # ✅ Hiển thị log lỗi chi tiết trên Render
     if not app.debug:
         import logging
@@ -3622,6 +3695,7 @@ if __name__ == '__main__':
 
     # ✅ CHỈNH CHO RENDER CHẠY ĐÚNG
     port = int(os.environ.get('PORT', 5000))  # Render sẽ tự động set biến PORT = 10000
-    app.run(host='0.0.0.0', port=port)
+    app.run(host='0.0.0.0', port=port, debug=True)
+
 
     
