@@ -3567,6 +3567,10 @@ def run_seed():
     except Exception as e:
         return f"❌ Lỗi khi chạy seed.py: {str(e)}"
 
+@app.errorhandler(500)
+def internal_error(error):
+    return render_template('500.html'), 500
+
 import os
 
 if __name__ == '__main__':
