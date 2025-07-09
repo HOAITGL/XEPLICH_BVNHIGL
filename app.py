@@ -3572,7 +3572,11 @@ import os
 
 if __name__ == '__main__':
     with app.app_context():
-        db.create_all()
+        from sqlalchemy import inspect
+        inspector = inspect(db.engine)
+        if not inspector.has_table("user"):
+            db.create_all()
+
 
         from models.user import User
 
