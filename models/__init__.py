@@ -2,6 +2,7 @@ from extensions import db
 from flask_sqlalchemy import SQLAlchemy
 from .shift_rate_config import ShiftRateConfig
 from .leave_request import LeaveRequest
+from .department_setting import DepartmentSetting
 
 db = SQLAlchemy()
 from .user import User
