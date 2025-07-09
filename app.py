@@ -3564,9 +3564,11 @@ def run_seed():
     except Exception as e:
         return f"❌ Lỗi khi chạy seed.py: {str(e)}"
 
-@app.errorhandler(500)
-def internal_error(error):
-    return render_template('500.html'), 500
+@app.route('/create-holiday-table')
+def create_holiday_table():
+    from models.holiday import Holiday
+    db.create_all()
+    return "✅ Bảng holiday đã được tạo!"
 
 import os
 
