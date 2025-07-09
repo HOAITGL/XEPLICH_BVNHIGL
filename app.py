@@ -667,9 +667,25 @@ def assign_schedule():
 
 @app.route('/create-dept-setting')
 def create_dept_setting():
-    from models.department_setting import DepartmentSetting
-    db.create_all()
-    return "✅ Đã tạo bảng DepartmentSetting nếu chưa có."
+    try:
+        from models.department_setting import DepartmentSetting
+        from extensions import db
+
+        sample_settings = [
+            {"department_name": "Khoa Xét Nghiệm - GPB", "max_people_per_day": 3},
+            {"department_name": "Khoa Hồi sức - TCCD", "max_people_per_day": 2},
+        ]
+        for setting in sample_settings:
+            if not DepartmentSetting.query.filter_by(department_name=setting["department_name"]).first():
+                db.session.add(DepartmentSetting(**setting))
+
+        db.session.commit()
+        return "✅ Đã tạo dữ liệu mẫu cấu hình khoa thành công."
+    except Exception as e:
+        import traceback
+        print("❌ Lỗi khi tạo cấu hình:", e)
+        traceback.print_exc()  # Ghi log chi tiết vào console
+        return f"❌ Lỗi: {e}", 500
 
 @app.route('/auto-assign')
 def auto_assign_page():
