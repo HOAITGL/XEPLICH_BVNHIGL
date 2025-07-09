@@ -127,22 +127,24 @@
           <td colspan="14" class="text-start fw-bold">{{ row.index_label }} {{ row.department }}</td>
         </tr>
         {% else %}
-        <tr>
-          <td>{{ row.index_label }}</td>
-          <td class="text-start">{{ row.full_name }}</td>
-          <td>{{ row.thuong_thuong }}</td>
-          <td>{{ row.hscc_thuong }}</td>
-          <td>{{ row.thuong_nghi }}</td>
-          <td>{{ row.hscc_nghi }}</td>
-          <td>{{ row.thuong_le }}</td>
-          <td>{{ row.hscc_le }}</td>
-          <td>{{ row.total_shifts }}</td>
-          <td>{{ "{:,.0f}".format(row.tien_qd73).replace(",", ".") }}</td>
-          <td>{{ "{:,.0f}".format(row.tien_an).replace(",", ".") }}</td>
-          <td>{{ "{:,.0f}".format(row.tong_tien).replace(",", ".") }}</td>
-          <td></td>
-          <td>{% if row.is_contract %}HĐ{% endif %}</td>
-        </tr>
+          {% if not row.truc_thuong_tru %}
+          <tr>
+            <td>{{ row.index_label }}</td>
+            <td class="text-start">{{ row.full_name }}</td>
+            <td>{{ row.thuong_thuong }}</td>
+            <td>{{ row.hscc_thuong }}</td>
+            <td>{{ row.thuong_nghi }}</td>
+            <td>{{ row.hscc_nghi }}</td>
+            <td>{{ row.thuong_le }}</td>
+            <td>{{ row.hscc_le }}</td>
+            <td>{{ row.total_shifts }}</td>
+            <td>{{ "{:,.0f}".format(row.tien_qd73).replace(",", ".") }}</td>
+            <td>{{ "{:,.0f}".format(row.tien_an).replace(",", ".") }}</td>
+            <td>{{ "{:,.0f}".format(row.tong_tien).replace(",", ".") }}</td>
+            <td></td>
+            <td>{% if row.is_contract %}HĐ{% endif %}</td>
+          </tr>
+          {% endif %}
         {% endif %}
       {% endfor %}
       <tr class="total-row">

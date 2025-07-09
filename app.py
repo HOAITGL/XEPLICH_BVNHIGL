@@ -3441,6 +3441,7 @@ def print_shift_payment_summary():
         Schedule.query.join(User).join(Shift)
         .filter(Schedule.work_date >= start_dt, Schedule.work_date <= end_dt)
         .filter(Shift.duration == (16 if ca_chon == '16h' else 24))
+        .filter(~Shift.name.ilike('%thường trú%'))  # ❌ Loại bỏ ca thường trú
         .all()
     )
 
