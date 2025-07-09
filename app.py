@@ -25,6 +25,7 @@ import os
 import logging
 from logging.handlers import RotatingFileHandler
 from models.holiday import Holiday  # 👈 nếu chưa có model, mình có thể tạo giúp
+from flask_migrate import Migrate
 
 def setup_logging(app):
     if not os.path.exists('logs'):
@@ -181,19 +182,19 @@ def add_leave():
     else:
         departments = [user_dept]
 
-    # ✅ Chọn khoa: admin có thể chọn, user thường thì cố định
-    selected_department = (
-        request.form.get('department')
-        if user_role == 'admin'
-        else user_dept
-    )
+    # ✅ Chọn khoa ban đầu khi chưa POST
+    if request.method == 'POST':
+        selected_department = request.form.get('department') if user_role == 'admin' else user_dept
+    else:
+        selected_department = departments[0] if user_role == 'admin' and departments else user_dept
 
-    # ✅ Admin: chọn user theo khoa. User thường: chỉ chính mình
+    # ✅ Admin chọn user theo khoa
     if user_role == 'admin':
         users = User.query.filter(User.department == selected_department).order_by(User.name).all() if selected_department else []
     else:
         users = [User.query.get(current_user_id)]
 
+    # ✅ Submit đơn nghỉ
     if request.method == 'POST' and 'user_id' in request.form:
         user_id = int(request.form['user_id'])
         start_date = datetime.strptime(request.form['start_date'], '%Y-%m-%d').date()
@@ -201,20 +202,17 @@ def add_leave():
         reason = request.form.get('reason')
         location = request.form.get('location')
 
-        # Nhận ngày sinh
         birth_day = request.form.get('birth_day')
         birth_month = request.form.get('birth_month')
         birth_year = request.form.get('birth_year')
         birth_date_str = f"{birth_year}-{birth_month.zfill(2)}-{birth_day.zfill(2)}"
-
-        # Nhận năm vào công tác
         start_work_year = int(request.form.get('start_work_year'))
 
-        # Cập nhật năm vào công tác cho user
+        # Cập nhật năm công tác
         user = User.query.get(user_id)
         user.start_year = start_work_year
 
-        # Lưu đơn nghỉ phép
+        # Lưu đơn
         leave = LeaveRequest(
             user_id=user_id,
             start_date=start_date,
@@ -232,7 +230,8 @@ def add_leave():
         'add_leave.html',
         departments=departments,
         selected_department=selected_department,
-        users=users
+        users=users,
+        current_user_role=user_role  # ➕ Bổ sung dòng này
     )
 
 from models.leave_request import LeaveRequest
@@ -593,10 +592,6 @@ def test_export():
 
 @app.route('/assign', methods=['GET', 'POST'])
 def assign_schedule():
-    from flask import flash
-    from datetime import datetime, timedelta
-    from models.leave_request import LeaveRequest
-
     user_role = session.get('role')
     user_dept = session.get('department')
 
@@ -608,21 +603,23 @@ def assign_schedule():
     selected_department = request.args.get('department') if request.method == 'GET' else request.form.get('department')
     users = User.query.filter_by(department=selected_department).all() if selected_department else []
     shifts = Shift.query.all()
+    leaves = []
 
-    leaves = []  # mặc định
     if request.method == 'POST':
         start_date = datetime.strptime(request.form['start_date'], '%Y-%m-%d').date()
         end_date = datetime.strptime(request.form['end_date'], '%Y-%m-%d').date()
         duplicated_entries = []
 
-        user_name = session.get('name')  # 👈 Thêm dòng này trước khi dùng user_name
-        app.logger.info(f"[ASSIGN] User '{user_name}' bắt đầu phân lịch khoa '{selected_department}' từ {start_date} đến {end_date}")
+        user_name = session.get('name')
+        app.logger.info(f"[ASSIGN] User '{user_name}' phân lịch '{selected_department}' từ {start_date} đến {end_date}")
 
-        # Lấy danh sách nghỉ phép trong khoảng thời gian
         leaves = LeaveRequest.query.filter(
             LeaveRequest.start_date <= end_date,
             LeaveRequest.end_date >= start_date
         ).all()
+
+        setting = DepartmentSetting.query.filter_by(department_name=selected_department).first()
+        max_people = setting.max_people_per_day if setting else 1
 
         for checkbox in request.form.getlist('schedule'):
             user_id, shift_id = checkbox.split('-')
@@ -631,9 +628,16 @@ def assign_schedule():
 
             current = start_date
             while current <= end_date:
-                existing = Schedule.query.filter_by(user_id=user_id, work_date=current).first()
+                existing = Schedule.query.filter_by(user_id=user_id, shift_id=shift_id, work_date=current).first()
+                count_same_day = Schedule.query.join(User).filter(
+                    Schedule.work_date == current,
+                    User.department == selected_department
+                ).count()
+
                 if existing:
-                    duplicated_entries.append(f"{existing.user.name} đã có lịch ngày {current.strftime('%d/%m/%Y')}")
+                    duplicated_entries.append(f"{existing.user.name} đã có lịch ca {existing.shift.name} ngày {current.strftime('%d/%m/%Y')}")
+                elif count_same_day >= max_people:
+                    duplicated_entries.append(f"Ngày {current.strftime('%d/%m/%Y')} đã đủ người trực tối đa ({max_people})")
                 else:
                     new_schedule = Schedule(user_id=user_id, shift_id=shift_id, work_date=current)
                     db.session.add(new_schedule)
@@ -838,7 +842,6 @@ from models.schedule import Schedule
 def view_schedule():
     user_role = session.get('role')
     user_dept = session.get('department')
-    user_name = session.get('name')  # ✅ Thêm dòng này
 
     # Quyết định khoa được chọn
     if user_role == 'admin':
@@ -864,9 +867,6 @@ def view_schedule():
         start_date = datetime.today().date()
         end_date = start_date + timedelta(days=6)
 
-    # 🔎 Ghi log xem lịch
-    app.logger.info(f"[VIEW] User '{user_name}' ({user_role}) xem lịch khoa '{selected_department}' từ {start_date} đến {end_date}")
-
     # Lấy lịch trực
     query = Schedule.query.join(User).join(Shift)\
         .filter(Schedule.work_date.between(start_date, end_date))
@@ -874,7 +874,8 @@ def view_schedule():
         query = query.filter(User.department == selected_department)
 
     schedules = query.order_by(Schedule.work_date).all()
-    date_range = sorted({s.work_date for s in schedules})
+    print(">>> Các ngày có lịch trực:", sorted({s.work_date for s in schedules}))
+    date_range = [start_date + timedelta(days=i) for i in range((end_date - start_date).days + 1)]
 
     # Chuẩn bị dữ liệu lịch trực
     schedule_data = {}
@@ -889,17 +890,34 @@ def view_schedule():
                 'shifts': {},
                 'shifts_full': {}
             }
-        schedule_data[u.id]['shifts'][s.work_date] = s.shift.name
-        schedule_data[u.id]['shifts_full'][s.work_date] = {
+        # Cho phép nhiều ca/ngày
+        if s.work_date not in schedule_data[u.id]['shifts_full']:
+            schedule_data[u.id]['shifts_full'][s.work_date] = []
+        schedule_data[u.id]['shifts_full'][s.work_date].append({
             'shift_id': s.shift.id,
             'shift_name': s.shift.name
-        }
+        })
 
     # Dữ liệu lọc riêng cho in
-    filtered_for_print = {
-        uid: data for uid, data in schedule_data.items()
-        if any(s['shift_name'].strip().lower().startswith("trực") for s in data['shifts_full'].values())
-    }
+    filtered_for_print = {}
+    for uid, data in schedule_data.items():
+        filtered_shifts = {}
+        for work_date, shifts in data['shifts_full'].items():
+            ca_truc = [
+                ca for ca in shifts 
+                if 'trực' in ca['shift_name'].lower() and 'nghỉ' not in ca['shift_name'].lower()
+            ]
+            if ca_truc:
+                filtered_shifts[work_date] = ca_truc
+
+        if filtered_shifts:
+            filtered_for_print[uid] = {
+                'id': data['id'],
+                'name': data['name'],
+                'position': data['position'],
+                'department': data['department'],
+                'shifts_full': filtered_shifts
+            }
 
     # Kiểm tra chữ ký
     signature = ScheduleSignature.query.filter_by(
@@ -936,7 +954,7 @@ def view_schedule():
             'department': user_dept,
             'name': session.get('name')
         }
-    )
+    )                                                             
 
 @app.route('/schedule/edit/<int:user_id>', methods=['GET', 'POST'])
 def edit_user_schedule(user_id):
@@ -953,18 +971,22 @@ def edit_user_schedule(user_id):
             return "Không thể chỉnh sửa. Lịch trực đã được ký xác nhận và khóa.", 403
 
     if request.method == 'POST':
+        edited_dates = []  # ✅ THÊM DÒNG NÀY
+
         for s in schedules:
             new_shift_id = request.form.get(f'shift_{s.id}')
             if new_shift_id and int(new_shift_id) != s.shift_id:
+                edited_dates.append((s.work_date, s.shift_id, int(new_shift_id)))  # Ghi nhận thay đổi
                 s.shift_id = int(new_shift_id)
+
         db.session.commit()
 
-         # 🔎 Ghi log nếu có chỉnh sửa
+        # 🔎 Ghi log nếu có chỉnh sửa
         if edited_dates:
             user_name = session.get('name')
             for date, old_id, new_id in edited_dates:
                 app.logger.info(f"[EDIT] User '{user_name}' chỉnh sửa lịch user_id={user_id} - ngày {date}, từ ca {old_id} → ca {new_id}")
-        
+
         return redirect('/schedule')
 
     return render_template('edit_schedule.html', user=user, shifts=shifts, schedules=schedules)
@@ -1231,12 +1253,16 @@ def export_by_department():
 def generate_schedule_route():
     from models.leave_request import LeaveRequest
 
-    try:
+    departments = [d[0] for d in db.session.query(User.department)
+                   .filter(User.department.isnot(None)).distinct().all()]
+
+    if request.method == 'POST':
         department = request.form.get('department')
         start_date = datetime.strptime(request.form['start_date'], '%Y-%m-%d').date()
         end_date = datetime.strptime(request.form['end_date'], '%Y-%m-%d').date()
         user_ids = request.form.getlist('user_ids')
         shift_ids = request.form.getlist('shift_ids')
+        people_per_day = int(request.form.get('people_per_day', 1))
 
         if not user_ids or not shift_ids:
             flash("⚠️ Vui lòng chọn ít nhất 1 người và 1 ca trực.", "danger")
@@ -1250,48 +1276,55 @@ def generate_schedule_route():
         assignments = []
         conflicts = []
 
-        # 📥 Lấy danh sách nghỉ phép
         leaves = LeaveRequest.query.filter(
             LeaveRequest.start_date <= end_date,
             LeaveRequest.end_date >= start_date
         ).all()
 
-        # 🧠 Vòng lặp theo từng ngày và từng ca
-        for date_idx, work_date in enumerate(date_range):
-            for shift_idx, shift_id in enumerate(shift_ids):
-                user_index = (date_idx * len(shift_ids) + shift_idx) % user_count
-                uid = user_ids[user_index]
+        user_index = 0
+        for work_date in date_range:
+            assigned = set()
+            for shift_id in shift_ids:
+                attempts = 0
+                while len(assigned) < people_per_day and attempts < user_count * 2:
+                    uid = user_ids[user_index % user_count]
+                    user_index += 1
+                    attempts += 1
 
-                # ❌ Nếu user đang nghỉ phép
-                if any(leave.user_id == uid and leave.start_date <= work_date <= leave.end_date for leave in leaves):
-                    user = User.query.get(uid)
-                    conflicts.append(f"📆 {user.name} đang nghỉ phép ngày {work_date.strftime('%d/%m/%Y')}")
-                    continue
+                    # Kiểm tra nghỉ phép
+                    if any(l.user_id == uid and l.start_date <= work_date <= l.end_date for l in leaves):
+                        continue
 
-                # ❌ Kiểm tra lịch trùng (cùng người, cùng ca, cùng ngày)
-                exists = Schedule.query.filter_by(user_id=uid, shift_id=shift_id, work_date=work_date).first()
-                if exists:
-                    user = User.query.get(uid)
-                    conflicts.append(f"🔁 {user.name} đã có lịch trực {int(exists.shift.duration)}h ngày {work_date.strftime('%d/%m/%Y')}")
-                    continue
+                    # Trùng lịch
+                    exists = Schedule.query.filter_by(user_id=uid, shift_id=shift_id, work_date=work_date).first()
+                    if exists or uid in assigned:
+                        continue
 
-                # ✅ Thêm lịch mới
-                assignments.append(Schedule(user_id=uid, shift_id=shift_id, work_date=work_date))
+                    # ✅ Thêm
+                    assignments.append(Schedule(user_id=uid, shift_id=shift_id, work_date=work_date))
+                    assigned.add(uid)
 
         if assignments:
             db.session.add_all(assignments)
             db.session.commit()
             flash("✅ Đã tạo lịch trực tự động thành công.", "success")
 
-        for msg in conflicts:
-            flash(msg, "danger")
+        if not assignments:
+            flash("⚠️ Không có lịch nào được tạo. Có thể do tất cả bị trùng hoặc nghỉ phép.", "warning")
 
         return redirect(url_for('generate_schedule_route'))
 
-    except Exception as e:
-        db.session.rollback()
-        flash(f"❌ Lỗi tạo lịch: {str(e)}", "danger")
-        return redirect(request.referrer)
+    # GET hiển thị form
+    selected_department = request.args.get('department')
+    users = User.query.filter_by(department=selected_department).all() if selected_department else []
+    shifts = Shift.query.all()
+
+    return render_template('generate_form.html',
+                           departments=departments,
+                           selected_department=selected_department,
+                           users=users,
+                           shifts=shifts)
+
 
 @app.route('/export')
 def export_excel():
@@ -1580,9 +1613,8 @@ def import_users():
                 role          = row[3]
                 department    = row[4]
                 position      = row[5]
-                contract_type = row[6] if len(row) > 6 else None
-                email         = row[7] if len(row) > 7 else None
-                phone         = row[8] if len(row) > 8 else None
+                contract_type = row[6] if len(row) > 6 else None 
+                phone         = row[7] if len(row) > 7 else None
 
                 # Bỏ qua nếu thiếu tên đăng nhập hoặc đã tồn tại
                 if not username or User.query.filter_by(username=username).first():
@@ -1597,7 +1629,6 @@ def import_users():
                     department=department,
                     position=position,
                     contract_type=contract_type,
-                    email=email,
                     phone=phone
                 )
                 db.session.add(user)
@@ -2798,6 +2829,9 @@ def classify_day(date):
 
 @app.route('/shift-payment-view')
 def shift_payment_view():
+    user_role = session.get('role')
+    user_dept = session.get('department')
+
     from calendar import month_name
     from collections import defaultdict
 
@@ -2830,7 +2864,11 @@ def shift_payment_view():
         start_date_dt = datetime.strptime(start_date, '%Y-%m-%d').date()
         end_date_dt = datetime.strptime(end_date, '%Y-%m-%d').date()
 
-    departments = [d[0] for d in db.session.query(User.department).distinct().all() if d[0]]
+    if user_role == 'admin':
+        departments = [d[0] for d in db.session.query(User.department).distinct() if d[0]]
+    else:
+        departments = [user_dept]
+        selected_department = user_dept  # ép luôn chọn khoa mình
 
     hscc_depts = [d.department_name for d in HSCCDepartment.query.all()]
     rates = {(r.ca_loai, r.truc_loai, r.ngay_loai): r.don_gia for r in ShiftRateConfig.query.all()}
@@ -2913,7 +2951,15 @@ def tong_hop_cong_truc_view():
     from models.schedule import Schedule
     from models.shift import Shift
 
+    user_role = session.get('role')
+    user_dept = session.get('department')
+
     selected_department = request.args.get('department', '')
+    if user_role == 'admin':
+        departments = [d[0] for d in db.session.query(User.department).distinct() if d[0]]
+    else:
+        departments = [user_dept]
+
     start_date = request.args.get('start_date')
     end_date = request.args.get('end_date')
     mode = request.args.get('mode', '16h')  # '16h' hoặc '24h'
@@ -2993,8 +3039,6 @@ def tong_hop_cong_truc_view():
         'detail': summary,
         'tong_ngay': sum(summary.values())
     }
-
-    departments = [d[0] for d in db.session.query(User.department).distinct() if d[0]]
 
     return render_template('tong_hop_cong_truc_view.html',
                            rows=rows,

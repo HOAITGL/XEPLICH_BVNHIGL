@@ -56,18 +56,44 @@
 
 <!-- NÚT CHỨC NĂNG -->
 <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-  <div class="d-flex gap-2">
-    <button class="btn btn-outline-primary" onclick="window.print()">🖨 In lịch trực khoa</button>
-    <a href="{{ url_for('print_clinic_dept_schedule', start=start_date, end=end_date, department='Khoa khám - cấp cứu') }}" target="_blank" class="btn btn-outline-danger">In lịch khoa khám</a>
+  <div class="d-flex gap-2 flex-wrap">
+   
+    <!-- 🖨 In chỉ ca trực -->
+    {% if not request.args.get('print') %}
+    <a href="{{ request.path }}?department={{ selected_department }}&start_date={{ start_date }}&end_date={{ end_date }}&print=1" 
+       class="btn btn-outline-secondary">
+      🖨 In lịch trực khoa (Chỉ ca trực)
+    </a>
+    {% endif %}
 
+    <!-- 🖨 Nút in bản lọc hiện tại -->
+    {% if request.args.get('print') %}
+    <button onclick="window.print()" class="btn btn-primary">
+      🖨 In lịch trực tuần
+    </button>
+    {% endif %}
+
+    <!-- In lịch khoa khám -->
+    <a href="{{ url_for('print_clinic_dept_schedule', start=start_date, end=end_date, department='Khoa khám - cấp cứu') }}"
+       target="_blank"
+       class="btn btn-outline-danger">
+      In lịch khoa khám
+    </a>
+
+    <!-- Xuất Excel -->
     <form method="POST" action="/export-template">
       <input type="hidden" name="department" value="{{ selected_department }}">
       <input type="hidden" name="start_date" value="{{ start_date }}">
       <input type="hidden" name="end_date" value="{{ end_date }}">
       <button type="submit" class="btn btn-outline-success">📥 Xuất Excel theo mẫu</button>
-      <a href="/print-clinic-schedule?start={{ start_date }}&end={{ end_date }}" class="btn btn-outline-primary" target="_blank">🖨 In phân lịch phòng khám-KHTH</a>
     </form>
 
+    <!-- In phân lịch KHTH -->
+    <a href="/print-clinic-schedule?start={{ start_date }}&end={{ end_date }}" class="btn btn-outline-primary" target="_blank">
+      🖨 In phân lịch phòng khám-KHTH
+    </a>
+
+    <!-- Ký xác nhận -->
     {% if selected_department and not is_signed and user.role == 'manager' %}
     <form method="POST" action="/schedule/sign" onsubmit="return confirm('Xác nhận ký và khóa bảng lịch trực?');">
       <input type="hidden" name="department" value="{{ selected_department }}">
@@ -91,13 +117,14 @@
   </div>
 </div>
 
+
 <!-- BẢNG LỊCH TRỰC -->
 <div class="table-scroll">
 <table class="table table-bordered table-striped">
   <thead class="table-dark">
     <tr>
       <th>Họ tên</th>
-      <th>Cấp bậc/ chức vu</th>
+      <th>Chức danh</th>
       {% for d in date_range %}
         <th>{{ d.strftime('%d/%m') }}</th>
       {% endfor %}
@@ -105,24 +132,21 @@
     </tr>
   </thead>
   <tbody>
-    {% for u in schedule_data.values() %}
-      {% set ns = namespace(has_truc=false) %}
-      {% for s in u.shifts_full.values() %}
-        {% if s.shift_name and 'Trực' in s.shift_name %}
-          {% set ns.has_truc = true %}
-        {% endif %}
-      {% endfor %}
-      <tr class="{% if not ns.has_truc %}hide-if-not-truc{% endif %}">
-        <td>{{ u.name }}</td>
-        <td>{{ u.position }}</td>
-        {% for d in date_range %}
-          {% set ca = u.shifts_full.get(d) %}
-          <td class="{% if ca and 'Trực' not in ca.shift_name %}non-duty{% endif %}">
-            {% if ca %}
+    {% set display_data = print_data if request.args.get('print') else schedule_data %}
+    {% for u in display_data.values() %}
+    <tr class="user-row">
+      <td>{{ u.name }}</td>
+      <td>{{ u.position }}</td>
+      {% for d in date_range %}
+      <td>
+        {% set cas = u.shifts_full.get(d) %}
+        {% if cas %}
+          {% for ca in cas %}
+            <div>
               {{ ca.shift_name }}
-              {% if user.role == 'admin' or (user.role == 'manager' and not locked and not is_signed) %}
+              {% if user.role in ['admin', 'manager'] %}
               <form method="POST" action="/schedule/delete-one"
-                    onsubmit="return confirm('Xoá ca trực ngày {{ d.strftime('%d/%m') }}?')"
+                    onsubmit="return confirm('Xoá ca {{ ca.shift_name }} ngày {{ d.strftime('%d/%m') }}?')"
                     style="display:inline;">
                 <input type="hidden" name="user_id" value="{{ u.id }}">
                 <input type="hidden" name="shift_id" value="{{ ca.shift_id }}">
@@ -130,21 +154,24 @@
                 <button type="submit" class="btn btn-sm btn-outline-danger px-1 py-0" style="font-size: 0.75rem;">🗑</button>
               </form>
               {% endif %}
-            {% endif %}
-          </td>
-        {% endfor %}
-        <td class="print-hide">
-          {% if user.role == 'admin' or (user.role == 'manager' and not locked and not is_signed) %}
-            <a href="/schedule/edit/{{ u.id }}" class="btn btn-sm btn-primary">Sửa</a>
-          {% else %}
-            <span class="text-muted">Đã khóa</span>
-          {% endif %}
-        </td>
-      </tr>
+            </div>
+          {% endfor %}
+        {% endif %}
+      </td>
+      {% endfor %}
+      <td class="print-hide">
+        {% if user.role in ['admin', 'manager'] %}
+        <a href="/schedule/edit/{{ u.id }}" class="btn btn-sm btn-primary px-2 py-0" style="font-size: 0.75rem;">Sửa</a>
+        {% else %}
+        —
+        {% endif %}
+      </td>
+    </tr>
     {% endfor %}
   </tbody>
 </table>
 </div>
+
 
 <!-- CHÂN IN -->
 <div class="d-none d-print-block mt-3">
@@ -167,9 +194,6 @@
 @media print {
   .d-print-block { display: block !important; }
   .d-print-none, .btn, .sidebar, form, nav, .print-hide, .user-greeting {
-    display: none !important;
-  }
-  .hide-if-not-truc {
     display: none !important;
   }
   html, body {

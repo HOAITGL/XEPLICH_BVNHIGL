@@ -49,7 +49,6 @@
         <th>Cấp bậc chức vụ</th>
         <th>Loại hợp đồng</th>
         <th>Số điện thoại</th>
-        <th>Email</th>
         <th>Hành động</th>
        </tr>
     </thead>
@@ -63,7 +62,6 @@
          <td>{{ user.position or '' }}</td>
          <td>{{ user.contract_type or '' }}</td>
          <td>{{ user.phone or '' }}</td>
-         <td>{{ user.email or '' }}</td>
          <td>
              <a href="/users/edit/{{ user.id }}" class="btn btn-sm btn-primary">Sửa</a>
              <a href="/users/delete/{{ user.id }}" class="btn btn-sm btn-danger" onclick="return confirm('Xác nhận xoá?')">Xoá</a>

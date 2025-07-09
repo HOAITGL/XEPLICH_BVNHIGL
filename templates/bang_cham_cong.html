@@ -225,35 +225,32 @@
 </table>
 
 <div class="d-none d-print-block" style="width: 100%; font-size: 13px; margin-top: 0.5cm;">
-  <div style="display: grid; grid-template-columns: 20% 20% 20% 20% 20%;">
-    <div style="text-align: left;">
-      <strong>Nơi nhận:</strong><br>
-      - Ban Giám đốc<br>
-      - Các khoa/phòng<br>
-      - Đăng website<br>
-      - Lưu: VP, KH-CNTT
-    </div>
+  <div style="display: grid; grid-template-columns: 25% 25% 25% 25%;">
     <div style="text-align: center;">
       <strong>NGƯỜI LẬP BẢNG</strong><br><em>(Ký, ghi rõ họ tên)</em>
     </div>
+
     {% set dept_lower = (selected_department | default('') | lower) %}
     {% if dept_lower and dept_lower != 'phòng tổ chức - hcqt' %}
-      <div style="text-align: center;">
-        {% if "phòng" in dept_lower %}
-          <strong>TRƯỞNG PHÒNG</strong><br><em>(Ký, ghi rõ họ tên)</em>
-        {% elif "khoa" in dept_lower %}
-          <strong>TRƯỞNG KHOA</strong><br><em>(Ký, ghi rõ họ tên)</em>
-        {% endif %}
-      </div>
-    {% endif %}
     <div style="text-align: center;">
+      {% if "phòng" in dept_lower %}
+        <strong>TRƯỞNG PHÒNG</strong><br><em>(Ký, ghi rõ họ tên)</em>
+      {% elif "khoa" in dept_lower %}
+        <strong>TRƯỞNG KHOA</strong><br><em>(Ký, ghi rõ họ tên)</em>
+      {% endif %}
+    </div>
+    {% endif %}
+
+    <div style="text-align: center; padding-left: 2cm;">
       <strong>PHÒNG TỔ CHỨC - HCQT</strong><br><em>(Ký, ghi rõ họ tên)</em>
     </div>
-    <div style="text-align: center;">
+
+    <div style="text-align: center; padding-left: 2cm;">
       <strong>GIÁM ĐỐC</strong><br><em>(Ký, ghi rõ họ tên)</em>
     </div>
   </div>
 </div>
+
 
 <script>
 document.querySelector("form").addEventListener("submit", function(e) {
