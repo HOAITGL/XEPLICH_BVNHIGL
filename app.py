@@ -1441,11 +1441,16 @@ def edit_shift(id):
 @app.route('/shifts/delete/<int:shift_id>')
 def delete_shift(shift_id):
     shift = Shift.query.get_or_404(shift_id)
+
+    from models.schedule import Schedule
+    if Schedule.query.filter_by(shift_id=shift_id).first():
+        return "Không thể xoá ca này vì đang được sử dụng trong lịch trực.", 400
+
     db.session.delete(shift)
     db.session.commit()
 
-    user_name = session.get('name')
-    app.logger.info(f"[SHIFT_DELETE] {user_name} đã xoá ca trực: {shift.name} (Mã: {shift.code})")
+    user_name = session.get('name', 'Không xác định')
+    app.logger.info(f"[SHIFT_DELETE] {user_name} đã xoá ca trực: {shift.name}")
 
     return redirect('/shifts')
 
