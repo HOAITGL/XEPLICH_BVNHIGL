@@ -665,6 +665,12 @@ def assign_schedule():
         leaves=leaves
     )
 
+@app.route('/create-dept-setting')
+def create_dept_setting():
+    from models.department_setting import DepartmentSetting
+    db.create_all()
+    return "✅ Đã tạo bảng DepartmentSetting nếu chưa có."
+
 @app.route('/auto-assign')
 def auto_assign_page():
     selected_department = request.args.get('department')
