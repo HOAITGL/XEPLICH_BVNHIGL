@@ -24,7 +24,6 @@ from io import BytesIO
 import os
 import logging
 from logging.handlers import RotatingFileHandler
-from models.holiday import Holiday  # 👈 nếu chưa có model, mình có thể tạo giúp
 from flask_migrate import Migrate
 
 def setup_logging(app):
@@ -747,10 +746,12 @@ def auto_attendance_page():
                     current_date += timedelta(days=1)
                     continue
 
-                # Bỏ qua nếu là ngày lễ
-                if Holiday.query.filter_by(date=current_date).first():
+                # Bỏ qua nếu là ngày lễ cố định
+                ngay_le = {'01-01', '04-30', '05-01', '09-02'}
+                if current_date.strftime('%m-%d') in ngay_le:
                     current_date += timedelta(days=1)
                     continue
+
 
                 for staff in staff_members:
                     existing = Schedule.query.filter_by(
@@ -3563,12 +3564,6 @@ def run_seed():
         return "✅ Đã chạy seed.py thành công!"
     except Exception as e:
         return f"❌ Lỗi khi chạy seed.py: {str(e)}"
-
-@app.route('/create-holiday-table')
-def create_holiday_table():
-    from models.holiday import Holiday
-    db.create_all()
-    return "✅ Bảng holiday đã được tạo!"
 
 import os
 
