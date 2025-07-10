@@ -21,4 +21,5 @@ class User(db.Model, UserMixin):
     # Quan hệ đến lịch trực
     schedules = relationship("Schedule", back_populates="user")
     leave_requests = relationship('LeaveRequest', back_populates='user')
+    permissions = relationship('Permission', back_populates='user', cascade="all, delete-orphan")
 
