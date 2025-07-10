@@ -45,23 +45,8 @@ app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv("DATABASE_URL") or 'sqlite:///database.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.secret_key = 'lichtruc2025'
-from flask import Flask, render_template, request, redirect, url_for, flash, session
-from flask_login import login_required
-from datetime import datetime, timedelta
-from flask_sqlalchemy import SQLAlchemy
-from flask_migrate import Migrate, upgrade
-from models import ScheduleSignature
-from models.ScheduleSignature import ScheduleSignature
-from extensions import db  # Sử dụng đối tượng db đã khởi tạo trong extensions.py
-from openpyxl import Workbook
-from io import BytesIO
-import os
-import logging
-from logging.handlers import RotatingFileHandler
-from flask_migrate import Migrate
-from models.permission import Permission
-from models.unit_config import UnitConfig
-from utils.num2text import num2text
+
+app.config['DEBUG'] = True
 
 def setup_logging(app):
     if not os.path.exists('logs'):
@@ -3766,6 +3751,10 @@ def log_request_time(response):
     app.logger.info(f"[REQUEST TIME] {request.method} {request.path} - {duration:.3f}s")
     return response
 
+@app.errorhandler(500)
+def internal_error(error):
+    return render_template('500.html'), 500
+    
 import os
 
 if __name__ == '__main__':
