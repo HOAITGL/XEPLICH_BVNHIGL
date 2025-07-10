@@ -3757,34 +3757,23 @@ import traceback
 def handle_exception(e):
     return f"<h2>Internal Server Error</h2><pre>{traceback.format_exc()}</pre>", 500
 
-
-@app.route('/force-init-db')
-def force_init_db_once():
-    from models import db
-    db.drop_all()
-    db.create_all()
-
-    # ✅ Xoá luôn chính route này sau khi chạy lần đầu
-    import flask
-    current_app = flask.current_app
-    current_app.view_functions.pop('force_init_db_once', None)
-
-    return "✅ Đã tạo lại toàn bộ bảng và vô hiệu hoá route này."
-
 if __name__ == '__main__':
     import os
-    import logging
-    from models.user import User
-    from models.permission import Permission
     from sqlalchemy import inspect
 
     with app.app_context():
-        db.create_all()
-        print("✅ Đã tạo mọi bảng cần thiết.")
+        inspector = inspect(db.engine)
+        existing_tables = inspector.get_table_names()
 
-        # Tạo admin nếu chưa có
-        admin = User.query.filter_by(username='admin').first()
-        if not admin:
+        # ✅ Chỉ tạo bảng nếu chưa tồn tại bảng 'user' (coi như đại diện cho hệ thống đã khởi tạo)
+        if 'user' not in existing_tables:
+            db.create_all()
+            print("✅ Đã tạo tất cả bảng.")
+
+        from models.user import User
+
+        # ✅ Thêm admin nếu chưa có
+        if not User.query.filter_by(username='admin').first():
             admin = User(
                 name="Quản trị viên",
                 username="admin",
@@ -3799,43 +3788,12 @@ if __name__ == '__main__':
         else:
             print("⚠️ Tài khoản admin đã tồn tại.")
 
-        # ✅ Gán lại quyền mặc định đầy đủ cho admin
-        default_modules = [
-            'trang_chu',
-            'xem_lich_truc',
-            'yeu_cau_cv_ngoai_gio',
-            'don_nghi_phep',
-            'xep_lich_truc',
-            'tong_hop_khth',
-            'cham_cong',
-            'bang_cong_gop',
-            'bang_tinh_tien_truc',
-            'cau_hinh_ca_truc',
-            'thiet_lap_phong_kham',
-            'nhan_su_theo_khoa',
-            'cau_hinh_tien_truc',
-            'thiet_lap_khoa_hscc',
-            'phan_quyen',
-            'danh_sach_cong_viec',
-            'xem_log',
-            'doi_mat_khau'
-        ]
-
-        # Xoá quyền cũ (nếu có) rồi gán lại mới
-        Permission.query.filter_by(user_id=admin.id).delete()
-        for module in default_modules:
-            db.session.add(Permission(user_id=admin.id, module_name=module, can_access=True))
-        db.session.commit()
-        print("✅ Đã cập nhật đầy đủ 18 quyền mặc định cho admin.")
-
     # ✅ Hiển thị log lỗi chi tiết trên Render (nếu không chạy debug)
     if not app.debug:
+        import logging
         logging.basicConfig(level=logging.DEBUG)
         app.logger.setLevel(logging.DEBUG)
 
     # ✅ Khởi động ứng dụng
-    port = int(os.environ.get('PORT', 5000))
-    app.run(host='0.0.0.0', port=port, debug=True)
-
-
-    
+    port = int(os.environ.get('PORT', 5000))  # Render sẽ dùng PORT=10000
+    app.run(host='0.0.0.0', port=port, debug=True)    
