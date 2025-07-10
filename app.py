@@ -3757,12 +3757,6 @@ import traceback
 def handle_exception(e):
     return f"<h2>Internal Server Error</h2><pre>{traceback.format_exc()}</pre>", 500
 
-@app.route('/force-init-db')
-def force_init_db():
-    from models import db
-    db.drop_all()
-    db.create_all()
-    return "✅ Đã tạo lại toàn bộ bảng."
 
 @app.route('/force-init-db')
 def force_init_db_once():
