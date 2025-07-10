@@ -1025,9 +1025,6 @@ def view_schedule():
     ).first()
     locked = bool(lock)
 
-    unit = get_unit_config()  # 🔧 Gán giá trị từ hàm get_unit_config()
-    print(">> ĐƠN VỊ:", unit)  # 🧪 In ra console để kiểm tra
-
     return render_template(
         'schedule.html',
         departments=departments,
@@ -1041,7 +1038,6 @@ def view_schedule():
         is_signed=is_signed,
         signed_at=signed_at,
         locked=locked,
-        unit=unit,   # ✅ thêm dòng này
         user={
             'role': user_role,
             'department': user_dept,
@@ -2751,13 +2747,9 @@ from flask import render_template, request
 @app.route('/print-clinic-schedule')
 def print_clinic_schedule():
     from collections import defaultdict
-    from utils.unit_config import get_unit_config  # ✅ THÊM
 
-    # Lấy ngày
     start_str = request.args.get('start')
     end_str = request.args.get('end')
-    department = request.args.get('department')  # ✅ THÊM
-
     if not start_str or not end_str:
         return "Thiếu thông tin ngày bắt đầu hoặc kết thúc.", 400
 
@@ -2769,17 +2761,19 @@ def print_clinic_schedule():
     all_rooms = ClinicRoom.query.all()
     rooms_dict = {room.name.lower(): room.name for room in all_rooms if "tiếp đón" not in room.name.lower()}
 
+    # Khởi tạo dữ liệu lịch (dùng key 'phong_kham' viết thường)
     clinic_schedule = {
         "tiep_don": defaultdict(list),
         "phong_kham": {name: defaultdict(list) for name in rooms_dict.values()}
     }
 
-    # Lấy dữ liệu lịch có chứa từ khóa "phòng khám" hoặc "tiếp đón"
+    # Lấy dữ liệu phân công
     schedules = Schedule.query.join(User).join(Shift).filter(
         Schedule.work_date.between(start_date, end_date),
         Shift.name.ilike('%phòng khám%') | Shift.name.ilike('%tiếp đón%')
     ).all()
 
+    # Tạo bảng chức vụ người dùng
     user_positions = {}
     for s in schedules:
         name = s.user.name
@@ -2796,13 +2790,13 @@ def print_clinic_schedule():
                     clinic_schedule["phong_kham"][room_name][date].append(name)
                     break
 
-    # Loại bỏ phòng trống
+    # 1. Loại bỏ phòng trống
     clinic_schedule["phong_kham"] = {
         name: day_dict for name, day_dict in clinic_schedule["phong_kham"].items()
         if any(day_dict[d] for d in date_range)
     }
 
-    # Sắp xếp phòng theo thứ tự chuẩn
+    # 2. Sắp xếp phòng theo thứ tự chuẩn
     desired_order = [
         "phòng khám 1", "phòng khám 2", "phòng khám 3",
         "phòng khám ngoại", "phòng khám tmh", "phòng khám rhm",
@@ -2815,11 +2809,8 @@ def print_clinic_schedule():
             ordered_schedule[original_name] = clinic_schedule["phong_kham"][original_name]
     clinic_schedule["phong_kham"] = ordered_schedule
 
+    # Tạo danh sách rooms từ lịch đã sắp xếp
     rooms = list(clinic_schedule["phong_kham"].keys())
-    department = request.args.get('department')  # ✅ Lấy từ URL
-    selected_department = department  # hoặc dùng luôn biến này
-    unit = get_unit_config()
-    print(">>> Tên phòng từ URL:", department)
 
     return render_template(
         'print-clinic-schedule.html',
@@ -2830,11 +2821,8 @@ def print_clinic_schedule():
         user_positions=user_positions,
         rooms=rooms,
         now=datetime.now(),
-        get_titled_names=get_titled_names,
-        unit=unit,
-        selected_department=department  # ✅ Gửi đúng tên biến sang template
+        get_titled_names=get_titled_names
     )
-
 
 # Các route như /print-clinic-schedule ở trên...
 
@@ -2857,12 +2845,9 @@ def get_titled_names(raw_names, user_positions):
 def print_clinic_dept_schedule():
     from collections import defaultdict
     import re
-    from utils.unit_config import get_unit_config  # Đảm bảo đúng tên file
 
     start_str = request.args.get('start')
     end_str = request.args.get('end')
-    department = request.args.get('department', 'Khoa khám - cấp cứu')  # 🔹 BỔ SUNG DÒNG NÀY
-
     if not start_str or not end_str:
         return "Thiếu thông tin ngày bắt đầu hoặc kết thúc.", 400
 
@@ -2874,16 +2859,19 @@ def print_clinic_dept_schedule():
     all_rooms = ClinicRoom.query.all()
     rooms_dict = {room.name.lower(): room.name for room in all_rooms if "tiếp đón" not in room.name.lower()}
 
+    # Khởi tạo dữ liệu lịch (dùng key 'phong_kham' viết thường)
     clinic_schedule = {
         "tiep_don": defaultdict(list),
         "phong_kham": {name: defaultdict(list) for name in rooms_dict.values()}
     }
 
+    # Lấy dữ liệu phân công
     schedules = Schedule.query.join(User).join(Shift).filter(
         Schedule.work_date.between(start_date, end_date),
         Shift.name.ilike('%phòng khám%') | Shift.name.ilike('%tiếp đón%')
     ).all()
 
+    # Tạo bảng chức vụ người dùng
     user_positions = {}
     for s in schedules:
         name = s.user.name
@@ -2900,11 +2888,13 @@ def print_clinic_dept_schedule():
                     clinic_schedule["phong_kham"][room_name][date].append(name)
                     break
 
+    # 1. Loại bỏ phòng trống
     clinic_schedule["phong_kham"] = {
         name: day_dict for name, day_dict in clinic_schedule["phong_kham"].items()
         if any(day_dict[d] for d in date_range)
     }
 
+    # 2. Sắp xếp phòng theo thứ tự chuẩn
     desired_order = [
         "phòng khám 1", "phòng khám 2", "phòng khám 3",
         "phòng khám ngoại", "phòng khám tmh", "phòng khám rhm",
@@ -2917,9 +2907,8 @@ def print_clinic_dept_schedule():
             ordered_schedule[original_name] = clinic_schedule["phong_kham"][original_name]
     clinic_schedule["phong_kham"] = ordered_schedule
 
+    # Tạo danh sách rooms từ lịch đã sắp xếp
     rooms = list(clinic_schedule["phong_kham"].keys())
-    
-    unit = get_unit_config()  # 🔧 Gán giá trị từ hàm get_unit_config()
 
     return render_template(
         'print-clinic-dept-schedule.html',
@@ -2930,9 +2919,7 @@ def print_clinic_dept_schedule():
         user_positions=user_positions,
         rooms=rooms,
         now=datetime.now(),
-        get_titled_names=get_titled_names,
-        unit=unit,                  # ✅ Đã gọi đúng
-        department=department.upper()            # ✅ Đã truyền đúng
+        get_titled_names=get_titled_names
     )
 
 def get_titled_names(name_input, user_positions):
