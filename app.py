@@ -3576,6 +3576,18 @@ def run_seed():
 def internal_error(error):
     return render_template('500.html'), 500
 
+import time
+
+@app.before_request
+def start_timer():
+    request.start_time = time.time()
+
+@app.after_request
+def log_request_time(response):
+    duration = time.time() - request.start_time
+    app.logger.info(f"[REQUEST TIME] {request.method} {request.path} - {duration:.3f}s")
+    return response
+
 import os
 
 if __name__ == '__main__':
