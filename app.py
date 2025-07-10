@@ -3759,20 +3759,29 @@ import traceback
 def handle_exception(e):
     return f"<h2>Internal Server Error</h2><pre>{traceback.format_exc()}</pre>", 500
 
+@app.route('/force-init-db')
+def force_init_db():
+    from models import db
+    db.drop_all()
+    db.create_all()
+    return "✅ Đã tạo lại toàn bộ bảng."
+
+if __name__ == '__main__':
     import os
+    from sqlalchemy import inspect
     import logging
     from models.user import User
 
     with app.app_context():
-        # ✅ Tạo tất cả bảng nếu chưa có
         db.create_all()
-        print("✅ Đã kiểm tra và tạo các bảng cần thiết.")
+        print("✅ Đã tạo mọi bảng cần thiết.")
 
-        # ✅ Tạo tài khoản admin mặc định nếu chưa có
+        from models.user import User
+
         if not User.query.filter_by(username='admin').first():
             admin = User(
                 name="Quản trị viên",
-                username="admin",
+             username="admin",
                 password="admin",
                 role="admin",
                 department="Phòng CNTT",
@@ -3784,13 +3793,14 @@ def handle_exception(e):
         else:
             print("⚠️ Tài khoản admin đã tồn tại.")
 
-    # ✅ Hiển thị log lỗi chi tiết nếu chạy trên Render
+    # ✅ Hiển thị log lỗi chi tiết trên Render (nếu không chạy debug)
     if not app.debug:
+        import logging
         logging.basicConfig(level=logging.DEBUG)
         app.logger.setLevel(logging.DEBUG)
 
-    # ✅ Khởi động ứng dụng Flask
-    port = int(os.environ.get('PORT', 5000))
+    # ✅ Khởi động ứng dụng
+    port = int(os.environ.get('PORT', 5000))  # Render sẽ dùng PORT=10000
     app.run(host='0.0.0.0', port=port, debug=True)
 
 
