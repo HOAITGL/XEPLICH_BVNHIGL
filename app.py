@@ -130,13 +130,27 @@ from models.ca import Ca
 from scheduler.logic import generate_schedule
 
 @app.context_processor
-def inject_user():
-    user = None
-    # ❌ Tạm thời bỏ dòng gọi permissions để không bị lỗi
-    if 'user_id' in session:
-        user = User.query.get(session['user_id'])
-        # allowed_modules = [perm.module_name for perm in user.permissions if perm.can_access]
-    return dict(user=user)
+def inject_permissions():
+    if 'role' in session:
+        role = session['role']
+        modules = {
+            'admin': [
+                'trang_chu', 'xem_lich_truc', 'xep_lich_truc', 'phan_quyen',
+                'tong_hop_khth', 'cau_hinh_ca_truc', 'cau_hinh_tien_truc',
+                'nhan_su_theo_khoa', 'don_nghi_phep', 'bang_cong_gop',
+                'bang_tinh_tien_truc', 'yeu_cau_cv_ngoai_gio', 'xem_log',
+                'thiet_lap_phong_kham', 'thiet_lap_khoa_hscc', 'cham_cong', 'doi_mat_khau', 'danh_sach_cong_viec'
+            ],
+            'manager': [
+                'trang_chu', 'xem_lich_truc', 'xep_lich_truc', 'yeu_cau_cv_ngoai_gio',
+                'don_nghi_phep', 'bang_cong_gop', 'nhan_su_theo_khoa', 'doi_mat_khau'
+            ],
+            'user': [
+                'trang_chu', 'xem_lich_truc', 'don_nghi_phep', 'doi_mat_khau'
+            ]
+        }
+        return dict(allowed_modules=modules.get(role, []))
+    return dict(allowed_modules=[])
 
 @app.route('/module-config', methods=['GET', 'POST'])
 def edit_module_config():
@@ -2934,6 +2948,13 @@ def get_titled_names(name_input, user_positions):
 @app.context_processor
 def inject_helpers():
     return dict(get_titled_names=get_titled_names)
+
+@app.context_processor
+def inject_user():
+    user = None
+    if 'user_id' in session:
+        user = User.query.get(session['user_id'])
+    return dict(user=user)
 
 from flask import render_template, request, redirect
 from models.shift_rate_config import ShiftRateConfig
