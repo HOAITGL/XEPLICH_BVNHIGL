@@ -3785,15 +3785,19 @@ if __name__ == '__main__':
     with app.app_context():
         inspector = inspect(db.engine)
         existing_tables = inspector.get_table_names()
+        required_tables = {'user', 'permission'}
 
-        # ✅ Chỉ tạo bảng nếu chưa tồn tại bảng 'user' (coi như đại diện cho hệ thống đã khởi tạo)
-        if 'user' not in existing_tables:
+        # ✅ Tạo bảng nếu thiếu bất kỳ bảng nào trong danh sách cần thiết
+        if not required_tables.issubset(set(existing_tables)):
+            from models.permission import Permission
+            from models.user import User
             db.create_all()
-            print("✅ Đã tạo tất cả bảng.")
+            print("✅ Đã tạo tất cả bảng cần thiết.")
+        else:
+            print("✅ Các bảng chính đã tồn tại.")
 
+        # ✅ Thêm tài khoản admin nếu chưa có
         from models.user import User
-
-        # ✅ Thêm admin nếu chưa có
         if not User.query.filter_by(username='admin').first():
             admin = User(
                 name="Quản trị viên",
@@ -3809,12 +3813,13 @@ if __name__ == '__main__':
         else:
             print("⚠️ Tài khoản admin đã tồn tại.")
 
-    # ✅ Hiển thị log lỗi chi tiết trên Render (nếu không chạy debug)
+    # ✅ Hiển thị log chi tiết nếu không chạy debug
     if not app.debug:
         import logging
         logging.basicConfig(level=logging.DEBUG)
         app.logger.setLevel(logging.DEBUG)
 
-    # ✅ Khởi động ứng dụng
-    port = int(os.environ.get('PORT', 5000))  # Render sẽ dùng PORT=10000
-    app.run(host='0.0.0.0', port=port, debug=True)    
+    # ✅ Khởi động Flask app
+    port = int(os.environ.get('PORT', 5000))  # Render sẽ truyền PORT env
+    app.run(host='0.0.0.0', port=port, debug=True)
+   
