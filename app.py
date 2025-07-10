@@ -10,6 +10,9 @@ def session_login_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
+import sys
+import os
+sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
 
 from flask import Flask, render_template, request, redirect, url_for, flash, session
 from flask_login import login_required
@@ -21,10 +24,10 @@ from models.ScheduleSignature import ScheduleSignature
 from extensions import db  # Sử dụng đối tượng db đã khởi tạo trong extensions.py
 from openpyxl import Workbook
 from io import BytesIO
-import os
 import logging
 from logging.handlers import RotatingFileHandler
 from flask_migrate import Migrate
+from models.permission import Permission
 
 def setup_logging(app):
     if not os.path.exists('logs'):
@@ -41,6 +44,18 @@ app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv("DATABASE_URL") or 'sqlite:///database.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.secret_key = 'lichtruc2025'
+
+
+def setup_logging(app):
+    if not os.path.exists('logs'):
+        os.mkdir('logs')
+    log_handler = RotatingFileHandler('logs/activity.log', maxBytes=1000000, backupCount=5)
+    log_handler.setLevel(logging.INFO)
+    log_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+    log_handler.setFormatter(log_formatter)
+    if not app.logger.handlers:
+        app.logger.addHandler(log_handler)
+    app.logger.setLevel(logging.INFO)
 
 setup_logging(app)
 
@@ -100,10 +115,36 @@ from scheduler.logic import generate_schedule
 @app.context_processor
 def inject_user():
     user = None
+    allowed_modules = []
     if 'user_id' in session:
         user = db.session.get(User, session['user_id'])
-    return dict(user=user)
+        if user:
+            allowed_modules = [perm.module_name for perm in user.permissions if perm.can_access]
+    return dict(user=user, allowed_modules=allowed_modules)
 
+
+@app.route('/module-config', methods=['GET', 'POST'])
+def edit_module_config():
+    if session.get('role') != 'admin':
+        return "Bạn không có quyền truy cập chức năng này."
+
+    config_path = os.path.join(os.path.dirname(__file__), 'modules_config.json')
+
+    if request.method == 'POST':
+        try:
+            data = request.form.get('config_json')
+            parsed = json.loads(data)  # kiểm tra JSON hợp lệ
+            with open(config_path, 'w', encoding='utf-8') as f:
+                json.dump(parsed, f, indent=2, ensure_ascii=False)
+            flash("✅ Đã cập nhật cấu hình phân hệ.", "success")
+        except Exception as e:
+            flash(f"❌ Lỗi khi cập nhật: {str(e)}", "danger")
+        return redirect('/module-config')
+
+    with open(config_path, encoding='utf-8') as f:
+        current_config = f.read()
+
+    return render_template('edit_module_config.html', config=current_config)
 
 from flask_login import login_user, logout_user
 from flask import redirect, url_for, flash
@@ -175,27 +216,37 @@ def add_leave():
     user_dept = session.get('department')
     current_user_id = session.get('user_id')
 
-    # ✅ Phân quyền hiển thị danh sách khoa
+    # ✅ Danh sách khoa
     if user_role == 'admin':
-        departments = [d[0] for d in db.session.query(User.department).filter(User.department != None).distinct().all()]
+        departments = [d[0] for d in db.session.query(User.department)
+                       .filter(User.department != None).distinct().all()]
     else:
         departments = [user_dept]
 
-    # ✅ Chọn khoa ban đầu khi chưa POST
+    # ✅ Lấy khoa được chọn
     if request.method == 'POST':
         selected_department = request.form.get('department') if user_role == 'admin' else user_dept
     else:
-        selected_department = departments[0] if user_role == 'admin' and departments else user_dept
+        selected_department = request.args.get('department') if user_role == 'admin' else user_dept
 
-    # ✅ Admin chọn user theo khoa
+    # ✅ Lấy danh sách user theo khoa
     if user_role == 'admin':
         users = User.query.filter(User.department == selected_department).order_by(User.name).all() if selected_department else []
     else:
         users = [User.query.get(current_user_id)]
 
-    # ✅ Submit đơn nghỉ
+    # ✅ Xử lý tạo đơn nghỉ
     if request.method == 'POST' and 'user_id' in request.form:
-        user_id = int(request.form['user_id'])
+        user_id_str = request.args.get('user_id')
+        if user_id_str and user_id_str.isdigit():
+            user_id = int(user_id_str)
+        else:
+            user_id = None  # hoặc xử lý giá trị mặc định
+        if not user_id_str.isdigit():
+            flash("❌ Vui lòng chọn nhân viên hợp lệ.", "danger")
+            return redirect('/leaves/add')
+
+        user_id = int(user_id_str)
         start_date = datetime.strptime(request.form['start_date'], '%Y-%m-%d').date()
         end_date = datetime.strptime(request.form['end_date'], '%Y-%m-%d').date()
         reason = request.form.get('reason')
@@ -205,20 +256,19 @@ def add_leave():
         birth_month = request.form.get('birth_month')
         birth_year = request.form.get('birth_year')
         birth_date_str = f"{birth_year}-{birth_month.zfill(2)}-{birth_day.zfill(2)}"
+        birth_date = datetime.strptime(birth_date_str, '%Y-%m-%d').date()
         start_work_year = int(request.form.get('start_work_year'))
 
-        # Cập nhật năm công tác
         user = User.query.get(user_id)
         user.start_year = start_work_year
 
-        # Lưu đơn
         leave = LeaveRequest(
             user_id=user_id,
             start_date=start_date,
             end_date=end_date,
             reason=reason,
             location=location,
-            birth_date=datetime.strptime(birth_date_str, '%Y-%m-%d').date()
+            birth_date=birth_date
         )
         db.session.add(leave)
         db.session.commit()
@@ -230,7 +280,8 @@ def add_leave():
         departments=departments,
         selected_department=selected_department,
         users=users,
-        current_user_role=user_role  # ➕ Bổ sung dòng này
+        current_user_role=user_role,
+        now=datetime.now()
     )
 
 from models.leave_request import LeaveRequest
@@ -405,10 +456,21 @@ from datetime import datetime
 from models.leave_request import LeaveRequest
 import os
 
-@app.route('/leaves/print/<int:leave_id>')
-def print_leave(leave_id):
-    leave = LeaveRequest.query.get_or_404(leave_id)
-    return render_template('leave/leave_print.html', leave=leave, now=datetime.now())
+@app.route('/leaves/print/<int:id>')
+@login_required
+def print_leave(id):
+    from models.leave_request import LeaveRequest
+
+    leave = LeaveRequest.query.get_or_404(id)
+    user = leave.user
+    unit = get_unit_config()  # ✅ bắt buộc phải có
+
+    return render_template(
+        'leave_print.html',
+        leave=leave,
+        user=user,
+        now=datetime.now()
+    )
 
 from flask import send_file
 from io import BytesIO
@@ -1667,21 +1729,72 @@ def manage_roles():
     if session.get('role') != 'admin':
         return "Bạn không có quyền truy cập trang này."
 
-    users = User.query.order_by(User.department).all()
+    search = request.args.get('search', '').strip()
+    role_filter = request.args.get('role', '')
+    department_filter = request.args.get('department', '').strip()
+    page = int(request.args.get('page', 1))
+    per_page = 10
+
+    users_query = User.query
+    if search:
+        users_query = users_query.filter(User.name.ilike(f"%{search}%"))
+    if role_filter:
+        users_query = users_query.filter_by(role=role_filter)
+    if department_filter:
+        users_query = users_query.filter_by(department=department_filter)
+
+    pagination = users_query.order_by(User.department).paginate(page=page, per_page=per_page)
+    users = pagination.items
+
+    modules = [
+        'trang_chu', 'xem_lich_truc', 'yeu_cau_cv_ngoai_gio', 'don_nghi_phep',
+        'xep_lich_truc', 'tong_hop_khth', 'cham_cong', 'bang_cong_gop', 'bang_tinh_tien_truc',
+        'cau_hinh_ca_truc', 'thiet_lap_phong_kham', 'nhan_su_theo_khoa',
+        'cau_hinh_tien_truc', 'thiet_lap_khoa_hscc', 'phan_quyen',
+        'danh_sach_cong_viec', 'xem_log', 'doi_mat_khau', 'module_config'
+    ]
+
+    module_names = {
+        'trang_chu': 'Trang chủ',
+        'xem_lich_truc': 'Xem lịch trực',
+        'yeu_cau_cv_ngoai_gio': 'Yêu cầu công việc ngoài giờ',
+        'don_nghi_phep': 'Đơn nghỉ phép',
+        'xep_lich_truc': 'Xếp lịch trực',
+        'tong_hop_khth': 'Tổng hợp KHTH',
+        'cham_cong': 'Chấm công',
+        'bang_cong_gop': 'Bảng công gộp',
+        'bang_tinh_tien_truc': 'Bảng thanh toán tiền trực',
+        'cau_hinh_ca_truc': 'Cấu hình ca trực',
+        'thiet_lap_phong_kham': 'Thiết lập Phòng khám',
+        'nhan_su_theo_khoa': 'Nhân sự theo khoa',
+        'cau_hinh_tien_truc': 'Cấu hình tiền trực',
+        'thiet_lap_khoa_hscc': 'Thiết lập khoa HSCC',
+        'phan_quyen': 'Phân quyền',
+        'danh_sach_cong_viec': 'Danh sách yêu cầu công việc',
+        'xem_log': 'Xem log hệ thống',
+        'doi_mat_khau': 'Đổi mật khẩu',
+        'module_config': 'Cấu hình phân hệ'
+    }
 
     if request.method == 'POST':
-        for user in users:
+        all_users = User.query.all()
+        for user in all_users:
             role = request.form.get(f'role_{user.id}')
             dept = request.form.get(f'department_{user.id}')
             position = request.form.get(f'position_{user.id}')
             if role and dept and position:
-                # Ghi nhật ký nếu có thay đổi
                 if (user.role != role) or (user.department != dept) or (user.position != position):
                     logging.info(f"{datetime.now()} | Admin ID {session['user_id']} cập nhật: {user.username} → "
                                  f"Role: {user.role} → {role}, Dept: {user.department} → {dept}, Position: {user.position} → {position}")
                 user.role = role
                 user.department = dept
                 user.position = position
+
+            Permission.query.filter_by(user_id=user.id).delete()
+            selected_modules = request.form.getlist(f'modules_{user.id}')
+            for mod in modules:
+                db.session.add(Permission(user_id=user.id, module_name=mod, can_access=(mod in selected_modules)))
+
         db.session.commit()
         flash("✅ Đã lưu thay đổi phân quyền người dùng.", "success")
         return redirect('/roles')
@@ -1689,11 +1802,42 @@ def manage_roles():
     departments = [d[0] for d in db.session.query(User.department).distinct().all() if d[0]]
     roles = ['admin', 'manager', 'user']
     positions = [p[0] for p in db.session.query(User.position).filter(User.position != None).distinct().all()]
+
+    for user in users:
+        user.modules = [perm.module_name for perm in user.permissions if perm.can_access]
+
     return render_template('manage_roles.html',
                            users=users,
                            departments=departments,
                            roles=roles,
-                           positions=positions)
+                           positions=positions,
+                           modules=modules,
+                           module_names=module_names,
+                           pagination=pagination,
+                           current_search=search,
+                           current_role=role_filter,
+                           current_department=department_filter
+    )
+
+@app.route('/unit-config', methods=['GET', 'POST'])
+def unit_config():
+    if session.get('role') != 'admin':
+        return "Bạn không có quyền truy cập."
+
+    config = UnitConfig.query.first()
+    if not config:
+        config = UnitConfig()
+
+    if request.method == 'POST':
+        config.name = request.form['name']
+        config.address = request.form['address']
+        config.phone = request.form['phone']
+        db.session.add(config)
+        db.session.commit()
+        flash("✅ Đã cập nhật thông tin đơn vị", "success")
+        return redirect('/unit-config')
+
+    return render_template('unit_config.html', config=config)
 
 from flask import send_file
 
@@ -2561,10 +2705,6 @@ def change_password():
 
     return render_template('change_password.html', user=user)
 
-@app.context_processor
-def inject_helpers():
-    return dict(get_titled_names=get_titled_names)
-
 import re
 from datetime import datetime, timedelta
 from collections import defaultdict
@@ -2767,9 +2907,6 @@ def get_titled_names(name_input, user_positions):
             titled.append(name)
 
     return '<br>'.join(titled)
-
-
-
 
 # Đăng ký vào template
 @app.context_processor
