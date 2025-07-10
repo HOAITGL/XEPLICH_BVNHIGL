@@ -85,34 +85,82 @@
 <body>
   <div class="sidebar">
     <ul>
-      <li><a href="/">🏠 Trang chủ</a></li>
-
-      {% if session.get('role') in ['admin', 'user', 'manager'] %}
-	<li><a href="/schedule">📅 Xem lịch trực</a></li>
-	<li><a href="/yeu-cau-xu-ly-cong-viec">📄 Yêu cầu xử lý CV ngoài giờ</a></li>
-	<li><a href="/leaves">📆 Đơn nghỉ phép</a></li>
+      {% if 'trang_chu' in allowed_modules %}
+        <li><a href="/">🏠 Trang chủ</a></li>
       {% endif %}
 
-      {% if session.get('role') in ['admin', 'manager'] %}
-	<li><a href="/assign">📝 Xếp lịch trực</a></li>
+      {% if 'xem_lich_truc' in allowed_modules %}
+        <li><a href="/schedule">📅 Xem lịch trực</a></li>
+      {% endif %}
+
+      {% if 'yeu_cau_cv_ngoai_gio' in allowed_modules %}
+        <li><a href="/yeu-cau-xu-ly-cong-viec">📄 Yêu cầu xử lý CV ngoài giờ</a></li>
+      {% endif %}
+
+      {% if 'don_nghi_phep' in allowed_modules %}
+        <li><a href="/leaves">📆 Đơn nghỉ phép</a></li>
+      {% endif %}
+
+      {% if 'xep_lich_truc' in allowed_modules %}
+        <li><a href="/assign">📝 Xếp lịch trực</a></li>
+      {% endif %}
+
+      {% if 'tong_hop_khth' in allowed_modules %}
         <li><a href="/report-all">🗂 Tổng hợp lịch trực-KHTH</a></li>
+      {% endif %}
+
+      {% if 'cham_cong' in allowed_modules %}
         <li><a href="/bang-cham-cong">📋 Bảng chấm công</a></li>
-	<li><a href="/tong-hop-cong-truc-view">📊 Bảng tổng hợp công trực</a></li>
+      {% endif %}
+
+      {% if 'bang_cong_gop' in allowed_modules %}
+        <li><a href="/tong-hop-cong-truc-view">📊 Bảng tổng hợp công trực</a></li>
+      {% endif %}
+
+      {% if 'bang_tinh_tien_truc' in allowed_modules %}
         <li><a href="{{ url_for('shift_payment_view') }}">💰 Bảng thanh toán tiền trực</a></li>
+      {% endif %}
+
+      {% if 'cau_hinh_ca_truc' in allowed_modules %}
         <li><a href="/shifts">⏰ Cấu hình ca trực</a></li>
+      {% endif %}
+
+      {% if 'thiet_lap_phong_kham' in allowed_modules %}
         <li><a class="nav-link" href="/clinic-rooms">🏥 Thiết lập Phòng khám</a></li>
+      {% endif %}
+
+      {% if 'nhan_su_theo_khoa' in allowed_modules %}
         <li><a href="/users-by-department">👥 Nhân sự theo khoa</a></li>
       {% endif %}
 
-      {% if session.get('role') == 'admin' %}
+      {% if 'cau_hinh_tien_truc' in allowed_modules %}
         <li><a href="/shift-rate-config">⏰ Cấu hình tiền trực</a></li>
-        <li><a href="/configure-hscc">⚕️ Thiết lập khoa HSCC</a></li>
-        <li><a href="/roles">🔐 Hệ thống phân quyền</a></li>
-	<li><a href="/danh-sach-yeu-cau">📂 Danh sách yêu cầu công việc</a></li>
-	<li><a href="{{ url_for('view_log') }}">🧾 Xem log hệ thống</a></li>
       {% endif %}
 
-      <li><a href="/change-password">🔑 Đổi mật khẩu</a></li>
+      {% if 'thiet_lap_khoa_hscc' in allowed_modules %}
+        <li><a href="/configure-hscc">⚕️ Thiết lập khoa HSCC</a></li>
+      {% endif %}
+
+      {% if 'phan_quyen' in allowed_modules %}
+        <li><a href="/roles">🔐 Hệ thống phân quyền</a></li>
+      {% endif %}
+
+      {% if 'danh_sach_cong_viec' in allowed_modules %}
+        <li><a href="/danh-sach-yeu-cau">📂 Danh sách yêu cầu công việc</a></li>
+      {% endif %}
+
+      {% if 'xem_log' in allowed_modules %}
+        <li><a href="{{ url_for('view_log') }}">🧾 Xem log hệ thống</a></li>
+      {% endif %}
+
+      {% if 'unit_config' in allowed_modules %}
+        <li><a href="/unit-config">🏥 Cấu hình đơn vị</a></li>
+      {% endif %}
+
+      {% if 'doi_mat_khau' in allowed_modules %}
+        <li><a href="/change-password">🔑 Đổi mật khẩu</a></li>
+      {% endif %}
+
       <li><a href="/logout">🚪 Đăng xuất</a></li>
     </ul>
   </div>
