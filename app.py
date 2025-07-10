@@ -46,8 +46,6 @@ app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv("DATABASE_URL") or 'sqlite:///
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.secret_key = 'lichtruc2025'
 
-app.config['DEBUG'] = True
-
 def setup_logging(app):
     if not os.path.exists('logs'):
         os.mkdir('logs')
