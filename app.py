@@ -3752,7 +3752,13 @@ def log_request_time(response):
 @app.errorhandler(500)
 def internal_error(error):
     return render_template('500.html'), 500
-    
+
+import traceback
+
+@app.errorhandler(Exception)
+def handle_exception(e):
+    return f"<h2>Internal Server Error</h2><pre>{traceback.format_exc()}</pre>", 500
+
 import os
 
 if __name__ == '__main__':
