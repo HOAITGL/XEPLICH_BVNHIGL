@@ -1,0 +1,22 @@
+[
+  {"code": "trang_chu", "label": "Trang chủ", "url": "/", "icon": "🏠"},
+  {"code": "xem_lich_truc", "label": "Xem lịch trực", "url": "/schedule", "icon": "📅"},
+  {"code": "yeu_cau_cv_ngoai_gio", "label": "Yêu cầu xử lý CV ngoài giờ", "url": "/yeu-cau-xu-ly-cong-viec", "icon": "📄"},
+  {"code": "don_nghi_phep", "label": "Đơn nghỉ phép", "url": "/leaves", "icon": "📆"},
+  {"code": "xep_lich_truc", "label": "Xếp lịch trực", "url": "/assign", "icon": "📝"},
+  {"code": "tong_hop_khth", "label": "Tổng hợp lịch trực-KHTH", "url": "/report-all", "icon": "🗂"},
+  {"code": "cham_cong", "label": "Bảng chấm công", "url": "/bang-cham-cong", "icon": "📋"},
+  {"code": "bang_cong_gop", "label": "Bảng tổng hợp công trực", "url": "/tong-hop-cong-truc-view", "icon": "📊"},
+  {"code": "bang_tinh_tien_truc", "label": "Bảng thanh toán tiền trực", "url": "/shift-payment", "icon": "💰"},
+  {"code": "cau_hinh_ca_truc", "label": "Cấu hình ca trực", "url": "/shifts", "icon": "⏰"},
+  {"code": "thiet_lap_phong_kham", "label": "Thiết lập Phòng khám", "url": "/clinic-rooms", "icon": "🏥"},
+  {"code": "nhan_su_theo_khoa", "label": "Nhân sự theo khoa", "url": "/users-by-department", "icon": "👥"},
+  {"code": "cau_hinh_tien_truc", "label": "Cấu hình tiền trực", "url": "/shift-rate-config", "icon": "⏰"},
+  {"code": "thiet_lap_khoa_hscc", "label": "Thiết lập khoa HSCC", "url": "/configure-hscc", "icon": "⚕️"},
+  {"code": "phan_quyen", "label": "Hệ thống phân quyền", "url": "/roles", "icon": "🔐"},
+  {"code": "danh_sach_cong_viec", "label": "Danh sách yêu cầu công việc", "url": "/danh-sach-yeu-cau", "icon": "📂"},
+  {"code": "xem_log", "label": "Xem log hệ thống", "url": "/log", "icon": "🧾"},
+  {"code": "doi_mat_khau", "label": "Đổi mật khẩu", "url": "/change-password", "icon": "🔑"},
+  {"code": "module_config", "label": "Cấu hình phân hệ", "url": "/module-config", "icon": "⚙️"},
+  {"code": "logout", "label": "Đăng xuất", "url": "/logout", "icon": "🚪"}
+]
