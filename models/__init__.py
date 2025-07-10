@@ -10,4 +10,8 @@ from .ca import Ca
 from .ca_config import CaConfiguration
 from .clinic_room import ClinicRoom
 from .permission import Permission  # nhớ thêm dòng này nếu chưa có
+<<<<<<< HEAD
+=======
+from .unit_config import UnitConfig
+>>>>>>> 2d092c541675e9351d9576df6050689646ac62cd
 
