@@ -6,4 +6,4 @@ class Permission(db.Model):
     module_name = db.Column(db.String(100), nullable=False)
     can_access = db.Column(db.Boolean, default=True)
 
-    user = db.relationship('User', backref='permissions')
+    user = db.relationship('User', back_populates='permissions')
