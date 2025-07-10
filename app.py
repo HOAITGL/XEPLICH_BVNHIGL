@@ -132,13 +132,11 @@ from scheduler.logic import generate_schedule
 @app.context_processor
 def inject_user():
     user = None
-    allowed_modules = []
+    # ❌ Tạm thời bỏ dòng gọi permissions để không bị lỗi
     if 'user_id' in session:
-        user = db.session.get(User, session['user_id'])
-        if user:
-            allowed_modules = [perm.module_name for perm in user.permissions if perm.can_access]
-    return dict(user=user, allowed_modules=allowed_modules)
-
+        user = User.query.get(session['user_id'])
+        # allowed_modules = [perm.module_name for perm in user.permissions if perm.can_access]
+    return dict(user=user)
 
 @app.route('/module-config', methods=['GET', 'POST'])
 def edit_module_config():
@@ -3765,6 +3763,19 @@ def force_init_db():
     db.drop_all()
     db.create_all()
     return "✅ Đã tạo lại toàn bộ bảng."
+
+@app.route('/force-init-db')
+def force_init_db_once():
+    from models import db
+    db.drop_all()
+    db.create_all()
+
+    # ✅ Xoá luôn chính route này sau khi chạy lần đầu
+    import flask
+    current_app = flask.current_app
+    current_app.view_functions.pop('force_init_db_once', None)
+
+    return "✅ Đã tạo lại toàn bộ bảng và vô hiệu hoá route này."
 
 if __name__ == '__main__':
     import os
