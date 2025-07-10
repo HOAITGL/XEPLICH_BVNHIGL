@@ -13,7 +13,6 @@ def session_login_required(f):
 import sys
 import os
 sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
-
 from flask import Flask, render_template, request, redirect, url_for, flash, session
 from flask_login import login_required
 from datetime import datetime, timedelta
@@ -24,15 +23,12 @@ from models.ScheduleSignature import ScheduleSignature
 from extensions import db  # Sử dụng đối tượng db đã khởi tạo trong extensions.py
 from openpyxl import Workbook
 from io import BytesIO
-<<<<<<< HEAD
-=======
 import logging
 from logging.handlers import RotatingFileHandler
 from flask_migrate import Migrate
 from models.permission import Permission
 from models.unit_config import UnitConfig
 from utils.num2text import num2text
-
 
 def setup_logging(app):
     if not os.path.exists('logs'):
@@ -60,16 +56,12 @@ from extensions import db  # Sử dụng đối tượng db đã khởi tạo tr
 from openpyxl import Workbook
 from io import BytesIO
 import os
->>>>>>> 2d092c541675e9351d9576df6050689646ac62cd
 import logging
 from logging.handlers import RotatingFileHandler
 from flask_migrate import Migrate
 from models.permission import Permission
-<<<<<<< HEAD
-=======
 from models.unit_config import UnitConfig
 from utils.num2text import num2text
->>>>>>> 2d092c541675e9351d9576df6050689646ac62cd
 
 def setup_logging(app):
     if not os.path.exists('logs'):
@@ -280,15 +272,12 @@ def add_leave():
 
     # ✅ Xử lý tạo đơn nghỉ
     if request.method == 'POST' and 'user_id' in request.form:
-<<<<<<< HEAD
         user_id_str = request.args.get('user_id')
         if user_id_str and user_id_str.isdigit():
             user_id = int(user_id_str)
         else:
             user_id = None  # hoặc xử lý giá trị mặc định
-=======
         user_id_str = request.form.get('user_id', '').strip()
->>>>>>> 2d092c541675e9351d9576df6050689646ac62cd
         if not user_id_str.isdigit():
             flash("❌ Vui lòng chọn nhân viên hợp lệ.", "danger")
             return redirect('/leaves/add')
@@ -331,10 +320,6 @@ def add_leave():
         selected_department=selected_department,
         users=users,
         current_user_role=user_role,
-<<<<<<< HEAD
-=======
-        unit=unit,
->>>>>>> 2d092c541675e9351d9576df6050689646ac62cd
         now=datetime.now()
     )
 
@@ -514,11 +499,7 @@ import os
 @login_required
 def print_leave(id):
     from models.leave_request import LeaveRequest
-<<<<<<< HEAD
-=======
     from utils.unit_config import get_unit_config
->>>>>>> 2d092c541675e9351d9576df6050689646ac62cd
-
     leave = LeaveRequest.query.get_or_404(id)
     user = leave.user
     unit = get_unit_config()  # ✅ bắt buộc phải có
@@ -527,10 +508,6 @@ def print_leave(id):
         'leave_print.html',
         leave=leave,
         user=user,
-<<<<<<< HEAD
-=======
-        unit=unit,  # ✅ phải truyền vào template
->>>>>>> 2d092c541675e9351d9576df6050689646ac62cd
         now=datetime.now()
     )
 
@@ -2086,7 +2063,7 @@ def bang_cham_cong():
         else:
             query = query.filter(User.contract_type.ilike(selected_contract))
 
-    users = query.order_by(User.name).all()
+    users = query.filter(User.role != 'admin').order_by(User.name).all()
 
     schedules = Schedule.query.join(Shift).filter(
         Schedule.user_id.in_([u.id for u in users]),
@@ -3105,6 +3082,9 @@ def shift_payment_view():
     rows = []
     co_ngay_le = False
     for user, info in data.items():
+        if user.role == 'admin':
+            continue  # ❌ Bỏ qua admin
+
         row = {
             'user': user,
             'tong_ngay': sum(info.values()),
@@ -3227,7 +3207,7 @@ def tong_hop_cong_truc_view():
         summary[(loai_ca, loai_ngay)] += 1
 
     user_ids = list(result_by_user.keys())
-    users = User.query.filter(User.id.in_(user_ids)).all() if user_ids else []
+    users = User.query.filter(User.id.in_(user_ids), User.role != 'admin').all() if user_ids else []
 
     rows = []
     for user in users:
