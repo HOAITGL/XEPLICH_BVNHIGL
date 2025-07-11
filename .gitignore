@@ -4,7 +4,8 @@ __pycache__/
 *$py.class
 
 # SQLite database files
-*.db
+# *.db        ← bỏ comment để không chặn hết .db
+!database.db  # Giữ lại file database.db để git theo dõi
 
 # Flask cache and logs
 instance/
@@ -26,3 +27,4 @@ Thumbs.db
 venv/
 ENV/
 env/
+
