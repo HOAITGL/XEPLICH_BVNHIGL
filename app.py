@@ -141,25 +141,36 @@ from scheduler.logic import generate_schedule
 
 @app.context_processor
 def inject_permissions():
-    if 'role' in session:
-        role = session['role']
-        modules = {
-            'admin': [
-                'trang_chu', 'xem_lich_truc', 'xep_lich_truc', 'phan_quyen',
-                'tong_hop_khth', 'cau_hinh_ca_truc', 'cau_hinh_tien_truc',
-                'nhan_su_theo_khoa', 'don_nghi_phep', 'bang_cong_gop',
-                'bang_tinh_tien_truc', 'yeu_cau_cv_ngoai_gio', 'xem_log',
-                'thiet_lap_phong_kham', 'thiet_lap_khoa_hscc', 'cham_cong', 'doi_mat_khau', 'danh_sach_cong_viec'
-            ],
-            'manager': [
-                'trang_chu', 'xem_lich_truc', 'xep_lich_truc', 'yeu_cau_cv_ngoai_gio',
-                'don_nghi_phep', 'bang_cong_gop', 'nhan_su_theo_khoa', 'doi_mat_khau'
-            ],
-            'user': [
-                'trang_chu', 'xem_lich_truc', 'don_nghi_phep', 'doi_mat_khau'
-            ]
-        }
-        return dict(allowed_modules=modules.get(role, []))
+    from models import Permission  # Đảm bảo đã import model Permission
+    if 'user_id' in session:
+        user_id = session['user_id']
+        permissions = Permission.query.filter_by(user_id=user_id, can_access=True).all()
+
+        if permissions:
+            allowed_modules = [p.module_name for p in permissions]
+        else:
+            # Nếu không có phân quyền riêng → fallback theo role
+            role = session.get('role')
+            default_modules = {
+                'admin': [
+                    'trang_chu', 'xem_lich_truc', 'xep_lich_truc', 'phan_quyen',
+                    'tong_hop_khth', 'cau_hinh_ca_truc', 'cau_hinh_tien_truc',
+                    'nhan_su_theo_khoa', 'don_nghi_phep', 'bang_cong_gop',
+                    'bang_tinh_tien_truc', 'yeu_cau_cv_ngoai_gio', 'xem_log',
+                    'thiet_lap_phong_kham', 'thiet_lap_khoa_hscc', 'cham_cong', 'doi_mat_khau', 'danh_sach_cong_viec'
+                ],
+                'manager': [
+                    'trang_chu', 'xem_lich_truc', 'xep_lich_truc', 'yeu_cau_cv_ngoai_gio',
+                    'don_nghi_phep', 'bang_cong_gop', 'nhan_su_theo_khoa', 'doi_mat_khau'
+                ],
+                'user': [
+                    'trang_chu', 'xem_lich_truc', 'don_nghi_phep', 'doi_mat_khau'
+                ]
+            }
+            allowed_modules = default_modules.get(role, [])
+
+        return dict(allowed_modules=allowed_modules)
+
     return dict(allowed_modules=[])
 
 @app.route('/module-config', methods=['GET', 'POST'])
