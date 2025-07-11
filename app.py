@@ -47,6 +47,9 @@ app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv("DATABASE_URL") or 'sqlite:///
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.secret_key = 'lichtruc2025'
 
+# ✅ Gắn app vào SQLAlchemy
+db.init_app(app)
+
 # ✅ Tạo bảng nếu thiếu (dùng cho Render khi không gọi __main__)
 with app.app_context():
     from sqlalchemy import inspect
