@@ -29,22 +29,7 @@ from flask_migrate import Migrate
 from models.permission import Permission
 from models.unit_config import UnitConfig
 from utils.num2text import num2text
-
-def setup_logging(app):
-    if not os.path.exists('logs'):
-        os.mkdir('logs')
-    log_handler = RotatingFileHandler('logs/activity.log', maxBytes=1000000, backupCount=5)
-    log_handler.setLevel(logging.INFO)
-    log_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-    log_handler.setFormatter(log_formatter)
-    if not app.logger.handlers:
-        app.logger.addHandler(log_handler)
-    app.logger.setLevel(logging.INFO)
-
-app = Flask(__name__)
-app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv("DATABASE_URL") or 'sqlite:///database.db'
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.secret_key = 'lichtruc2025'
+from models.user import User
 
 def setup_logging(app):
     if not os.path.exists('logs'):
@@ -74,6 +59,18 @@ with app.app_context():
         print("✅ Đã tạo bảng user/permission trên Render.")
     else:
         print("✅ Các bảng chính đã tồn tại.")
+
+def setup_logging(app):
+    if not os.path.exists('logs'):
+        os.mkdir('logs')
+    log_handler = RotatingFileHandler('logs/activity.log', maxBytes=1000000, backupCount=5)
+    log_handler.setLevel(logging.INFO)
+    log_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+    log_handler.setFormatter(log_formatter)
+    if not app.logger.handlers:
+        app.logger.addHandler(log_handler)
+    app.logger.setLevel(logging.INFO)
+
 
 def setup_logging(app):
     if not os.path.exists('logs'):
