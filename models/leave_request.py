@@ -4,7 +4,7 @@ from datetime import date
 class LeaveRequest(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    user = db.relationship('User', backref='leaves')  # dòng này là quan trọng!
+    user = db.relationship('User', back_populates='leave_requests')  # dòng này là quan trọng!
 
     start_date = db.Column(db.Date, nullable=False)
     end_date = db.Column(db.Date, nullable=False)
