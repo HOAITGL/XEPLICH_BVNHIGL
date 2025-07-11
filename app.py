@@ -28,7 +28,6 @@ from logging.handlers import RotatingFileHandler
 from flask_migrate import Migrate
 from models.permission import Permission
 from models.unit_config import UnitConfig
-from utils.num2text import num2text
 from models.user import User
 
 def setup_logging(app):
@@ -88,7 +87,6 @@ def setup_logging(app):
 
 setup_logging(app)
 
-db.init_app(app)
 migrate = Migrate(app, db)
 
 with app.app_context():
@@ -2025,8 +2023,6 @@ def export_template():
 
     return send_file(stream, as_attachment=True, download_name="lichtruc_dangngang.xlsx")
 
-from sqlalchemy import or_
-
 @app.route('/bang-cham-cong')
 def bang_cham_cong():
     from datetime import datetime, timedelta, date
@@ -2135,9 +2131,6 @@ def bang_cham_cong():
     )
 
 from flask import request, send_file
-from io import BytesIO
-import openpyxl
-from datetime import datetime, timedelta
 from models import User, Schedule
 
 @app.route('/export-cham-cong')
@@ -2655,7 +2648,6 @@ def update_clinic_room(room_id):
 from collections import defaultdict
 
 from flask import send_file, request
-import openpyxl
 from openpyxl.styles import Alignment, Font
 from io import BytesIO
 from collections import defaultdict
