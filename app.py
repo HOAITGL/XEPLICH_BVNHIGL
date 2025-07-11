@@ -1651,7 +1651,6 @@ def edit_user(user_id):
         user.position = request.form['position']
         user.contract_type = request.form.get('contract_type')  # ✅ nếu có thêm trường này
         user.phone = request.form['phone']
-        user.email = request.form['email']
         db.session.commit()
         return redirect('/users-by-department')
 
@@ -1671,7 +1670,6 @@ def add_user():
         position = request.form['position']
         contract_type = request.form.get('contract_type')
         phone = request.form.get('phone')
-        email = request.form.get('email')
 
         # ⚠️ Nếu là manager thì luôn ép vai trò nhân viên mới là 'user'
         if current_role == 'manager':
@@ -1692,7 +1690,6 @@ def add_user():
             position=position,
             contract_type=contract_type,
             phone=phone,
-            email=email
         )
         db.session.add(new_user)
         db.session.commit()
