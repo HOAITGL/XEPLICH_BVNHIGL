@@ -23,12 +23,14 @@ from models.ScheduleSignature import ScheduleSignature
 from extensions import db  # Sử dụng đối tượng db đã khởi tạo trong extensions.py
 from openpyxl import Workbook
 from io import BytesIO
-import logging
 from logging.handlers import RotatingFileHandler
 from flask_migrate import Migrate
 from models.permission import Permission
 from models.unit_config import UnitConfig
 from models.user import User
+
+from logging.handlers import RotatingFileHandler
+import logging, os
 
 def setup_logging(app):
     if not os.path.exists('logs'):
@@ -37,8 +39,11 @@ def setup_logging(app):
     log_handler.setLevel(logging.INFO)
     log_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
     log_handler.setFormatter(log_formatter)
-    if not app.logger.handlers:
+    
+    # Tránh thêm nhiều handler nếu đã có
+    if not any(isinstance(h, RotatingFileHandler) for h in app.logger.handlers):
         app.logger.addHandler(log_handler)
+    
     app.logger.setLevel(logging.INFO)
 
 app = Flask(__name__)
@@ -61,29 +66,6 @@ with app.app_context():
         print("✅ Đã tạo bảng user/permission trên Render.")
     else:
         print("✅ Các bảng chính đã tồn tại.")
-
-def setup_logging(app):
-    if not os.path.exists('logs'):
-        os.mkdir('logs')
-    log_handler = RotatingFileHandler('logs/activity.log', maxBytes=1000000, backupCount=5)
-    log_handler.setLevel(logging.INFO)
-    log_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-    log_handler.setFormatter(log_formatter)
-    if not app.logger.handlers:
-        app.logger.addHandler(log_handler)
-    app.logger.setLevel(logging.INFO)
-
-
-def setup_logging(app):
-    if not os.path.exists('logs'):
-        os.mkdir('logs')
-    log_handler = RotatingFileHandler('logs/activity.log', maxBytes=1000000, backupCount=5)
-    log_handler.setLevel(logging.INFO)
-    log_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-    log_handler.setFormatter(log_formatter)
-    if not app.logger.handlers:
-        app.logger.addHandler(log_handler)
-    app.logger.setLevel(logging.INFO)
 
 setup_logging(app)
 
@@ -225,6 +207,10 @@ def login():
         session['user_id'] = user.id
         session['role'] = user.role
         session['department'] = user.department
+
+        # ✅ Ghi lại log đăng nhập
+        app.logger.info(f"[LOGIN] Tài khoản '{username}' đã đăng nhập từ IP {request.remote_addr}")
+        
         flash('Đăng nhập thành công!', 'success')
         return redirect(url_for('index'))
 
