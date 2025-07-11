@@ -62,6 +62,18 @@ app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv("DATABASE_URL") or 'sqlite:///
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.secret_key = 'lichtruc2025'
 
+# ✅ Tạo bảng nếu thiếu (dùng cho Render khi không gọi __main__)
+with app.app_context():
+    from sqlalchemy import inspect
+    inspector = inspect(db.engine)
+    existing_tables = inspector.get_table_names()
+    required_tables = {'user', 'permission'}
+
+    if not required_tables.issubset(set(existing_tables)):
+        db.create_all()
+        print("✅ Đã tạo bảng user/permission trên Render.")
+    else:
+        print("✅ Các bảng chính đã tồn tại.")
 
 def setup_logging(app):
     if not os.path.exists('logs'):
