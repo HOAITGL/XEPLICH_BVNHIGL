@@ -1509,6 +1509,15 @@ def add_shift():
 
     return render_template('add_shift.html')
 
+from flask import request, redirect, flash
+import openpyxl
+from datetime import datetime
+from models.shift import Shift
+from app import db
+
+def parse_time_string(time_str):
+    return datetime.strptime(time_str.strip(), '%H:%M').time()
+
 from flask import flash, redirect, render_template
 
 @app.route('/shifts/edit/<int:id>', methods=['GET', 'POST'])
@@ -1592,8 +1601,10 @@ from datetime import datetime, time
 from flask import flash  # cần import để sử dụng thông báo
 
 @app.route('/import-shifts', methods=['POST'])
-def import_shifts():
+def import_shifts_excel():  # ✅ Đổi tên hàm
     import openpyxl
+    from datetime import datetime, time
+
     file = request.files['file']
     if not file:
         flash("Không có file được chọn.", "error")
@@ -1606,28 +1617,24 @@ def import_shifts():
         for idx, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
             name, code, start, end, duration = row
             if name and code:
-                # Chuyển start và end thành đối tượng time nếu có thể
                 def to_time(val):
                     if isinstance(val, time):
                         return val
                     if isinstance(val, datetime):
                         return val.time()
                     if isinstance(val, str):
-                        try:
-                            return datetime.strptime(val.strip(), '%H:%M').time()
-                        except ValueError:
+                        for fmt in ("%H:%M", "%H:%M:%S"):
                             try:
-                                return datetime.strptime(val.strip(), '%H:%M:%S').time()
+                                return datetime.strptime(val.strip(), fmt).time()
                             except ValueError:
-                                return None
+                                continue
                     return None
 
                 start_time = to_time(start)
                 end_time = to_time(end)
 
                 if not start_time or not end_time:
-                    flash(f"Dòng {idx}: Bạn đã nhập sai giờ bắt đầu hoặc giờ kết thúc. "
-                          f"Vui lòng dùng định dạng giờ 'HH:MM' hoặc 'HH:MM:SS'.", "error")
+                    flash(f"Dòng {idx}: Giờ bắt đầu/kết thúc sai định dạng. Dùng 'HH:MM' hoặc 'HH:MM:SS'.", "error")
                     continue
 
                 existing = Shift.query.filter_by(code=code).first()
@@ -1636,9 +1643,9 @@ def import_shifts():
                     db.session.add(new_shift)
 
         db.session.commit()
-        flash("Đã nhập ca trực thành công.", "success")
+        flash("✅ Đã nhập ca trực thành công.", "success")
     except Exception as e:
-        flash(f"Đã xảy ra lỗi: {str(e)}", "error")
+        flash(f"❌ Lỗi khi đọc file: {str(e)}", "error")
 
     return redirect('/shifts')
 
