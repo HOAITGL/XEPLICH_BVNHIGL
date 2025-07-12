@@ -429,10 +429,11 @@ def api_user_phones():
     result = {user.name: user.phone for user in users if user.phone}
     return result
 
-
 @app.route("/danh-sach-yeu-cau")
 def danh_sach_yeu_cau():
     import csv
+    import os
+    from datetime import datetime
 
     data = []
     if os.path.exists("data.csv"):
@@ -449,12 +450,22 @@ def danh_sach_yeu_cau():
                     except:
                         pass
                     data.append(row)
-
     else:
         headers = []
 
     month = datetime.today().month
-    return render_template("danh_sach_yeu_cau.html", headers=headers, data=data, month=month)
+
+    # Tạo biến current_date với định dạng yêu cầu
+    now = datetime.today()
+    current_date = f"Gia Lai, ngày {now.day:02d} tháng {now.month:02d} năm {now.year}"
+
+    return render_template(
+        "danh_sach_yeu_cau.html",
+        headers=headers,
+        data=data,
+        month=month,
+        current_date=current_date
+    )
 
 @app.route("/xoa-yeu-cau/<int:index>", methods=["POST"])
 def xoa_yeu_cau(index):
@@ -477,7 +488,7 @@ def xoa_yeu_cau(index):
             writer.writerow(headers)
             writer.writerows(data)
 
-    return redirect("/danh-sach-yeu-cau")
+        return redirect("/danh-sach-yeu-cau")
 
 from flask import send_file
 import pandas as pd
