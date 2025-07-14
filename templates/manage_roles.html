@@ -102,7 +102,7 @@
                 <label style="display: block; margin-bottom: 4px;">
                   <input type="checkbox"
                          class="modules_{{ user.id }} all-modules"
-                         name="modules_{{ user.id }}"
+                         name="modules_{{ user.id }}[]"
                          value="{{ module }}"
                          {% if module in user.modules %}checked{% endif %}>
                   {{ module_names[module] }}

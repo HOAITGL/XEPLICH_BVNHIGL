@@ -1849,7 +1849,7 @@ def manage_roles():
                 user.position = position
 
             Permission.query.filter_by(user_id=user.id).delete()
-            selected_modules = request.form.getlist(f'modules_{user.id}')
+            selected_modules = request.form.getlist(f'modules_{user.id}[]')
             for mod in modules:
                 db.session.add(Permission(user_id=user.id, module_name=mod, can_access=(mod in selected_modules)))
 
