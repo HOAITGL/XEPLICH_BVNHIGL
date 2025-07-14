@@ -1837,9 +1837,16 @@ def manage_roles():
     if request.method == 'POST':
         all_users = User.query.all()
         for user in all_users:
+            selected_modules = request.form.getlist(f'modules_{user.id}[]')
+
+            # Nếu không có modules gửi lên thì bỏ qua → không sửa phân quyền user đó
+            if not selected_modules:
+                continue
+
             role = request.form.get(f'role_{user.id}')
             dept = request.form.get(f'department_{user.id}')
             position = request.form.get(f'position_{user.id}')
+
             if role and dept and position:
                 if (user.role != role) or (user.department != dept) or (user.position != position):
                     logging.info(f"{datetime.now()} | Admin ID {session['user_id']} cập nhật: {user.username} → "
@@ -1848,10 +1855,14 @@ def manage_roles():
                 user.department = dept
                 user.position = position
 
+            # Xoá phân quyền cũ và thêm lại
             Permission.query.filter_by(user_id=user.id).delete()
-            selected_modules = request.form.getlist(f'modules_{user.id}[]')
             for mod in modules:
-                db.session.add(Permission(user_id=user.id, module_name=mod, can_access=(mod in selected_modules)))
+                db.session.add(Permission(
+                    user_id=user.id,
+                    module_name=mod,
+                    can_access=(mod in selected_modules)
+                ))
 
         db.session.commit()
         flash("✅ Đã lưu thay đổi phân quyền người dùng.", "success")
@@ -1874,8 +1885,7 @@ def manage_roles():
                            pagination=pagination,
                            current_search=search,
                            current_role=role_filter,
-                           current_department=department_filter
-    )
+                           current_department=department_filter)
 
 @app.route('/unit-config', methods=['GET', 'POST'])
 def unit_config():
