@@ -46,6 +46,7 @@
       <button type="button" class="btn btn-outline-warning" onclick="toggleAllUsers(false)">🧹 Bỏ chọn tất cả phân hệ</button>
       <button type="button" class="btn btn-outline-success" onclick="applyToDepartment()">🧷 Chọn tất cả phân hệ cho khoa đã chọn</button>
     </div>
+    <button type="button" class="btn btn-outline-dark" onclick="applyFromSelectedUser()">📋 Áp dụng phân hệ từ người đang chọn</button>
     <button type="submit" class="btn btn-primary">💾 Lưu thay đổi</button>
   </div>
 
@@ -65,7 +66,9 @@
         {% for user in users %}
         <tr data-department="{{ user.department }}"
             class="{% if user.role == 'admin' %}table-danger{% elif user.role == 'manager' %}table-warning{% else %}table-light{% endif %}">
-          <td>{{ user.name }}</td>
+          <td onclick="markSelectedUser({{ user.id }})" style="cursor: pointer;" title="Click để chọn làm mẫu">
+            {{ user.name }}
+          </td>
           <td>{{ user.username }}</td>
           <td>
             <select name="department_{{ user.id }}" class="form-select">
@@ -169,6 +172,44 @@
       const checkboxes = row.querySelectorAll('input.all-modules');
       checkboxes.forEach(cb => cb.checked = true);
     });
+  }
+
+  // Tính năng chọn người mẫu và áp dụng phân hệ
+  let selectedUserId = null;
+
+  function markSelectedUser(userId) {
+    selectedUserId = userId;
+    alert("✅ Đã chọn người mẫu ID: " + userId);
+  }
+
+  function applyFromSelectedUser() {
+    if (!selectedUserId) {
+      alert("⚠️ Vui lòng click vào tên người dùng để chọn người mẫu trước.");
+      return;
+    }
+
+    const selectedModules = Array.from(
+      document.querySelectorAll(`.modules_${selectedUserId}`)
+    ).filter(cb => cb.checked).map(cb => cb.value);
+
+    if (selectedModules.length === 0) {
+      alert("⛔ Người được chọn chưa có phân hệ nào!");
+      return;
+    }
+
+    const rows = document.querySelectorAll("tr[data-department]");
+    rows.forEach(row => {
+      const inputs = row.querySelectorAll('input[type=checkbox]');
+      const userIdMatch = Array.from(inputs).find(i => i.name.startsWith("modules_"));
+      if (!userIdMatch) return;
+      const userId = userIdMatch.name.split("_")[1].replace("[]", "");
+      if (parseInt(userId) === selectedUserId) return;
+
+      const checkboxes = row.querySelectorAll(`.modules_${userId}`);
+      checkboxes.forEach(cb => cb.checked = selectedModules.includes(cb.value));
+    });
+
+    alert("✅ Đã sao chép phân hệ sang tất cả người dùng khác.");
   }
 </script>
 {% endblock %}
