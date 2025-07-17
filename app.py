@@ -1874,7 +1874,7 @@ def manage_roles():
     modules = [
         'trang_chu', 'xem_lich_truc', 'yeu_cau_cv_ngoai_gio', 'don_nghi_phep',
         'xep_lich_truc', 'tong_hop_khth', 'cham_cong', 'bang_cong_gop', 'bang_tinh_tien_truc',
-        'cau_hinh_ca_truc', 'thiet_lap_phong_kham', 'nhan_su_theo_khoa',
+        'cau_hinh_ca_truc', 'cau_hinh_muc_doc_hai','thiet_lap_phong_kham', 'nhan_su_theo_khoa',
         'cau_hinh_tien_truc', 'thiet_lap_khoa_hscc', 'phan_quyen',
         'danh_sach_cong_viec', 'xem_log', 'doi_mat_khau', 'module_config'
     ]
@@ -1890,6 +1890,7 @@ def manage_roles():
         'bang_cong_gop': 'Bảng công gộp',
         'bang_tinh_tien_truc': 'Bảng thanh toán tiền trực',
         'cau_hinh_ca_truc': 'Cấu hình ca trực',
+        'cau_hinh_muc_doc_hai': 'cấu hình mức độc hại',
         'thiet_lap_phong_kham': 'Thiết lập Phòng khám',
         'nhan_su_theo_khoa': 'Nhân sự theo khoa',
         'cau_hinh_tien_truc': 'Cấu hình tiền trực',
