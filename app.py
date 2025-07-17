@@ -3860,6 +3860,11 @@ def log_request_time(response):
     app.logger.info(f"[REQUEST TIME] {request.method} {request.path} - {duration:.3f}s")
     return response
 
+@app.cli.command("db-upgrade")
+def db_upgrade():
+    from flask_migrate import upgrade
+    upgrade()
+
 @app.errorhandler(500)
 def internal_error(error):
     return render_template('500.html'), 500
