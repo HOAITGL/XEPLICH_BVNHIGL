@@ -1203,6 +1203,30 @@ def unsign_schedule():
     flash("🗑️ Đã hủy ký xác nhận. Có thể chỉnh sửa lịch trực.", "warning")
     return redirect('/schedule')
 
+@app.route('/schedule/unlock', methods=['POST'])
+def unlock_signature():
+    if session.get('role') != 'admin':
+        return "Bạn không có quyền thực hiện hành động này.", 403
+
+    department = request.form.get('department')
+    from_date = datetime.strptime(request.form.get('from_date'), '%Y-%m-%d').date()
+    to_date = datetime.strptime(request.form.get('to_date'), '%Y-%m-%d').date()
+
+    sig = ScheduleSignature.query.filter_by(
+        department=department,
+        from_date=from_date,
+        to_date=to_date
+    ).first()
+
+    if sig:
+        db.session.delete(sig)
+        db.session.commit()
+        flash("🧹 Đã hủy xác nhận và mở khóa lịch trực.", "warning")
+    else:
+        flash("Không tìm thấy bản ký xác nhận để hủy.", "danger")
+
+    return redirect(f'/schedule?department={department}&start_date={from_date}&end_date={to_date}')
+
 @app.route('/calendar')
 def fullcalendar():
     selected_department = request.args.get('department')
