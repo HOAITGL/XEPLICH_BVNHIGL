@@ -1,0 +1,36 @@
+{% extends "layout.html" %}
+{% block title %}Danh sách nhân viên ngừng hoạt động{% endblock %}
+{% block content %}
+
+<h2>🚫 Danh sách nhân viên đã ngừng hoạt động</h2>
+
+<table class="table table-bordered">
+  <thead>
+    <tr>
+      <th>Họ tên</th>
+      <th>Tên đăng nhập</th>
+      <th>Khoa/Phòng</th>
+      <th>Chức vụ</th>
+      <th>Loại hợp đồng</th>
+      <th>SĐT</th>
+      <th>Hành động</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for user in users %}
+    <tr>
+      <td>{{ user.name }}</td>
+      <td>{{ user.username }}</td>
+      <td>{{ user.department }}</td>
+      <td>{{ user.position }}</td>
+      <td>{{ user.contract_type }}</td>
+      <td>{{ user.phone }}</td>
+      <td>
+        <a href="{{ url_for('reactivate_user', user_id=user.id) }}" class="btn btn-success btn-sm">Khôi phục</a>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+{% endblock %}

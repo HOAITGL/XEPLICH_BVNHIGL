@@ -1143,7 +1143,7 @@ def sign_schedule():
     to_date_str = request.form.get('to_date')
 
     user_name = session.get('name')
-    app.logger.info(f"[SIGN] User '{user_name}' ký lịch trực cho khoa '{dept}' từ {start} đến {end}")
+    app.logger.info(f"[SIGN] User '{user_name}' ký lịch trực cho khoa '{department}' từ {from_date_str} đến {to_date_str}")
 
     if not department or not from_date_str or not to_date_str:
         flash("Thiếu thông tin để ký xác nhận.", "danger")
@@ -1276,21 +1276,35 @@ def report_by_department():
 def users_by_department():
     user_role = session.get('role')
     user_dept = session.get('department')
-    user_name = session.get('name')  # Thêm dòng này
+    user_name = session.get('name')
 
+    selected_department = request.args.get('department')
+    
     if user_role in ['manager', 'user']:
-        users = User.query.filter(User.department == user_dept).order_by(User.name).all()
+        # Nhân viên hoặc trưởng khoa chỉ xem khoa mình
+        users = User.query.filter(
+            User.department == user_dept,
+            User.active == True
+        ).order_by(User.name).all()
         departments = [user_dept]
         selected_department = user_dept
     else:
-        departments = [d[0] for d in db.session.query(User.department).filter(User.department != None).distinct().all()]
-        selected_department = request.args.get('department')
+        # Admin có thể chọn khoa bất kỳ
+        departments = [
+            d[0] for d in db.session.query(User.department)
+            .filter(User.department != None)
+            .distinct()
+            .all()
+        ]
         if selected_department:
-            users = User.query.filter(User.department == selected_department).order_by(User.name).all()
+            users = User.query.filter(
+                User.department == selected_department
+            ).order_by(User.name).all()
         else:
-            users = User.query.order_by(User.department, User.name).all()
-    
-    user_name = session.get('name')
+            users = User.query.filter(
+                User.active == True
+            ).order_by(User.department, User.name).all()
+
     app.logger.info(f"[USER_VIEW] User '{user_name}' ({user_role}) xem danh sách nhân sự khoa '{selected_department}'")
 
     return render_template(
@@ -1298,8 +1312,29 @@ def users_by_department():
         users=users,
         departments=departments,
         selected_department=selected_department,
-        current_user_role=user_role  # Truyền vào để template biết đang là role gì
+        current_user_role=user_role
     )
+
+@app.route('/users/inactive')
+def inactive_users():
+    users = User.query.filter_by(active=False).all()
+    return render_template('inactive_users.html', users=users)
+
+@app.route('/users/reactivate/<int:user_id>')
+def reactivate_user(user_id):
+    user = User.query.get_or_404(user_id)
+    user.active = True
+    db.session.commit()
+    flash("✅ Nhân viên đã được khôi phục!", "success")
+    return redirect('/users/inactive')
+
+@app.route('/users/deactivate/<int:user_id>')
+def deactivate_user(user_id):
+    user = User.query.get_or_404(user_id)
+    user.active = False
+    db.session.commit()
+    flash("🚫 Nhân viên đã được ngừng hoạt động!", "warning")
+    return redirect(request.referrer or url_for('users_by_department'))
 
 @app.route('/users/delete-all', methods=['POST'])
 def delete_all_users():
@@ -1944,8 +1979,9 @@ def clear_log():
 @app.route('/users/delete/<int:user_id>', methods=['POST', 'GET'])
 def delete_user(user_id):
     user = User.query.get_or_404(user_id)
-    db.session.delete(user)
+    user.active = False  # ✅ Đánh dấu ngừng hoạt động
     db.session.commit()
+    flash("✅ Đã ngừng hoạt động nhân viên.", "success")
     return redirect('/users-by-department')
 
 @app.route('/export-template', methods=['POST'])
@@ -2151,6 +2187,12 @@ def bang_cham_cong():
                     year=year,
                     now=now
     )
+
+@app.template_filter('break_code')
+def break_code(code):
+    if code and len(code) > 2:
+        return code[:2] + '\n' + code[2:]
+    return code
 
 from flask import request, send_file
 from models import User, Schedule

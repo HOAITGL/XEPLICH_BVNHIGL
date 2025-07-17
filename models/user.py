@@ -23,3 +23,4 @@ class User(db.Model, UserMixin):
     leave_requests = relationship('LeaveRequest', back_populates='user')
     permissions = relationship('Permission', back_populates='user', cascade="all, delete-orphan")
 
+    active = db.Column(db.Boolean, default=True)  # ✅ thêm dòng này

@@ -5,17 +5,15 @@
 <!-- TIÊU ĐỀ CHUẨN CÔNG VĂN -->
 <div class="d-none d-print-block text-center mb-3">
   <div class="row">
-    <div class="col-6" style="text-align: center;">
-      <div>
-        <strong>BỆNH VIỆN NHI TỈNH GIA LAI</strong><br>
-        {% if not selected_department %}
-          <strong>PHÒNG TỔ CHỨC - HCQT</strong>
-        {% else %}
-          <span style="display:inline-block; font-weight:bold; border-bottom:1px solid black; margin-top: 2px;">
-            {{ selected_department.upper() }}
-          </span>
-        {% endif %}
-      </div>
+    <div class="col-6 text-center">
+      <strong>BỆNH VIỆN NHI TỈNH GIA LAI</strong><br>
+      {% if not selected_department %}
+        <strong>PHÒNG TỔ CHỨC - HCQT</strong>
+      {% else %}
+        <span style="display:inline-block; font-weight:bold; border-bottom:1px solid black; margin-top: 2px;">
+          {{ selected_department.upper() }}
+        </span>
+      {% endif %}
     </div>
     <div class="col-6 text-center">
       <strong>CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</strong><br>
@@ -34,106 +32,96 @@
 </div>
 
 <style>
-    .weekend-holiday {
-      background-color: #ffebcc !important;
+  @media print {
+    .d-print-block { display: block !important; }
+    .d-print-none, .btn, .sidebar, form, nav, .print-hide, .user-greeting {
+      display: none !important;
     }
 
-    @media print {
-      .d-print-block { display: block !important; }
-      .d-print-none, .btn, .sidebar, form, nav, .print-hide, .user-greeting {
-        display: none !important;
-      }
-
-      html, body {
-        zoom: 100%;
-        margin: 0 !important;
-        padding: 0 !important;
-        width: 100%;
-        height: 100%;
-      }
-
-      .container, .row, .main, .wrapper, .content {
-        width: 100% !important;
-        margin: 0 !important;
-        padding: 0 !important;
-      }
-
-      table {
-        width: 100% !important;
-        table-layout: auto !important;
-        border-collapse: collapse;
-        font-size: 9.5px;
-      }
-
-      th, td {
-        padding: 4px 6px;
-        border: 1px solid black;
-        text-align: center;
-        vertical-align: middle;
-        line-height: 1.2;
-        word-break: break-word;
-      }
-
-      th:first-child, td:first-child {
-        min-width: 0.5cm;
-      }
-
-      th.hoten, td.hoten {
-        min-width: 2.5cm;
-        max-width: 3.5cm;
-      }
-
-      th:nth-child(3), td:nth-child(3) {
-        min-width: 0.9cm;
-        max-width: 1.1cm;
-      }
-
-      th.ketthuc, td.ketthuc {
-        min-width: 1.0cm !important;
-        max-width: 1.2cm;
-      }
-
-      td.ca-ma {
-        display: block;
-        max-height: 2.4em;
-        overflow: hidden;
-        line-height: 1.2em;
-        white-space: normal;
-        word-break: break-word;
-      }
-      th.ngay, td.ngay {
-        min-width: 0.5cm;
-        max-width: 0.6cm;
-      }
-      th.so-cong-kl, td.so-cong-kl,
-      th.so-cong-tg, td.so-cong-tg,
-      th.so-cong-100, td.so-cong-100,
-      th.so-cong-bhxh, td.so-cong-bhxh {
-        min-width: 1.0cm !important;
-        max-width: 1.2cm !important;
-      }
+    html, body {
+      zoom: 100%;
+      margin: 0 !important;
+      padding: 0 !important;
+      width: 100%;
+      height: 100%;
     }
 
-    @page {
-      size: A4 landscape;
-      margin: 1cm 1cm 0.7cm 1cm;
+    .container, .row, .main, .wrapper, .content {
+      width: 100% !important;
+      margin: 0 !important;
+      padding: 0 !important;
     }
 
+    table {
+      width: 100% !important;
+      table-layout: auto !important;
+      border-collapse: collapse;
+      font-size: 9.5px;
+    }
+
+    th, td {
+      padding: 4px 6px;
+      border: 3px solid black;
+      border-top: 3px solid black;
+      border-bottom: 3px solid black;
+      text-align: center;
+      vertical-align: middle;
+      line-height: 1.2;
+      word-break: break-word;
+    }
+
+    /* Cột họ tên rộng hơn */
+    th.hoten, td.hoten {
+      min-width: 3.5cm;
+      max-width: 5.0cm;
+    }
+
+    /* Cột cấp bậc chức vụ nhỏ lại và 2 dòng */
+    th.chucvu, td.chucvu {
+      min-width: 1.2cm;
+      max-width: 1.6cm;
+      white-space: pre-line;
+      line-height: 1.2;
+      font-size: 9.3px;
+      padding: 4px 2px;
+    }
+
+    td.code-cell {
+      white-space: pre-line !important;
+      font-size: 9.5px;
+      line-height: 1.1;
+      padding: 4px 2px;
+      word-break: break-word;
+    }
+
+    th.so-cong-kl, td.so-cong-kl,
+    th.so-cong-tg, td.so-cong-tg,
+    th.so-cong-100, td.so-cong-100,
+    th.so-cong-bhxh, td.so-cong-bhxh {
+      min-width: 1.0cm !important;
+      max-width: 1.2cm !important;
+      text-align: center;
+      white-space: normal;
+    }
+  }
+
+  @page {
+    size: A4 landscape;
+    margin: 1cm 1cm 0.7cm 1cm;
+  }
 </style>
 
-<div class="d-print-block mb-3" style="width: 100%;">
-  <h5 class="mt-4 mb-3 fw-bold text-uppercase"
-      style="position: relative; left: 50%; transform: translateX(-50%); text-align: center;">
-    BẢNG CHẤM CÔNG THÁNG {{ month }} NĂM {{ year }}
-  </h5>
-</div>
+
+<h5 class="mt-4 mb-3 fw-bold text-uppercase text-center">
+  BẢNG CHẤM CÔNG THÁNG {{ month }} NĂM {{ year }}
+</h5>
 
 <form method="GET" class="d-flex gap-3 flex-wrap align-items-end mb-4">
   <div>
-    <label for="department" class="form-label mb-0">Khoa/Phòng:</label>
-    {% if user.role == 'admin' %}      
+    <label class="form-label mb-0">Khoa/Phòng:</label>
+    {% if user.role == 'admin' %}
       <select name="department" class="form-select">
-      <option value="">-- Tất cả --</option>
+        <option value="">-- Tất cả --</option>
         {% for dept in departments %}
           <option value="{{ dept }}" {% if dept == selected_department %}selected{% endif %}>{{ dept }}</option>
         {% endfor %}
@@ -144,7 +132,7 @@
     {% endif %}
   </div>
   <div>
-    <label for="contract_type" class="form-label mb-0">Loại hợp đồng:</label>
+    <label class="form-label mb-0">Loại hợp đồng:</label>
     <select name="contract_type" class="form-select">
       <option value="">-- Tất cả --</option>
       <option value="biên chế" {% if selected_contract == 'biên chế' %}selected{% endif %}>Biên chế</option>
@@ -161,10 +149,7 @@
   </div>
   <div>
     <button type="submit" class="btn btn-primary">Xem bảng</button>
-    <a href="/export-cham-cong?start={{ start_date }}&end={{ end_date }}
-    {% if selected_department %}&department={{ selected_department }}{% endif %}
-    {% if selected_contract %}&contract_type={{ selected_contract }}{% endif %}"
-    class="btn btn-success">📥 Xuất Excel</a>
+    <a href="/export-cham-cong?start={{ start_date }}&end={{ end_date }}{% if selected_department %}&department={{ selected_department }}{% endif %}{% if selected_contract %}&contract_type={{ selected_contract }}{% endif %}" class="btn btn-success">📥 Xuất Excel</a>
     <button type="button" class="btn btn-secondary" onclick="window.print()">🖨 In</button>
   </div>
 </form>
@@ -183,25 +168,24 @@
         {% endif %}
       </th>
       <th colspan="{{ days_in_month|length }}" style="background-color:#fff2cc; font-weight:bold;">NGÀY TRONG THÁNG</th>
-      <th rowspan="3" style="background-color:#d9ead3;">Số công không hưởng lương</th>
-      <th rowspan="3" style="background-color:#d9ead3;">Số công hưởng lương TG</th>
-      <th rowspan="3" style="background-color:#d9ead3;">Số công nghỉ việc 100%</th>
-      <th rowspan="3" style="background-color:#d9ead3;">Số công BHXH</th>
+      <th class="so-cong-kl" rowspan="3" style="background-color:#d9ead3;">Số công không hưởng lương</th>
+      <th class="so-cong-tg" rowspan="3" style="background-color:#d9ead3;">Số công hưởng lương TG</th>
+      <th class="so-cong-100" rowspan="3" style="background-color:#d9ead3;">Số công nghỉ việc 100%</th>
+      <th class="so-cong-bhxh" rowspan="3" style="background-color:#d9ead3;">Số công BHXH</th>
     </tr>
     <tr>
       <th rowspan="2" style="background-color:#d9ead3;">STT</th>
       <th rowspan="2" class="hoten" style="background-color:#d9ead3;">Họ và tên</th>
       <th rowspan="2" style="background-color:#d9ead3;">Cấp bậc/ chức vụ</th>
-
       {% for day in days_in_month %}
-        <th>{{ "%02d"|format(day.day) }}</th>
+        <th class="ngay">{{ "%02d"|format(day.day) }}</th>
       {% endfor %}
     </tr>
     <tr>
       {% set thu_map = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'] %}
       {% for day in days_in_month %}
         {% set thu = thu_map[day.weekday()] %}
-        <th class="{% if day.weekday() in [5,6] or day in holidays %}weekend-holiday{% endif %}">{{ thu }}</th>
+        <th class="ngay {% if day.weekday() in [5,6] or day in holidays %}weekend-holiday{% endif %}">{{ thu }}</th>
       {% endfor %}
     </tr>
   </thead>
@@ -213,7 +197,7 @@
       <td>{{ user.position }}</td>
       {% for day in days_in_month %}
         {% set code = schedule_map.get((user.id, day), '') %}
-        <td class="{% if day.weekday() in [5,6] or day in holidays %}weekend-holiday{% endif %}">{{ code }}</td>
+        <td class="code-cell {% if day.weekday() in [5,6] or day in holidays %}weekend-holiday{% endif %}">{{ code|break_code }}</td>
       {% endfor %}
       <td>{{ summary[user.id]['kl'] }}</td>
       <td>{{ summary[user.id]['tg'] }}</td>
@@ -229,36 +213,22 @@
     <div style="text-align: center;">
       <strong>NGƯỜI LẬP BẢNG</strong><br><em>(Ký, ghi rõ họ tên)</em>
     </div>
-
-    {% set dept_lower = (selected_department | default('') | lower) %}
-    {% if dept_lower and dept_lower != 'phòng tổ chức - hcqt' %}
-    <div style="text-align: center;">
-      {% if "phòng" in dept_lower %}
-        <strong>TRƯỞNG PHÒNG</strong><br><em>(Ký, ghi rõ họ tên)</em>
-      {% elif "khoa" in dept_lower %}
-        <strong>TRƯỞNG KHOA</strong><br><em>(Ký, ghi rõ họ tên)</em>
-      {% endif %}
-    </div>
+    {% if selected_department and "phòng tổ chức" not in selected_department.lower() %}
+      <div style="text-align: center;">
+        {% if "phòng" in selected_department.lower() %}
+          <strong>TRƯỞNG PHÒNG</strong>
+        {% elif "khoa" in selected_department.lower() %}
+          <strong>TRƯỞNG KHOA</strong>
+        {% endif %}
+        <br><em>(Ký, ghi rõ họ tên)</em>
+      </div>
     {% endif %}
-
-    <div style="text-align: center; padding-left: 2cm;">
+    <div style="text-align: center;">
       <strong>PHÒNG TỔ CHỨC - HCQT</strong><br><em>(Ký, ghi rõ họ tên)</em>
     </div>
-
-    <div style="text-align: center; padding-left: 2cm;">
+    <div style="text-align: center;">
       <strong>GIÁM ĐỐC</strong><br><em>(Ký, ghi rõ họ tên)</em>
     </div>
   </div>
 </div>
-
-
-<script>
-document.querySelector("form").addEventListener("submit", function(e) {
-  const printChecked = document.getElementById("print_filter").checked;
-  const contractType = document.querySelector("select[name='contract_type']").value;
-  if (printChecked && !contractType) {
-    alert("Vui lòng chọn loại hợp đồng nếu muốn lọc khi in!");
-    e.preventDefault();
-  }
-});
-</script>{% endblock %}
+{% endblock %}

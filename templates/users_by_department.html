@@ -17,7 +17,7 @@
     {% endif %}
   {% endwith %}
 
-  {% if user.role == 'admin' %}
+  {% if current_user_role == 'admin' %}
   <form method="GET" class="mb-3">
     <label for="department">Chọn khoa/phòng:</label>
     <select name="department" id="department" class="form-control w-auto d-inline-block ms-2">
@@ -29,19 +29,23 @@
   </form>
   {% endif %}
 
-  {% if user.role in ['admin', 'manager'] %}
-  <a href="/users/add" class="btn btn-success mb-3">➕ Thêm nhân viên</a>
-  <a href="/import-users" class="btn btn-outline-secondary ms-2">📤 Import từ Excel</a>
-  {% if user.role == 'admin' %}
-  <form method="POST" action="/users/delete-all" onsubmit="return confirm('Bạn có chắc chắn muốn xóa toàn bộ nhân sự (trừ admin)?');" class="d-inline">
-    <button type="submit" class="btn btn-danger ms-2">🗑️ Xoá toàn bộ nhân sự</button>
-  </form>
-  {% endif %}
+  {% if current_user_role in ['admin', 'manager'] %}
+  <div class="mb-3">
+    <a href="{{ url_for('add_user') }}" class="btn btn-success">➕ Thêm nhân viên</a>
+    <a href="{{ url_for('import_users') }}" class="btn btn-outline-secondary ms-2">📤 Import từ Excel</a>
+
+    {% if current_user_role == 'admin' %}
+    <form method="POST" action="{{ url_for('delete_all_users') }}" onsubmit="return confirm('Bạn có chắc chắn muốn xóa toàn bộ nhân sự (trừ admin)?');" class="d-inline">
+      <button type="submit" class="btn btn-danger ms-2">🗑️ Xoá toàn bộ nhân sự</button>
+    </form>
+    <a href="/users/inactive" class="btn btn-secondary ms-2">🚫 DS Nhân viên ngừng hoạt động</a>
+    {% endif %}
+  </div>
   {% endif %}
 
   <table class="table table-bordered">
-     <thead class="table-dark">
-       <tr>
+    <thead class="table-dark">
+      <tr>
         <th>Họ tên</th>
         <th>Tên đăng nhập</th>
         <th>Vai trò hệ thống</th>
@@ -50,22 +54,23 @@
         <th>Loại hợp đồng</th>
         <th>Số điện thoại</th>
         <th>Hành động</th>
-       </tr>
+      </tr>
     </thead>
     <tbody>
       {% for user in users %}
       <tr>
-         <td>{{ user.name }}</td>
-         <td>{{ user.username }}</td>
-         <td>{{ user.role or '' }}</td>
-         <td>{{ user.department }}</td>
-         <td>{{ user.position or '' }}</td>
-         <td>{{ user.contract_type or '' }}</td>
-         <td>{{ user.phone or '' }}</td>
-         <td>
-             <a href="/users/edit/{{ user.id }}" class="btn btn-sm btn-primary">Sửa</a>
-             <a href="/users/delete/{{ user.id }}" class="btn btn-sm btn-danger" onclick="return confirm('Xác nhận xoá?')">Xoá</a>
-         </td>
+        <td>{{ user.name }}</td>
+        <td>{{ user.username }}</td>
+        <td>{{ user.role or '' }}</td>
+        <td>{{ user.department }}</td>
+        <td>{{ user.position or '' }}</td>
+        <td>{{ user.contract_type or '' }}</td>
+        <td>{{ user.phone or '' }}</td>
+        <td>
+          <a href="{{ url_for('edit_user', user_id=user.id) }}" class="btn btn-sm btn-primary">Sửa</a>
+          <a href="{{ url_for('delete_user', user_id=user.id) }}" class="btn btn-sm btn-danger" onclick="return confirm('Xác nhận xoá?')">Xoá</a>
+          <a href="{{ url_for('deactivate_user', user_id=user.id) }}" class="btn btn-warning btn-sm">Ngừng</a>
+        </td>
       </tr>
       {% endfor %}
     </tbody>
