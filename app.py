@@ -3908,7 +3908,10 @@ if __name__ == '__main__':
             db.session.commit()
             print("✅ Đã tạo tài khoản admin.")
         else:
-            print("⚠️ Tài khoản admin đã tồn tại.")
+            print("✅ Các bảng chính đã tồn tại.")
+            from flask_migrate import upgrade
+            upgrade()
+            print("✅ Đã chạy flask db upgrade để cập nhật schema.")
 
     # ✅ Hiển thị log chi tiết nếu không chạy debug
     if not app.debug:
