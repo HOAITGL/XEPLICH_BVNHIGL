@@ -1,4 +1,4 @@
-"""Add active column to User
+"""Add active column to User"""
 
 Revision ID: 96b57a7c37d0
 Revises: ece9c8b00af4
