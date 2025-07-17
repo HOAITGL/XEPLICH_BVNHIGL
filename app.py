@@ -3878,8 +3878,13 @@ def handle_exception(e):
 if __name__ == '__main__':
     import os
     from sqlalchemy import inspect
+    from flask_migrate import upgrade
 
     with app.app_context():
+        # ✅ Luôn chạy upgrade để đảm bảo schema mới nhất
+        upgrade()
+        print("✅ Đã chạy flask db upgrade để cập nhật schema.")
+
         inspector = inspect(db.engine)
         existing_tables = inspector.get_table_names()
         required_tables = {'user', 'permission'}
@@ -3908,10 +3913,7 @@ if __name__ == '__main__':
             db.session.commit()
             print("✅ Đã tạo tài khoản admin.")
         else:
-            print("✅ Các bảng chính đã tồn tại.")
-            from flask_migrate import upgrade
-            upgrade()
-            print("✅ Đã chạy flask db upgrade để cập nhật schema.")
+            print("⚠️ Tài khoản admin đã tồn tại.")
 
     # ✅ Hiển thị log chi tiết nếu không chạy debug
     if not app.debug:
@@ -3922,4 +3924,4 @@ if __name__ == '__main__':
     # ✅ Khởi động Flask app
     port = int(os.environ.get('PORT', 5000))  # Render sẽ truyền PORT env
     app.run(host='0.0.0.0', port=port, debug=True)
-   
+  
