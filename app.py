@@ -50,25 +50,6 @@ app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv("DATABASE_URL") or 'sqlite:///database.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.secret_key = 'lichtruc2025'
-db.init_app(app)
-
-if __name__ == '__main__':
-    # ✅ Đảm bảo thêm cột 'active' trước khi truy vấn User
-    try:
-        with db.engine.connect() as connection:
-            result = connection.execute(
-                "SELECT column_name FROM information_schema.columns WHERE table_name='user' AND column_name='active';"
-            )
-            if not result.fetchone():
-                connection.execute('ALTER TABLE "user" ADD COLUMN active BOOLEAN DEFAULT TRUE;')
-                print("✅ Đã thêm cột 'active' vào bảng user.")
-            else:
-                print("✅ Cột 'active' đã tồn tại.")
-    except Exception as e:
-        print(f"❌ Lỗi khi kiểm tra/thêm cột 'active': {e}")
-
-    port = int(os.environ.get('PORT', 5000))
-    app.run(host='0.0.0.0', port=port, debug=True)
 
 # ✅ Gắn app vào SQLAlchemy
 db.init_app(app)
