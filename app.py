@@ -28,6 +28,10 @@ from flask_migrate import Migrate
 from models.permission import Permission
 from models.unit_config import UnitConfig
 from models.user import User
+from models.hazard_config import HazardConfig
+from datetime import date
+import calendar
+from models import User, Shift, HazardConfig, ChamCong
 
 from logging.handlers import RotatingFileHandler
 import logging, os
@@ -53,6 +57,9 @@ app.secret_key = 'lichtruc2025'
 
 # ✅ Gắn app vào SQLAlchemy
 db.init_app(app)
+
+from extensions import migrate
+migrate.init_app(app, db)
 
 # ✅ Tạo bảng nếu thiếu (dùng cho Render khi không gọi __main__)
 with app.app_context():
@@ -139,7 +146,8 @@ def inject_permissions():
                     'tong_hop_khth', 'cau_hinh_ca_truc', 'cau_hinh_tien_truc',
                     'nhan_su_theo_khoa', 'don_nghi_phep', 'bang_cong_gop',
                     'bang_tinh_tien_truc', 'yeu_cau_cv_ngoai_gio', 'xem_log',
-                    'thiet_lap_phong_kham', 'thiet_lap_khoa_hscc', 'cham_cong', 'doi_mat_khau', 'danh_sach_cong_viec'
+                    'thiet_lap_phong_kham', 'thiet_lap_khoa_hscc', 'cham_cong', 'doi_mat_khau', 'danh_sach_cong_viec',
+                    'cau_hinh_doc_hai'
                 ],
                 'manager': [
                     'trang_chu', 'xem_lich_truc', 'xep_lich_truc', 'yeu_cau_cv_ngoai_gio',
@@ -3823,6 +3831,154 @@ def delete_hscc(dept_id):
     db.session.delete(dept)
     db.session.commit()
     return redirect('/configure-hscc')
+
+@app.route('/hazard-config', methods=['GET', 'POST'])
+def hazard_config():
+    if session.get('role') != 'admin':
+        return "Bạn không có quyền truy cập."
+
+    if request.method == 'POST':
+        department = request.form['department']
+        hazard_level = float(request.form['hazard_level'])
+        unit = request.form['unit']
+        duration_hours = float(request.form['duration_hours'])
+        start_date = datetime.strptime(request.form['start_date'], '%Y-%m-%d').date()
+        end_date = datetime.strptime(request.form['end_date'], '%Y-%m-%d').date()
+
+        config = HazardConfig(
+            department=department,
+            hazard_level=hazard_level,
+            unit=unit,
+            duration_hours=duration_hours,
+            start_date=start_date,
+            end_date=end_date
+        )
+        db.session.add(config)
+        db.session.commit()
+        return redirect('/hazard-config')
+
+    # Lấy danh sách khoa từ bảng User
+    departments = [
+        d[0] for d in db.session.query(User.department)
+        .filter(User.department != None)
+        .distinct()
+        .order_by(User.department)
+        .all()
+    ]
+    configs = HazardConfig.query.order_by(HazardConfig.department).all()
+    return render_template('hazard_config.html', configs=configs, departments=departments)
+
+@app.route('/hazard-config/edit/<int:config_id>', methods=['GET', 'POST'])
+def edit_hazard_config(config_id):
+    config = HazardConfig.query.get_or_404(config_id)
+    if request.method == 'POST':
+        config.department = request.form['department']
+        config.hazard_level = float(request.form['hazard_level'])
+        config.unit = request.form['unit']
+        config.start_date = datetime.strptime(request.form['start_date'], '%Y-%m-%d').date()
+        config.end_date = datetime.strptime(request.form['end_date'], '%Y-%m-%d').date()
+        db.session.commit()
+        return redirect('/hazard-config')
+    return render_template('edit_hazard_config.html', config=config)
+
+@app.route('/hazard-config/delete/<int:config_id>')
+def delete_hazard_config(config_id):
+    config = HazardConfig.query.get_or_404(config_id)
+    db.session.delete(config)
+    db.session.commit()
+    return redirect('/hazard-config')
+
+@app.route('/bang-doc-hai')
+def bang_doc_hai():
+    if session.get('role') not in ['admin', 'manager']:
+        return "Bạn không có quyền truy cập."
+
+    selected_department = request.args.get('department')
+    start_date = request.args.get('start')
+    end_date = request.args.get('end')
+
+    # Gán mặc định nếu thiếu
+    if not start_date or not end_date:
+        today = date.today()
+        start_date = date(today.year, today.month, 1)
+        end_date = date(today.year, today.month, calendar.monthrange(today.year, today.month)[1])
+    else:
+        start_date = datetime.strptime(start_date, '%Y-%m-%d').date()
+        end_date = datetime.strptime(end_date, '%Y-%m-%d').date()
+
+    # Danh sách khoa có chấm công
+    departments = [
+        d[0] for d in db.session.query(User.department)
+        .filter(User.department != None).distinct().all()
+    ]
+
+    # Truy vấn người dùng theo khoa
+    query = User.query.filter(User.active == True)
+    if selected_department:
+        query = query.filter(User.department == selected_department)
+    users = query.all()
+
+    # Truy vấn cấu hình độc hại
+    hazard_configs = HazardConfig.query.filter(
+        HazardConfig.start_date <= end_date,
+        HazardConfig.end_date >= start_date
+    ).all()
+
+    # Truy vấn ca trực
+    ca_truc = {ca.code: ca for ca in Shift.query.all()}
+
+    # Truy vấn bảng chấm công
+    chamcongs = db.session.query(ChamCong).filter(
+        ChamCong.date >= start_date,
+        ChamCong.date <= end_date
+    ).all()
+
+    results = []
+    for user in users:
+        gio_doc_hai = 0.0
+        relevant_config = [
+            c for c in hazard_configs if c.department == user.department
+        ]
+        user_chamcong = [c for c in chamcongs if c.user_id == user.id]
+
+        for config in relevant_config:
+            for c in user_chamcong:
+                ca = ca_truc.get(c.shift_code)
+                if not ca:
+                    continue
+                ngay_lam = c.date
+                if config.start_date <= ngay_lam <= config.end_date:
+                    if ca.duration >= 8:
+                        gio_doc_hai += config.duration_hours or 8
+                    elif ca.duration >= 4:
+                        gio_doc_hai += (config.duration_hours or 8) / 2
+
+            if gio_doc_hai > 0:
+                results.append({
+                    'name': user.name,
+                    'position': user.position or '',
+                    'department': user.department,
+                    'hours': round(gio_doc_hai, 1),
+                    'hazard_level': f"{config.hazard_level:.1%}" if config.unit == 'percent' else config.hazard_level,
+                    'unit': 'Phần trăm' if config.unit == 'percent' else config.unit,
+                    'start': config.start_date.strftime('%d/%m/%Y'),
+                    'end': config.end_date.strftime('%d/%m/%Y')
+                })
+
+    return render_template(
+        'bang_doc_hai.html',
+        results=results,
+        departments=departments,
+        selected_department=selected_department,
+        start=start_date.strftime('%Y-%m-%d'),
+        end=end_date.strftime('%Y-%m-%d')
+    )
+
+@app.before_first_request
+def create_missing_tables():
+    from models.hazard_config import HazardConfig
+    db.create_all()
+    print("✅ Đã kiểm tra và tạo các bảng thiếu (nếu có)")
 
 from models.user import User
 

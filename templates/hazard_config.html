@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <title>Cấu hình mức hưởng độc hại</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        table { border-collapse: collapse; width: 100%; margin-top: 20px; }
+        th, td { border: 1px solid #999; padding: 8px; text-align: center; }
+        th { background-color: #eee; }
+        label { display: inline-block; width: 150px; }
+        .form-group { margin: 10px 0; }
+        a { text-decoration: none; color: blue; }
+    </style>
+</head>
+<body>
+
+    <a href="/" style="color: blue; font-weight: bold;">🔙 Quay lại trang chính</a>
+
+    <h2>CẤU HÌNH MỨC HƯỞNG ĐỘC HẠI THEO KHOA</h2>
+
+    <form method="post">
+        <div class="form-group">
+            <label for="department">Khoa:</label>
+            <select name="department" required>
+    		<option value="">-- Chọn khoa --</option>
+    		{% for dept in departments %}
+       		   <option value="{{ dept }}">{{ dept }}</option>
+    		{% endfor %}
+	    </select>
+        </div>
+
+        <div class="form-group">
+            <label for="hazard_level">Mức độc hại:</label>
+            <select name="hazard_level" id="hazard_level">
+                <option value="0.1">10%</option>
+                <option value="0.2">20%</option>
+                <option value="0.3">30%</option>
+		<option value="0.4">40%</option>
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label for="unit">Đơn vị:</label>
+            <select name="unit" id="unit">
+                <option value="percent">Phần trăm (%)</option>
+                <option value="fixed">Cố định (VNĐ)</option>
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label for="duration_hours">Số giờ tính hưởng độc hại:</label>
+            <input type="number" name="duration_hours" step="0.1" min="0" required>
+        </div>
+
+        <div class="form-group">
+            <label for="start_date">Từ ngày:</label>
+            <input type="date" name="start_date" required>
+        </div>
+
+        <div class="form-group">
+            <label for="end_date">Đến ngày:</label>
+            <input type="date" name="end_date" required>
+        </div>
+
+        <button type="submit">➕ Thêm cấu hình</button>
+    </form>
+
+    <h4>Danh sách cấu hình đã lưu</h4>
+    <table>
+        <thead>
+            <tr>
+                <th>Khoa</th>
+                <th>Mức độc hại</th>
+                <th>Đơn vị</th>
+                <th>Số giờ</th>
+                <th>Từ ngày</th>
+                <th>Đến ngày</th>
+                <th>Thao tác</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for cfg in configs %}
+                <tr>
+                    <td>{{ cfg.department }}</td>
+                    <td>{{ '{:.1%}'.format(cfg.hazard_level) if cfg.unit == 'percent' else '{:,.0f}'.format(cfg.hazard_level) }}</td>
+                    <td>{{ 'Phần trăm' if cfg.unit == 'percent' else 'Cố định' }}</td>
+                    <td>{{ cfg.duration_hours }}</td>
+                    <td>{{ cfg.start_date.strftime('%d/%m/%Y') }}</td>
+                    <td>{{ cfg.end_date.strftime('%d/%m/%Y') }}</td>
+                    <td><a href="/hazard-config/edit/{{ cfg.id }}">Sửa</a> | <a href="/hazard-config/delete/{{ cfg.id }}" onclick="return confirm('Bạn có chắc muốn xóa?')">Xóa</a></td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+</body>
+</html>

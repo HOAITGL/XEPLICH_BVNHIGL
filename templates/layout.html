@@ -24,8 +24,8 @@
       padding: 0;
     }
     .sidebar ul li {
-      padding: 6px 12px;
-      font-size: 14px;
+      padding: 6px 10px;
+      font-size: 12px;
     }
     .sidebar ul li a {
       color: white;
@@ -135,6 +135,10 @@
 
       {% if 'cau_hinh_tien_truc' in allowed_modules %}
         <li><a href="/shift-rate-config">⏰ Cấu hình tiền trực</a></li>
+      {% endif %}
+
+      {% if 'cau_hinh_doc_hai' in allowed_modules %}
+        <li><a href="/hazard-config">☣️ Cấu hình mức độc hại</a></li>
       {% endif %}
 
       {% if 'thiet_lap_khoa_hscc' in allowed_modules %}

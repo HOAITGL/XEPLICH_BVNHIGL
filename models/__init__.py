@@ -10,3 +10,5 @@ from .ca import Ca
 from .ca_config import CaConfiguration
 from .clinic_room import ClinicRoom
 from .permission import Permission  # nhớ thêm dòng này nếu chưa có
+from .chamcong import ChamCong
+from .hazard_config import HazardConfig

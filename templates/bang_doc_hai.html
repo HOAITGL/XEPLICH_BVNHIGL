@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <title>Bảng độc hại</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+</head>
+<body class="container mt-4">
+    <h2 class="mb-4">BẢNG TÍNH HƯỞNG MỨC ĐỘC HẠI</h2>
+
+    <form method="get" class="row g-3 mb-4">
+        <div class="col-md-3">
+            <label for="department" class="form-label">Khoa/Phòng</label>
+            <select name="department" id="department" class="form-select">
+                <option value="">-- Tất cả --</option>
+                {% for d in departments %}
+                    <option value="{{ d }}" {% if d == selected_department %}selected{% endif %}>{{ d }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-3">
+            <label for="start" class="form-label">Từ ngày</label>
+            <input type="date" id="start" name="start" class="form-control" value="{{ start }}">
+        </div>
+        <div class="col-md-3">
+            <label for="end" class="form-label">Đến ngày</label>
+            <input type="date" id="end" name="end" class="form-control" value="{{ end }}">
+        </div>
+        <div class="col-md-3 d-flex align-items-end">
+            <button type="submit" class="btn btn-primary">Xem bảng</button>
+        </div>
+    </form>
+
+    {% if results %}
+        <table class="table table-bordered table-striped">
+            <thead>
+                <tr>
+                    <th>STT</th>
+                    <th>Họ tên</th>
+                    <th>Chức danh</th>
+                    <th>Khoa/Phòng</th>
+                    <th>Tổng giờ độc hại</th>
+                    <th>Mức %</th>
+                    <th>Đơn vị</th>
+                    <th>Giai đoạn</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for idx, row in enumerate(results, 1) %}
+                    <tr>
+                        <td>{{ idx }}</td>
+                        <td>{{ row['name'] }}</td>
+                        <td>{{ row['position'] }}</td>
+                        <td>{{ row['department'] }}</td>
+                        <td>{{ row['hours'] }}</td>
+                        <td>{{ row['hazard_level'] }}</td>
+                        <td>{{ row['unit'] }}</td>
+                        <td>{{ row['start'] }} → {{ row['end'] }}</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p class="text-muted">Không có dữ liệu phù hợp.</p>
+    {% endif %}
+</body>
+</html>

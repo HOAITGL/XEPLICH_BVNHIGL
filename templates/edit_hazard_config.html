@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <title>Sửa cấu hình độc hại</title>
+</head>
+<body>
+    <h2>SỬA CẤU HÌNH MỨC HƯỞNG ĐỘC HẠI</h2>
+
+    <form method="post">
+        <label>Khoa:
+            <input name="department" value="{{ config.department }}" required>
+        </label><br><br>
+
+        <label>Mức độc hại:
+            <select name="hazard_level">
+                <option value="0.1" {% if config.hazard_level == 0.1 %}selected{% endif %}>10%</option>
+                <option value="0.2" {% if config.hazard_level == 0.2 %}selected{% endif %}>20%</option>
+                <option value="0.3" {% if config.hazard_level == 0.3 %}selected{% endif %}>30%</option>
+                <option value="0.4" {% if config.hazard_level == 0.4 %}selected{% endif %}>40%</option>
+            </select>
+        </label><br><br>
+
+        <label>Đơn vị:
+            <select name="unit">
+                <option value="percent" {% if config.unit == 'percent' %}selected{% endif %}>Phần trăm</option>
+                <option value="fixed" {% if config.unit == 'fixed' %}selected{% endif %}>Tiền cố định</option>
+            </select>
+        </label><br><br>
+
+        <label>Số giờ tính hưởng độc hại:
+            <input type="number" step="0.1" name="duration_hours" value="{{ config.duration_hours }}" required>
+        </label><br><br>
+
+        <label>Từ ngày:
+            <input type="date" name="start_date" value="{{ config.start_date }}" required>
+        </label><br><br>
+
+        <label>Đến ngày:
+            <input type="date" name="end_date" value="{{ config.end_date }}" required>
+        </label><br><br>
+
+        <button type="submit">💾 Cập nhật</button>
+        <a href="/hazard-config">↩ Quay lại</a>
+    </form>
+</body>
+</html>
