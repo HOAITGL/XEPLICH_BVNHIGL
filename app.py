@@ -3907,7 +3907,7 @@ if __name__ == '__main__':
         except Exception as e:
             print(f"❌ Lỗi khi kiểm tra/thêm cột 'active': {e}")
 
-        # ✅ Thêm admin nếu chưa có
+        # ✅ Thêm tài khoản admin nếu chưa có
         from models.user import User
         if not User.query.filter_by(username='admin').first():
             admin = User(
@@ -3927,4 +3927,5 @@ if __name__ == '__main__':
     # ✅ Khởi động Flask
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=True)
+
 
