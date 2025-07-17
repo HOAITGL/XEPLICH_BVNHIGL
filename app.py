@@ -3878,18 +3878,13 @@ def handle_exception(e):
 if __name__ == '__main__':
     import os
     from sqlalchemy import inspect
-    from flask_migrate import upgrade
 
     with app.app_context():
-        # ✅ Luôn chạy upgrade để đảm bảo schema mới nhất
-        upgrade()
-        print("✅ Đã chạy flask db upgrade để cập nhật schema.")
-
         inspector = inspect(db.engine)
         existing_tables = inspector.get_table_names()
         required_tables = {'user', 'permission'}
 
-        # ✅ Tạo bảng nếu thiếu bất kỳ bảng nào trong danh sách cần thiết
+        # ✅ Tạo bảng nếu thiếu
         if not required_tables.issubset(set(existing_tables)):
             from models.permission import Permission
             from models.user import User
@@ -3898,7 +3893,18 @@ if __name__ == '__main__':
         else:
             print("✅ Các bảng chính đã tồn tại.")
 
-        # ✅ Thêm tài khoản admin nếu chưa có
+        # ✅ Thêm cột 'active' nếu chưa có
+        with db.engine.connect() as connection:
+            result = connection.execute(
+                "SELECT column_name FROM information_schema.columns WHERE table_name='user' AND column_name='active';"
+            )
+            if not result.fetchone():
+                connection.execute('ALTER TABLE "user" ADD COLUMN active BOOLEAN DEFAULT TRUE;')
+                print("✅ Đã thêm cột 'active' vào bảng user.")
+            else:
+                print("✅ Cột 'active' đã tồn tại.")
+
+        # ✅ Thêm admin nếu chưa có
         from models.user import User
         if not User.query.filter_by(username='admin').first():
             admin = User(
@@ -3915,13 +3921,7 @@ if __name__ == '__main__':
         else:
             print("⚠️ Tài khoản admin đã tồn tại.")
 
-    # ✅ Hiển thị log chi tiết nếu không chạy debug
-    if not app.debug:
-        import logging
-        logging.basicConfig(level=logging.DEBUG)
-        app.logger.setLevel(logging.DEBUG)
-
-    # ✅ Khởi động Flask app
-    port = int(os.environ.get('PORT', 5000))  # Render sẽ truyền PORT env
+    # ✅ Khởi động Flask
+    port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=True)
-  
+ 
