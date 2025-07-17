@@ -3875,57 +3875,59 @@ import traceback
 def handle_exception(e):
     return f"<h2>Internal Server Error</h2><pre>{traceback.format_exc()}</pre>", 500
 
-if __name__ == '__main__':
+@app.before_first_request
+def setup_initial_data():
     import os
     from sqlalchemy import inspect
 
-    with app.app_context():
-        inspector = inspect(db.engine)
-        existing_tables = inspector.get_table_names()
-        required_tables = {'user', 'permission'}
+    inspector = inspect(db.engine)
+    existing_tables = inspector.get_table_names()
+    required_tables = {'user', 'permission'}
 
-        # ✅ Tạo bảng nếu thiếu
-        if not required_tables.issubset(set(existing_tables)):
-            from models.permission import Permission
-            from models.user import User
-            db.create_all()
-            print("✅ Đã tạo tất cả bảng cần thiết.")
-        else:
-            print("✅ Các bảng chính đã tồn tại.")
-
-        # ✅ Thêm cột 'active' nếu chưa có
-        try:
-            with db.engine.connect() as connection:
-                result = connection.execute(
-                    "SELECT column_name FROM information_schema.columns WHERE table_name='user' AND column_name='active';"
-                )
-                if not result.fetchone():
-                    connection.execute('ALTER TABLE "user" ADD COLUMN active BOOLEAN DEFAULT TRUE;')
-                    print("✅ Đã thêm cột 'active' vào bảng user.")
-                else:
-                    print("✅ Cột 'active' đã tồn tại.")
-        except Exception as e:
-            print(f"❌ Lỗi khi kiểm tra/thêm cột 'active': {e}")
-
-        # ✅ Thêm tài khoản admin nếu chưa có
+    # ✅ Tạo bảng nếu thiếu
+    if not required_tables.issubset(set(existing_tables)):
+        from models.permission import Permission
         from models.user import User
-        if not User.query.filter_by(username='admin').first():
-            admin = User(
-                name="Quản trị viên",
-                username="admin",
-                password="admin",
-                role="admin",
-                department="Phòng CNTT",
-                position="Bác sĩ"
-            )
-            db.session.add(admin)
-            db.session.commit()
-            print("✅ Đã tạo tài khoản admin.")
-        else:
-            print("⚠️ Tài khoản admin đã tồn tại.")
+        db.create_all()
+        print("✅ Đã tạo tất cả bảng cần thiết.")
+    else:
+        print("✅ Các bảng chính đã tồn tại.")
 
-    # ✅ Khởi động Flask
+    # ✅ Thêm cột 'active' nếu chưa có
+    try:
+        with db.engine.connect() as connection:
+            result = connection.execute(
+                "SELECT column_name FROM information_schema.columns WHERE table_name='user' AND column_name='active';"
+            )
+            if not result.fetchone():
+                connection.execute('ALTER TABLE "user" ADD COLUMN active BOOLEAN DEFAULT TRUE;')
+                print("✅ Đã thêm cột 'active' vào bảng user.")
+            else:
+                print("✅ Cột 'active' đã tồn tại.")
+    except Exception as e:
+        print(f"❌ Lỗi khi kiểm tra/thêm cột 'active': {e}")
+
+    # ✅ Thêm tài khoản admin nếu chưa có
+    from models.user import User
+    if not User.query.filter_by(username='admin').first():
+        admin = User(
+            name="Quản trị viên",
+            username="admin",
+            password="admin",
+            role="admin",
+            department="Phòng CNTT",
+            position="Bác sĩ"
+        )
+        db.session.add(admin)
+        db.session.commit()
+        print("✅ Đã tạo tài khoản admin.")
+    else:
+        print("⚠️ Tài khoản admin đã tồn tại.")
+
+if __name__ == '__main__':
+    import os
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=True)
+
 
 
