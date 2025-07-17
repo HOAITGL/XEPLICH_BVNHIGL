@@ -3894,15 +3894,18 @@ if __name__ == '__main__':
             print("✅ Các bảng chính đã tồn tại.")
 
         # ✅ Thêm cột 'active' nếu chưa có
-        with db.engine.connect() as connection:
-            result = connection.execute(
-                "SELECT column_name FROM information_schema.columns WHERE table_name='user' AND column_name='active';"
-            )
-            if not result.fetchone():
-                connection.execute('ALTER TABLE "user" ADD COLUMN active BOOLEAN DEFAULT TRUE;')
-                print("✅ Đã thêm cột 'active' vào bảng user.")
-            else:
-                print("✅ Cột 'active' đã tồn tại.")
+        try:
+            with db.engine.connect() as connection:
+                result = connection.execute(
+                    "SELECT column_name FROM information_schema.columns WHERE table_name='user' AND column_name='active';"
+                )
+                if not result.fetchone():
+                    connection.execute('ALTER TABLE "user" ADD COLUMN active BOOLEAN DEFAULT TRUE;')
+                    print("✅ Đã thêm cột 'active' vào bảng user.")
+                else:
+                    print("✅ Cột 'active' đã tồn tại.")
+        except Exception as e:
+            print(f"❌ Lỗi khi kiểm tra/thêm cột 'active': {e}")
 
         # ✅ Thêm admin nếu chưa có
         from models.user import User
@@ -3924,4 +3927,4 @@ if __name__ == '__main__':
     # ✅ Khởi động Flask
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=True)
- 
+
