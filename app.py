@@ -1368,7 +1368,7 @@ def deactivate_user(user_id):
     flash("🚫 Nhân viên đã được ngừng hoạt động!", "warning")
     return redirect(request.referrer or url_for('users_by_department'))
 
-@app.route('/users/delete-all', methods=['POST'])
+@app.route('/users/delete-all', methods=['GET', 'POST'])
 def delete_all_users():
     if 'user_id' not in session or session.get('role') != 'admin':
         flash("Không có quyền thực hiện chức năng này.", "danger")
@@ -1376,8 +1376,13 @@ def delete_all_users():
 
     try:
         from models.user import User
+
+        user_name = session.get('username', 'Unknown')
+        user_role = session.get('role', 'unknown')
+        selected_department = session.get('department', 'unknown')
+
         users_to_delete = User.query.filter(User.username != 'admin').all()
-        print(f"🧹 Xoá {len(users_to_delete)} nhân sự...")  # ← ghi log số lượng
+        print(f"🧹 Xoá {len(users_to_delete)} nhân sự...")
         app.logger.info(f"[USER_VIEW] User '{user_name}' ({user_role}) xem danh sách nhân sự khoa '{selected_department}'")
 
         for u in users_to_delete:
@@ -1389,7 +1394,7 @@ def delete_all_users():
         flash("Đã xoá toàn bộ nhân sự (trừ admin).", "success")
     except Exception as e:
         db.session.rollback()
-        print(f"❌ Lỗi khi xoá: {str(e)}")  # ← chắc chắn sẽ in ra nếu lỗi
+        print(f"❌ Lỗi khi xoá: {str(e)}")
         flash(f"Lỗi khi xoá: {str(e)}", "danger")
 
     return redirect('/users-by-department')
@@ -2009,13 +2014,32 @@ def clear_log():
     return redirect('/view-log')
 
 
-@app.route('/users/delete/<int:user_id>', methods=['POST', 'GET'])
+@app.route('/delete_user/<int:user_id>', methods=['POST'])
 def delete_user(user_id):
-    user = User.query.get_or_404(user_id)
-    user.active = False  # ✅ Đánh dấu ngừng hoạt động
-    db.session.commit()
-    flash("✅ Đã ngừng hoạt động nhân viên.", "success")
+    user = User.query.get(user_id)
+    if user:
+        if user.username == 'admin':
+            flash("❌ Không thể xoá tài khoản admin.", "danger")
+        else:
+            db.session.delete(user)
+            db.session.commit()
+            flash(f"✅ Đã xoá: {user.name}", "success")
+    else:
+        flash("❌ Không tìm thấy người dùng.", "danger")
+
     return redirect('/users-by-department')
+
+import traceback
+
+@app.errorhandler(Exception)
+def handle_exception(e):
+    # Nếu đang debug, show lỗi chi tiết ra trình duyệt
+    return f"""
+        <h2 style='color: red;'>❌ Internal Server Error</h2>
+        <pre>{traceback.format_exc()}</pre>
+        <hr>
+        <p style='color: gray;'>Vui lòng báo lỗi này cho quản trị viên hệ thống.</p>
+    """, 500
 
 @app.route('/export-template', methods=['POST'])
 def export_template():
