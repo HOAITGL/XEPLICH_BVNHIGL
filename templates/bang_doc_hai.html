@@ -1,67 +1,111 @@
-<!DOCTYPE html>
-<html lang="vi">
-<head>
-    <meta charset="UTF-8">
-    <title>Bảng độc hại</title>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
-</head>
-<body class="container mt-4">
-    <h2 class="mb-4">BẢNG TÍNH HƯỞNG MỨC ĐỘC HẠI</h2>
+{% extends "layout.html" %}
+{% block content %}
+<div class="container mt-4">
+    <h2 class="mb-4 text-center text-uppercase">BẢNG CHẤM CÔNG HƯỞNG MỨC ĐỘC HẠI</h2>
 
-    <form method="get" class="row g-3 mb-4">
+    <form method="get" id="form-filter" action="/bang-doc-hai" class="row g-3 align-items-end">
         <div class="col-md-3">
             <label for="department" class="form-label">Khoa/Phòng</label>
-            <select name="department" id="department" class="form-select">
-                <option value="">-- Tất cả --</option>
-                {% for d in departments %}
-                    <option value="{{ d }}" {% if d == selected_department %}selected{% endif %}>{{ d }}</option>
+            <select class="form-select" id="department" name="department">
+                {% for dept in departments %}
+                    <option value="{{ dept }}" {% if dept == selected_department %}selected{% endif %}>{{ dept }}</option>
                 {% endfor %}
             </select>
         </div>
-        <div class="col-md-3">
+        <div class="col-md-2">
             <label for="start" class="form-label">Từ ngày</label>
-            <input type="date" id="start" name="start" class="form-control" value="{{ start }}">
+            <input type="date" class="form-control" id="start" name="start" value="{{ start }}">
         </div>
-        <div class="col-md-3">
+        <div class="col-md-2">
             <label for="end" class="form-label">Đến ngày</label>
-            <input type="date" id="end" name="end" class="form-control" value="{{ end }}">
+            <input type="date" class="form-control" id="end" name="end" value="{{ end }}">
         </div>
-        <div class="col-md-3 d-flex align-items-end">
-            <button type="submit" class="btn btn-primary">Xem bảng</button>
+        <div class="col-md-5 d-flex gap-2">
+            <button type="submit" class="btn btn-primary">Xem dữ liệu</button>
+            {% if results %}
+                <button type="button" class="btn btn-success" id="btn-export-excel">
+                    <i class="bi bi-file-earmark-excel"></i> Xuất Excel
+                </button>
+                <button type="button" class="btn btn-secondary" id="btn-print" target="_blank">
+                    <i class="bi bi-printer"></i> In
+                </button>
+            {% endif %}
         </div>
+
+        {% if all_users %}
+        <div class="col-12 mt-3">
+            <label class="form-label fw-bold">Chọn nhân viên hưởng độc hại:</label><br>
+            <div class="form-check form-check-inline">
+                <input class="form-check-input" type="checkbox" id="select-all">
+                <label class="form-check-label" for="select-all">Chọn tất cả</label>
+            </div>
+            {% for user in all_users %}
+                <div class="form-check form-check-inline">
+                    <input class="form-check-input hazard-checkbox" type="checkbox" name="hazard_user_ids"
+                        value="{{ user.id }}" id="user{{ user.id }}"
+                        {% if not selected_user_ids or user.id|string in selected_user_ids %}checked{% endif %}>
+                    <label class="form-check-label" for="user{{ user.id }}">{{ user.name }}</label>
+                </div>
+            {% endfor %}
+        </div>
+        {% endif %}
     </form>
 
-    {% if results %}
-        <table class="table table-bordered table-striped">
-            <thead>
-                <tr>
-                    <th>STT</th>
-                    <th>Họ tên</th>
-                    <th>Chức danh</th>
-                    <th>Khoa/Phòng</th>
-                    <th>Tổng giờ độc hại</th>
-                    <th>Mức %</th>
-                    <th>Đơn vị</th>
-                    <th>Giai đoạn</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for idx, row in enumerate(results, 1) %}
-                    <tr>
-                        <td>{{ idx }}</td>
-                        <td>{{ row['name'] }}</td>
-                        <td>{{ row['position'] }}</td>
-                        <td>{{ row['department'] }}</td>
-                        <td>{{ row['hours'] }}</td>
-                        <td>{{ row['hazard_level'] }}</td>
-                        <td>{{ row['unit'] }}</td>
-                        <td>{{ row['start'] }} → {{ row['end'] }}</td>
-                    </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    {% else %}
-        <p class="text-muted">Không có dữ liệu phù hợp.</p>
-    {% endif %}
-</body>
-</html>
+    <div class="mt-4">
+        {% if results %}
+            <div class="table-responsive">
+                <table class="table table-bordered text-center align-middle small">
+                    <thead class="table-light">
+                        <tr>
+                            <th>STT</th>
+                            <th>Họ tên</th>
+                            <th>Chức vụ</th>
+                            {% for d in days_in_month %}
+                                <th>{{ "%02d"|format(d.day) }}</th>
+                            {% endfor %}
+                            <th>Tổng ngày</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in results %}
+                            <tr>
+                                <td>{{ loop.index }}</td>
+                                <td class="text-start">{{ row.name }}</td>
+                                <td>{{ row.position }}</td>
+                                {% for val in row.daily_hours %}
+                                    <td>{{ val }}</td>
+                                {% endfor %}
+                                <td><strong>{{ row.total_days }} ngày</strong></td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <p class="text-muted mt-3">Không có dữ liệu phù hợp.</p>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+document.getElementById('select-all').addEventListener('change', function () {
+    document.querySelectorAll('.hazard-checkbox').forEach(cb => cb.checked = this.checked);
+});
+
+function buildUrl(baseUrl) {
+    const form = document.getElementById('form-filter');
+    const params = new URLSearchParams(new FormData(form));
+    return `${baseUrl}?${params.toString()}`;
+}
+
+document.getElementById('btn-export-excel').addEventListener('click', function () {
+    const url = buildUrl('/bang-doc-hai/export-excel');
+    window.location.href = url;
+});
+
+document.getElementById('btn-print').addEventListener('click', function () {
+    const url = buildUrl('/bang-doc-hai/print');
+    window.open(url, '_blank');
+});
+</script>
+{% endblock %}

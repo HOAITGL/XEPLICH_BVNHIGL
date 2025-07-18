@@ -37,27 +37,29 @@
 
   <div class="mb-3">
     <label>Chọn nhân viên làm ngày:</label>
-    <div class="d-flex flex-wrap gap-2">
-      {% if users %}
+    {% if users %}
+      <div class="form-check mb-2">
+        <input class="form-check-input" type="checkbox" id="selectAll">
+        <label class="form-check-label" for="selectAll">Chọn tất cả</label>
+      </div>
+      <div class="d-flex flex-wrap gap-2">
         {% for staff in users %}
           <div class="form-check">
-            <input class="form-check-input" type="checkbox" name="staff_ids" value="{{ staff.id }}" id="staff{{ staff.id }}">
+            <input class="form-check-input staff-checkbox" type="checkbox" name="staff_ids" value="{{ staff.id }}" id="staff{{ staff.id }}">
             <label class="form-check-label" for="staff{{ staff.id }}">{{ staff.name }} ({{ staff.position }})</label>
           </div>
         {% endfor %}
-      {% else %}
-        <p>Chưa có nhân viên nào trong khoa này.</p>
-      {% endif %}
-    </div>
+      </div>
+    {% else %}
+      <p>Chưa có nhân viên nào trong khoa này.</p>
+    {% endif %}
   </div>
 
   <button type="submit" class="btn btn-primary">Chấm công</button>
 </form>
 
 <script>
-  // Nếu muốn tự động submit form khi chọn khoa (để load lại trang với nhân viên theo khoa)
   document.getElementById('department').addEventListener('change', function() {
-    // Gửi GET request để tải lại trang với tham số khoa được chọn
     const selected = this.value;
     if(selected) {
       window.location.href = '{{ url_for("auto_attendance_page") }}?department=' + encodeURIComponent(selected);
@@ -65,6 +67,14 @@
       window.location.href = '{{ url_for("auto_attendance_page") }}';
     }
   });
+
+  const selectAllCheckbox = document.getElementById('selectAll');
+  if (selectAllCheckbox) {
+    selectAllCheckbox.addEventListener('change', function () {
+      const checkboxes = document.querySelectorAll('.staff-checkbox');
+      checkboxes.forEach(cb => cb.checked = this.checked);
+    });
+  }
 </script>
 
 {% endblock %}

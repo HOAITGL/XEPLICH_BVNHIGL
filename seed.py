@@ -45,10 +45,10 @@ with app.app_context():
     for rate in rates:
         db.session.add(ShiftRateConfig(**rate))
 
-    # 🏥 Cấu hình khoa
+    # 🏥 Cấu hình khoa (key-value)
     from models.department_setting import DepartmentSetting
-    if not DepartmentSetting.query.filter_by(department_name="Khoa xét nghiệm").first():
-        db.session.add(DepartmentSetting(department_name="Khoa xét nghiệm", max_people_per_day=2))
-        
+    if not DepartmentSetting.query.filter_by(department="Khoa xét nghiệm", key="max_people_per_day").first():
+        db.session.add(DepartmentSetting(department="Khoa xét nghiệm", key="max_people_per_day", value="2"))
+
     db.session.commit()
     print("✅ Dữ liệu mẫu đã được khởi tạo.")

@@ -1,3 +1,4 @@
+
 {% extends "layout.html" %}
 {% block title %}Xếp lịch trực theo khoa{% endblock %}
 {% block content %}
@@ -97,7 +98,13 @@
             <th class="sticky-col">Họ tên</th>
             <th class="sticky-col-2">Chức danh</th>
             {% for shift in shifts %}
-              <th>{{ shift.name }}</th>
+              <th>
+                {{ shift.name }}
+                {% if "làm ngày" in shift.name.lower() %}
+                <br>
+                <input type="checkbox" onclick="toggleDayShifts(this)">
+                {% endif %}
+              </th>
             {% endfor %}
           </tr>
         </thead>
@@ -115,7 +122,10 @@
               </td>
               <td class="sticky-col-2">{{ user.position }}</td>
               {% for shift in shifts %}
-                <td><input type="checkbox" name="schedule" value="{{ user.id }}-{{ shift.id }}"></td>
+                <td>
+                  <input type="checkbox" name="schedule" value="{{ user.id }}-{{ shift.id }}"
+                         class="{% if 'làm ngày' in shift.name.lower() %}shift-day-checkbox{% endif %}">
+                </td>
               {% endfor %}
             </tr>
           {% endfor %}
@@ -124,4 +134,13 @@
     </div>
   </form>
 {% endif %}
+
+<script>
+function toggleDayShifts(masterCheckbox) {
+  document.querySelectorAll('.shift-day-checkbox').forEach(cb => {
+    cb.checked = masterCheckbox.checked;
+  });
+}
+</script>
+
 {% endblock %}
