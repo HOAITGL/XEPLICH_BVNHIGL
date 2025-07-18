@@ -51,7 +51,13 @@ def setup_logging(app):
     app.logger.setLevel(logging.INFO)
 
 app = Flask(__name__)
-app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv("DATABASE_URL") or 'sqlite:///database.db'
+
+# 👉 Chuyển đổi URL nếu Render trả về postgres://
+database_url = os.getenv("DATABASE_URL", "sqlite:///database.db")
+if database_url.startswith("postgres://"):
+    database_url = database_url.replace("postgres://", "postgresql://", 1)
+
+app.config['SQLALCHEMY_DATABASE_URI'] = database_url
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.secret_key = 'lichtruc2025'
 
@@ -4055,6 +4061,7 @@ import traceback
 @app.errorhandler(Exception)
 def handle_exception(e):
     return f"<h2>Internal Server Error</h2><pre>{traceback.format_exc()}</pre>", 500
+
 
 @app.before_first_request
 def setup_initial_data():
