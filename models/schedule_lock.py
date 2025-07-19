@@ -1,6 +1,7 @@
 
 from datetime import datetime
 from extensions import db
+from models.user import User
 
 class ScheduleLock(db.Model):
     id = db.Column(db.Integer, primary_key=True)

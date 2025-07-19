@@ -3922,15 +3922,21 @@ def hazard_config():
 @app.route('/hazard-config/edit/<int:config_id>', methods=['GET', 'POST'])
 def edit_hazard_config(config_id):
     config = HazardConfig.query.get_or_404(config_id)
+    
     if request.method == 'POST':
         config.department = request.form['department']
         config.hazard_level = float(request.form['hazard_level'])
         config.unit = request.form['unit']
+        config.duration_hours = float(request.form['duration_hours'])  # ✅ bổ sung
         config.start_date = datetime.strptime(request.form['start_date'], '%Y-%m-%d').date()
         config.end_date = datetime.strptime(request.form['end_date'], '%Y-%m-%d').date()
         db.session.commit()
         return redirect('/hazard-config')
-    return render_template('edit_hazard_config.html', config=config)
+
+    # ✅ bổ sung lấy danh sách khoa/phòng
+    departments = [d[0] for d in db.session.query(User.department).filter(User.department != None).distinct().all()]
+    
+    return render_template('edit_hazard_config.html', config=config, departments=departments)
 
 @app.route('/hazard-config/delete/<int:config_id>')
 def delete_hazard_config(config_id):

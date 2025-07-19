@@ -1,19 +1,10 @@
 services:
   - type: web
-    name: lichtruc-app
+    name: xeplịch-bvnhigl
     env: python
-    buildCommand: pip install -r requirements.txt
+    buildCommand: ./render-build.sh
     startCommand: python app.py
+    plan: free
     envVars:
-      - key: SECRET_KEY
-        value: lichtruc2025
       - key: DATABASE_URL
-        fromDatabase:
-          name: lichtruc-db
-          property: connectionString
-
-databases:
-  - name: lichtruc-db
-    databaseName: lichtrucdb
-    user: lichtrucuser
-
+        value: <thay bằng URL PostgreSQL do Render cung cấp>
