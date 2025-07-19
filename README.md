@@ -15,3 +15,4 @@
 pip install -r requirements.txt
 python seed.py
 python app.py
+"# XEPLICH_BVNHIGL" 
