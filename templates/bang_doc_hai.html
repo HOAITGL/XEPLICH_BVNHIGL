@@ -3,7 +3,7 @@
 <div class="container mt-4">
     <h2 class="mb-4 text-center text-uppercase">BẢNG CHẤM CÔNG HƯỞNG MỨC ĐỘC HẠI</h2>
 
-    <form method="get" id="form-filter" action="/bang-doc-hai" class="row g-3 align-items-end">
+    <form method="post" id="form-filter" action="/bang-doc-hai" class="row g-3 align-items-end">
         <div class="col-md-3">
             <label for="department" class="form-label">Khoa/Phòng</label>
             <select class="form-select" id="department" name="department">
@@ -95,25 +95,39 @@ if (selectAll) {
     });
 }
 
-function buildUrl(baseUrl) {
+function buildPostAndSubmit(actionUrl) {
     const form = document.getElementById('form-filter');
-    const params = new URLSearchParams(new FormData(form));
-    return `${baseUrl}?${params.toString()}`;
+    const formData = new FormData(form);
+
+    const tempForm = document.createElement('form');
+    tempForm.method = 'POST';
+    tempForm.action = actionUrl;
+    tempForm.target = '_blank';
+
+    for (const [key, value] of formData.entries()) {
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = key;
+        input.value = value;
+        tempForm.appendChild(input);
+    }
+
+    document.body.appendChild(tempForm);
+    tempForm.submit();
+    document.body.removeChild(tempForm);
 }
 
 const btnExport = document.getElementById('btn-export-excel');
 if (btnExport) {
     btnExport.addEventListener('click', function () {
-        const url = buildUrl('/bang-doc-hai/export-excel');
-        window.location.href = url;
+        buildPostAndSubmit('/bang-doc-hai/export-excel');
     });
 }
 
 const btnPrint = document.getElementById('btn-print');
 if (btnPrint) {
     btnPrint.addEventListener('click', function () {
-        const url = buildUrl('/bang-doc-hai/print');
-        window.open(url, '_blank');
+        buildPostAndSubmit('/bang-doc-hai/print');
     });
 }
 </script>

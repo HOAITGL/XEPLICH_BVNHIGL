@@ -3945,15 +3945,15 @@ def delete_hazard_config(config_id):
     db.session.commit()
     return redirect('/hazard-config')
 
-@app.route('/bang-doc-hai')
+@app.route('/bang-doc-hai', methods=['GET', 'POST'])
 def bang_doc_hai():
     if session.get('role') not in ['admin', 'manager']:
         return "Bạn không có quyền truy cập."
 
-    selected_department = request.args.get('department')
-    start_date = request.args.get('start')
-    end_date = request.args.get('end')
-    selected_user_ids = request.args.getlist('hazard_user_ids')  # ✅ nhận danh sách được chọn từ frontend
+    selected_department = request.values.get('department')
+    start_date = request.values.get('start')
+    end_date = request.values.get('end')
+    selected_user_ids = request.values.getlist('hazard_user_ids')  # ✅ nhận danh sách được chọn từ form
 
     if not start_date or not end_date:
         today = date.today()
@@ -3975,7 +3975,6 @@ def bang_doc_hai():
         users = users.filter(User.department == user_dept)
     elif selected_department and selected_department != 'Tất cả':
         users = users.filter(User.department == selected_department)
-    # Nếu là admin và chọn "Tất cả" thì không lọc department gì cả
     users = users.all()
 
     # Sort ưu tiên chức vụ
@@ -4056,15 +4055,15 @@ def bang_doc_hai():
         selected_user_ids=selected_user_ids
     )
 
-@app.route('/bang-doc-hai/print')
+@app.route('/bang-doc-hai/print', methods=['POST'])
 def bang_doc_hai_print():
     if session.get('role') not in ['admin', 'manager']:
         return "Bạn không có quyền truy cập."
 
-    selected_department = request.args.get('department')
-    start_date = request.args.get('start')
-    end_date = request.args.get('end')
-    selected_ids = request.args.getlist('hazard_user_ids')
+    selected_department = request.values.get('department')
+    start_date = request.values.get('start')
+    end_date = request.values.get('end')
+    selected_ids = request.values.getlist('hazard_user_ids')
 
     if not start_date or not end_date:
         today = date.today()
@@ -4075,7 +4074,7 @@ def bang_doc_hai_print():
         end_date = datetime.strptime(end_date, '%Y-%m-%d').date()
 
     users = User.query.filter(User.active == True)
-    if selected_department:
+    if selected_department and selected_department != 'Tất cả':
         users = users.filter(User.department == selected_department)
     users = users.all()
 
@@ -4264,17 +4263,18 @@ def export_bang_doc_hai_excel_file(users, schedules, shifts, hazard_configs, sta
     return output
 
 # ✅ ROUTE EXPORT FILE EXCEL
-@app.route('/bang-doc-hai/export-excel', endpoint='export_bang_doc_hai_excel')
+@app.route('/bang-doc-hai/export-excel', methods=['POST'], endpoint='export_bang_doc_hai_excel')
 def export_bang_doc_hai_excel():
     if session.get('role') not in ['admin', 'manager']:
         return "Bạn không có quyền truy cập."
 
-    selected_department = request.args.get('department')
-    start_date = datetime.strptime(request.args.get('start'), '%Y-%m-%d').date()
-    end_date = datetime.strptime(request.args.get('end'), '%Y-%m-%d').date()
+    selected_department = request.values.get('department')
+    start_date = datetime.strptime(request.values.get('start'), '%Y-%m-%d').date()
+    end_date = datetime.strptime(request.values.get('end'), '%Y-%m-%d').date()
+    selected_user_ids = request.values.getlist('hazard_user_ids')
 
     users = User.query.filter(User.active == True)
-    if selected_department:
+    if selected_department and selected_department != 'Tất cả':
         users = users.filter(User.department == selected_department)
     users = users.all()
 
@@ -4290,7 +4290,7 @@ def export_bang_doc_hai_excel():
 
     shifts = Shift.query.all()
 
-    output = export_bang_doc_hai_excel_file(users, schedules, shifts, hazard_configs, start_date, end_date)
+    output = export_bang_doc_hai_excel_file(users, schedules, shifts, hazard_configs, start_date, end_date, selected_user_ids)
 
     filename = f"bang_doc_hai_{selected_department or 'tatca'}.xlsx"
     return send_file(output, as_attachment=True, download_name=filename, mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
