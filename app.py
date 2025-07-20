@@ -3963,11 +3963,19 @@ def bang_doc_hai():
         start_date = datetime.strptime(start_date, '%Y-%m-%d').date()
         end_date = datetime.strptime(end_date, '%Y-%m-%d').date()
 
-    departments = [d[0] for d in db.session.query(User.department).filter(User.department != None).distinct().all()]
+    user_role = session.get('role')
+    user_dept = session.get('department')
+    if user_role == 'admin':
+        departments = ['Tất cả'] + [d[0] for d in db.session.query(User.department).filter(User.department != None).distinct().all()]
+    else:
+        departments = [user_dept]
 
     users = User.query.filter(User.active == True)
-    if selected_department:
+    if user_role != 'admin':
+        users = users.filter(User.department == user_dept)
+    elif selected_department and selected_department != 'Tất cả':
         users = users.filter(User.department == selected_department)
+    # Nếu là admin và chọn "Tất cả" thì không lọc department gì cả
     users = users.all()
 
     # Sort ưu tiên chức vụ

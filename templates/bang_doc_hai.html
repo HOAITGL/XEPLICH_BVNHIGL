@@ -88,9 +88,12 @@
 </div>
 
 <script>
-document.getElementById('select-all').addEventListener('change', function () {
-    document.querySelectorAll('.hazard-checkbox').forEach(cb => cb.checked = this.checked);
-});
+const selectAll = document.getElementById('select-all');
+if (selectAll) {
+    selectAll.addEventListener('change', function () {
+        document.querySelectorAll('.hazard-checkbox').forEach(cb => cb.checked = this.checked);
+    });
+}
 
 function buildUrl(baseUrl) {
     const form = document.getElementById('form-filter');
@@ -98,14 +101,20 @@ function buildUrl(baseUrl) {
     return `${baseUrl}?${params.toString()}`;
 }
 
-document.getElementById('btn-export-excel').addEventListener('click', function () {
-    const url = buildUrl('/bang-doc-hai/export-excel');
-    window.location.href = url;
-});
+const btnExport = document.getElementById('btn-export-excel');
+if (btnExport) {
+    btnExport.addEventListener('click', function () {
+        const url = buildUrl('/bang-doc-hai/export-excel');
+        window.location.href = url;
+    });
+}
 
-document.getElementById('btn-print').addEventListener('click', function () {
-    const url = buildUrl('/bang-doc-hai/print');
-    window.open(url, '_blank');
-});
+const btnPrint = document.getElementById('btn-print');
+if (btnPrint) {
+    btnPrint.addEventListener('click', function () {
+        const url = buildUrl('/bang-doc-hai/print');
+        window.open(url, '_blank');
+    });
+}
 </script>
 {% endblock %}
