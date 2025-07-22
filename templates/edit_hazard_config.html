@@ -18,6 +18,12 @@
         </div>
 
         <div class="col-md-2">
+            <label class="form-label">Chức vụ áp dụng</label>
+            <input type="text" name="position" class="form-control" value="{{ config.position or '' }}" placeholder="VD: HL, DD, BS">
+            <small class="text-muted">Để trống nếu áp dụng cho mọi chức vụ</small>
+        </div>
+
+        <div class="col-md-2">
             <label class="form-label">Mức độc hại</label>
             <select name="hazard_level" class="form-select">
                 <option value="0.1" {% if config.hazard_level == 0.1 %}selected{% endif %}>10%</option>
@@ -41,10 +47,13 @@
             <input type="number" step="0.1" name="duration_hours" class="form-control" value="{{ config.duration_hours }}" required>
         </div>
 
-        <div class="col-md-2">
+        <div class="col-md-3">
             <label class="form-label">Từ ngày</label>
             <input type="date" name="start_date" class="form-control" value="{{ config.start_date }}" required>
-            <label class="form-label mt-1">Đến ngày</label>
+        </div>
+
+        <div class="col-md-3">
+            <label class="form-label">Đến ngày</label>
             <input type="date" name="end_date" class="form-control" value="{{ config.end_date }}" required>
         </div>
 

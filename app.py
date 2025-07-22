@@ -3892,12 +3892,14 @@ def hazard_config():
         hazard_level = float(request.form['hazard_level'])
         unit = request.form['unit']
         duration_hours = float(request.form['duration_hours'])
+        position = request.form.get('position') or None  # ✅ lấy chức vụ nếu có
         start_date = datetime.strptime(request.form['start_date'], '%Y-%m-%d').date()
         end_date = datetime.strptime(request.form['end_date'], '%Y-%m-%d').date()
 
         for department in departments:
             config = HazardConfig(
                 department=department,
+                position=position,  # ✅ thêm vào đây
                 hazard_level=hazard_level,
                 unit=unit,
                 duration_hours=duration_hours,
@@ -3925,15 +3927,15 @@ def edit_hazard_config(config_id):
     
     if request.method == 'POST':
         config.department = request.form['department']
+        config.position = request.form.get('position') or None  # ✅ Thêm dòng này
         config.hazard_level = float(request.form['hazard_level'])
         config.unit = request.form['unit']
-        config.duration_hours = float(request.form['duration_hours'])  # ✅ bổ sung
+        config.duration_hours = float(request.form['duration_hours'])
         config.start_date = datetime.strptime(request.form['start_date'], '%Y-%m-%d').date()
         config.end_date = datetime.strptime(request.form['end_date'], '%Y-%m-%d').date()
         db.session.commit()
         return redirect('/hazard-config')
 
-    # ✅ bổ sung lấy danh sách khoa/phòng
     departments = [d[0] for d in db.session.query(User.department).filter(User.department != None).distinct().all()]
     
     return render_template('edit_hazard_config.html', config=config, departments=departments)
@@ -3953,7 +3955,7 @@ def bang_doc_hai():
     selected_department = request.values.get('department')
     start_date = request.values.get('start')
     end_date = request.values.get('end')
-    selected_user_ids = request.values.getlist('hazard_user_ids')  # ✅ nhận danh sách được chọn từ form
+    selected_user_ids = request.values.getlist('hazard_user_ids')
 
     if not start_date or not end_date:
         today = date.today()
@@ -3977,7 +3979,6 @@ def bang_doc_hai():
         users = users.filter(User.department == selected_department)
     users = users.all()
 
-    # Sort ưu tiên chức vụ
     priority_order = ['TK', 'TP', 'PTK', 'PTP', 'BS', 'BSCK1', 'BSCK2', 'KTV', 'DD', 'NV', 'HL', 'BV']
     def sort_by_position(user):
         position = (user.position or '').upper().strip()
@@ -4000,10 +4001,12 @@ def bang_doc_hai():
 
     days_in_month = [(start_date + timedelta(days=i)) for i in range((end_date - start_date).days + 1)]
 
-    results = []
+    nhom_chung = []
+    nhom_ho_ly = []
+
     for user in users:
         if selected_user_ids and str(user.id) not in selected_user_ids:
-            continue  # ✅ bỏ qua người không được chọn
+            continue
 
         user_schedules = {k: v for k, v in schedule_map.items() if k[0] == user.id}
         configs = [cfg for cfg in hazard_configs if cfg.department == user.department]
@@ -4013,7 +4016,8 @@ def bang_doc_hai():
             'position': user.position or '',
             'department': user.department,
             'daily_hours': [],
-            'total_days': 0
+            'total_days': 0,
+            'hazard_level': 0.0
         }
 
         for d in days_in_month:
@@ -4027,33 +4031,59 @@ def bang_doc_hai():
                 row['daily_hours'].append("–")
                 continue
 
-            configs_in_day = [cfg for cfg in configs if cfg.start_date <= d <= cfg.end_date]
-            if not configs_in_day:
-                row['daily_hours'].append("–")
-                continue
+            configs_in_day = [
+                cfg for cfg in configs
+                if cfg.start_date <= d <= cfg.end_date
+            ]
 
-            matched = sorted(configs_in_day, key=lambda cfg: abs(cfg.duration_hours - ca.duration))
-            best_match = matched[0] if matched else None
+            match_chucvu = [
+                cfg for cfg in configs_in_day
+                if cfg.position and cfg.position.strip().upper() == (user.position or '').strip().upper()
+            ]
+            match_all = [
+                cfg for cfg in configs_in_day
+                if not cfg.position or cfg.position.strip() == ''
+            ]
+
+            search_pool = match_chucvu if match_chucvu else match_all
+
+            exact = [cfg for cfg in search_pool if cfg.duration_hours == ca.duration]
+            if exact:
+                best_match = exact[0]
+            else:
+                closest = sorted(search_pool, key=lambda cfg: abs(cfg.duration_hours - ca.duration))
+                best_match = closest[0] if closest else None
 
             if best_match:
                 row['daily_hours'].append(f"{int(best_match.duration_hours)}h")
                 row['total_days'] += 1
+                row['hazard_level'] = best_match.hazard_level
             else:
                 row['daily_hours'].append("–")
 
-        results.append(row)
+        chucvu = (row['position'] or '').upper().strip()
+        if chucvu.startswith('HL'):
+            nhom_ho_ly.append(row)
+        else:
+            nhom_chung.append(row)
 
     return render_template(
         'bang_doc_hai.html',
-        results=results,
+        nhom_chung=nhom_chung,
+        nhom_ho_ly=nhom_ho_ly,
         departments=departments,
         selected_department=selected_department,
         start=start_date.strftime('%Y-%m-%d'),
         end=end_date.strftime('%Y-%m-%d'),
         days_in_month=days_in_month,
-        all_users=users,  # để render checkbox
+        all_users=users,
         selected_user_ids=selected_user_ids
     )
+
+from flask import render_template, request, session
+from datetime import datetime, timedelta, date
+import calendar
+from models import User, Schedule, Shift, HazardConfig
 
 @app.route('/bang-doc-hai/print', methods=['POST'])
 def bang_doc_hai_print():
@@ -4061,113 +4091,103 @@ def bang_doc_hai_print():
         return "Bạn không có quyền truy cập."
 
     selected_department = request.values.get('department')
-    start_date = request.values.get('start')
-    end_date = request.values.get('end')
-    selected_ids = request.values.getlist('hazard_user_ids')
+    start = request.values.get('start')
+    end = request.values.get('end')
+    selected_user_ids = request.values.getlist('hazard_user_ids')
 
-    if not start_date or not end_date:
+    if not start or not end:
         today = date.today()
         start_date = date(today.year, today.month, 1)
         end_date = date(today.year, today.month, calendar.monthrange(today.year, today.month)[1])
     else:
-        start_date = datetime.strptime(start_date, '%Y-%m-%d').date()
-        end_date = datetime.strptime(end_date, '%Y-%m-%d').date()
+        start_date = datetime.strptime(start, '%Y-%m-%d').date()
+        end_date = datetime.strptime(end, '%Y-%m-%d').date()
 
     users = User.query.filter(User.active == True)
     if selected_department and selected_department != 'Tất cả':
         users = users.filter(User.department == selected_department)
     users = users.all()
 
-    position_priority = {
-        'TK': 1, 'TP': 1,
-        'PTK': 2, 'PP': 2,
-        'BS': 3,
-        'ĐD': 4, 'KTV': 4, 'NV': 4, 'ĐDT': 4,
-        'HL': 5, 'BV': 5
-    }
-
-    def get_priority(user):
-        for key, val in position_priority.items():
-            if user.position and key in user.position.upper():
-                return val
-        return 99
-
-    users = sorted(users, key=lambda u: (get_priority(u), u.name))
-
-    if selected_ids:
-        selected_ids = list(map(int, selected_ids))
-        users = [u for u in users if u.id in selected_ids]
+    if selected_user_ids:
+        ids_int = list(map(int, selected_user_ids))
+        users = [u for u in users if u.id in ids_int]
 
     schedules = Schedule.query.filter(
         Schedule.work_date >= start_date,
         Schedule.work_date <= end_date
     ).all()
     schedule_map = {(s.user_id, s.work_date): s for s in schedules}
-
-    ca_truc_dict = {ca.id: ca for ca in Shift.query.all()}
+    ca_map = {ca.id: ca for ca in Shift.query.all()}
     hazard_configs = HazardConfig.query.filter(
         HazardConfig.start_date <= end_date,
         HazardConfig.end_date >= start_date
     ).all()
 
-    days_range = [(start_date + timedelta(days=i)) for i in range((end_date - start_date).days + 1)]
-
-    hazard_rate = None
-    configs_for_dept = [cfg for cfg in hazard_configs if cfg.department == selected_department]
-    if configs_for_dept:
-        hazard_rate = configs_for_dept[0].hazard_level
+    days_range = [start_date + timedelta(days=i) for i in range((end_date - start_date).days + 1)]
 
     table_data = []
     for user in users:
-        user_schedules = {k: v for k, v in schedule_map.items() if k[0] == user.id}
-        configs = [cfg for cfg in hazard_configs if cfg.department == user.department]
-
         row = {
             'name': user.name,
             'position': user.position or '',
             'daily_hours': [],
-            'total_days': 0
+            'total_days': 0,
+            'hazard_level': 0.0
         }
 
         for d in days_range:
-            sched = user_schedules.get((user.id, d))
+            sched = schedule_map.get((user.id, d))
             if not sched or not sched.shift_id:
                 row['daily_hours'].append("–")
                 continue
 
-            ca = ca_truc_dict.get(sched.shift_id)
+            ca = ca_map.get(sched.shift_id)
             if not ca:
                 row['daily_hours'].append("–")
                 continue
 
-            configs_in_day = [cfg for cfg in configs if cfg.start_date <= d <= cfg.end_date]
-            if not configs_in_day:
-                row['daily_hours'].append("–")
-                continue
+            applicable_cfgs = [
+                cfg for cfg in hazard_configs
+                if cfg.department == user.department and
+                   cfg.start_date <= d <= cfg.end_date
+            ]
 
-            matched = sorted(configs_in_day, key=lambda cfg: abs(cfg.duration_hours - ca.duration))
-            best_match = matched[0] if matched else None
+            match_chucvu = [
+                cfg for cfg in applicable_cfgs
+                if cfg.position and cfg.position.strip().upper() == (user.position or '').strip().upper()
+            ]
+            match_all = [
+                cfg for cfg in applicable_cfgs
+                if not cfg.position or cfg.position.strip() == ''
+            ]
+            search_pool = match_chucvu if match_chucvu else match_all
+
+            exact = [cfg for cfg in search_pool if cfg.duration_hours == ca.duration]
+            if exact:
+                best_match = exact[0]
+            else:
+                closest = sorted(search_pool, key=lambda cfg: abs(cfg.duration_hours - ca.duration))
+                best_match = closest[0] if closest else None
 
             if best_match:
-                hour_display = f"{int(best_match.duration_hours)}h"
+                row['daily_hours'].append(f"{int(best_match.duration_hours)}h")
                 row['total_days'] += 1
+                row['hazard_level'] = best_match.hazard_level
             else:
-                hour_display = "–"
-
-            row['daily_hours'].append(hour_display)
+                row['daily_hours'].append("–")
 
         table_data.append(row)
 
     return render_template(
         'bang_doc_hai_print.html',
         table_data=table_data,
-        department=selected_department or '',
+        department=selected_department or 'Tất cả',
         start=start_date,
         end=end_date,
         days_range=days_range,
-        now=datetime.now(),
-        hazard_rate=hazard_rate
+        now=datetime.now()
     )
+
 
 from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment, Border, Side

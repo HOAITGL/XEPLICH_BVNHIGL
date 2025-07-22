@@ -4,132 +4,94 @@
     <meta charset="UTF-8">
     <title>Bảng tính hưởng mức độc hại</title>
     <style>
-        @page {
-            size: A4 landscape;
-            margin: 2cm 1cm 2cm 2cm;
-        }
-
+        @page { size: A4 landscape; margin: 2cm 1cm 2cm 2cm; }
         body { font-family: Arial, sans-serif; margin: 0; }
         table, th, td { border: 1px solid black; border-collapse: collapse; text-align: center; }
         th, td { padding: 4px; font-size: 13px; }
         .text-bold { font-weight: bold; }
         .italic { font-style: italic; font-weight: normal; }
-
-        .header-table {
-            width: 100%;
-            margin-bottom: 10px;
-        }
-
-        .left-title, .right-title {
-            font-size: 14px;
-        }
-
-        .left-title {
-            text-align: center;
-        }
-
-        .right-title {
-            text-align: center;
-        }
-
-        .underline {
-            text-decoration: underline;
-        }
-
-        h2.title, h4.title, h5.title {
-            text-align: center;
-            margin: 6px 0;
-        }
-
-        .print-buttons {
-            text-align: right;
-            margin-bottom: 10px;
-        }
-
-        @media print {
-            .print-buttons {
-                display: none;
-            }
-        }
+        .header-table { width: 100%; margin-bottom: 10px; }
+        .left-title, .right-title { font-size: 14px; text-align: center; }
+        .underline { text-decoration: underline; }
+        h2.title, h4.title, h5.title { text-align: center; margin: 6px 0; }
+        .print-buttons { text-align: right; margin-bottom: 10px; }
+        @media print { .print-buttons { display: none; } }
     </style>
 </head>
 <body>
 
-    <div class="print-buttons">
-        <a href="/" style="padding: 6px 12px; font-size: 14px; background-color: #ccc; border: none; text-decoration: none; border-radius: 4px;">← Quay lại trang chủ</a>
-        <button onclick="window.print()" style="padding: 6px 12px; font-size: 14px;">🖨️ In bảng</button>
-    </div>
+<div class="print-buttons">
+    <a href="/" style="padding: 6px 12px; font-size: 14px; background-color: #ccc; border: none; text-decoration: none; border-radius: 4px;">← Quay lại trang chủ</a>
+    <button onclick="window.print()" style="padding: 6px 12px; font-size: 14px;">🖨️ In bảng</button>
+</div>
 
-    <table class="header-table" style="border: none;">
+<table class="header-table" style="border: none;">
+    <tr>
+        <td class="left-title" style="width: 50%; border: none;">
+            BỆNH VIỆN NHI TỈNH GIA LAI<br>
+            <strong class="underline">KHOA {{ department if department != 'Tất cả' else 'TOÀN BỆNH VIỆN' }}</strong>
+        </td>
+        <td class="right-title" style="width: 50%; border: none;">
+            <div><strong>CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</strong></div>
+            <div class="underline"><strong>Độc lập - Tự do - Hạnh phúc</strong></div>
+            <div class="italic">Gia Lai, ngày {{ now.day }} tháng {{ now.month }} năm {{ now.year }}</div>
+        </td>
+    </tr>
+</table>
+
+<h2 class="title text-bold">BẢNG CHẤM CÔNG HƯỞNG MỨC ĐỘC HẠI</h2>
+<h4 class="title">Từ ngày {{ start.strftime('%d/%m/%Y') }} đến {{ end.strftime('%d/%m/%Y') }}</h4>
+
+<table style="width: 100%;">
+    <thead>
         <tr>
-            <td class="left-title" style="width: 50%; border: none;">
-                BỆNH VIỆN NHI TỈNH GIA LAI<br>
-                <strong class="underline">KHOA {{ department if department != 'Tất cả' else 'TOÀN BỆNH VIỆN' }}</strong>
+            <th rowspan="2">STT</th>
+            <th rowspan="2">Họ tên</th>
+            <th rowspan="2">Chức vụ</th>
+            <th rowspan="2">Mức %</th>
+            <th colspan="{{ days_range|length }}">Ngày trong tháng</th>
+            <th rowspan="2">Tổng ngày</th>
+        </tr>
+        <tr>
+            {% for d in days_range %}
+                <th>{{ "%02d"|format(d.day) }}</th>
+            {% endfor %}
+        </tr>
+    </thead>
+    <tbody>
+        {% for row in table_data %}
+            <tr>
+                <td>{{ loop.index }}</td>
+                <td style="text-align: left;">{{ row.name }}</td>
+                <td style="text-align: left;">{{ row.position }}</td>
+                <td><strong>{{ "%.1f"|format(row.hazard_level or 0) }}</strong></td>
+                {% for h in row.daily_hours %}
+                    <td>{{ h }}</td>
+                {% endfor %}
+                <td><strong>{{ "%.0f"|format(row.total_days) }} ngày</strong></td>
+            </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<div style="margin-top: 10px;">
+    <table style="width:100%; border: none;">
+        <tr>
+            <td style="text-align: center; border: none;">
+                NGƯỜI LẬP BẢNG<br>(Ký, ghi rõ họ tên)
             </td>
-            <td class="right-title" style="width: 50%; border: none;">
-                <div><strong>CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</strong></div>
-                <div class="underline"><strong>Độc lập - Tự do - Hạnh phúc</strong></div>
-                <div class="italic">Gia Lai, ngày {{ now.day }} tháng {{ now.month }} năm {{ now.year }}</div>
+            <td style="text-align: center; border: none;">
+                TRƯỞNG KHOA<br>(Ký, ghi rõ họ tên)
+            </td>
+            <td style="text-align: center; border: none;">
+                PHÒNG TỔ CHỨC - HCQT<br>(Ký, ghi rõ họ tên)
+            </td>
+            <td style="text-align: center; border: none;">
+                GIÁM ĐỐC<br>(Ký, ghi rõ họ tên)
             </td>
         </tr>
     </table>
+</div>
 
-    <h2 class="title text-bold">
-      BẢNG CHẤM CÔNG HƯỞNG MỨC ĐỘC HẠI
-      {% if hazard_rate is not none %}
-          {{ " %.1f"|format(hazard_rate) }}
-      {% endif %}
-    </h2>
-    <h4 class="title">Từ ngày {{ start.strftime('%d/%m/%Y') }} đến {{ end.strftime('%d/%m/%Y') }}</h4>
-
-    <table style="width: 100%;">
-        <thead>
-            <tr>
-                <th rowspan="2">STT</th>
-                <th rowspan="2">Họ tên</th>
-                <th rowspan="2">Chức vụ</th>
-                <th colspan="{{ days_range|length }}">Ngày trong tháng</th>
-                <th rowspan="2">Tổng ngày</th>
-            </tr>
-            <tr>
-                {% for d in days_range %}
-                    <th>{{ "%02d"|format(d.day) }}</th>
-                {% endfor %}
-            </tr>
-        </thead>
-        <tbody>
-            {% for row in table_data %}
-                <tr>
-                    <td>{{ loop.index }}</td>
-                    <td style="text-align: left;">{{ row.name }}</td>
-                    <td style="text-align: left;">{{ row.position }}</td>
-                    {% for h in row.daily_hours %}
-                        <td>{{ h }}</td>
-                    {% endfor %}
-                    <td><strong>{{ "%.0f"|format(row.total_days) }} ngày</strong></td>
-                </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-
-    <!-- Phần chữ ký cuối trang -->
-    <div style="margin-top: 10px;">
-        <table style="width:100%; border: none;">
-            <tr>
-                <td style="text-align: center; border: none;">
-                    NGƯỜI LẬP BẢNG<br>(Ký, ghi rõ họ tên)
-                </td>
-                <td style="text-align: center; border: none;">
-                    TRƯỞNG KHOA<br>(Ký, ghi rõ họ tên)
-                </td>
-		    <td style="text-align: center; border: none;">
-                    PHÒNG TỔ CHỨC - HCQT<br>(Ký, ghi rõ họ tên)
-                </td>
-                <td style="text-align: center; border: none;">
-                    GIÁM ĐỐC<br>(Ký, ghi rõ họ tên)
-               </td>
-            </tr>
-        </table>
-    </div>
 </body>
 </html>

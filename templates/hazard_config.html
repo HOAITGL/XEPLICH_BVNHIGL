@@ -10,76 +10,87 @@
     <h2 class="mb-4">Thiết lập mức độc hại</h2>
     <a href="/" class="btn btn-secondary">🏠 Về trang chủ</a>
   </div>
-    <form method="post" class="row g-3 border p-3 mb-4 rounded">
-        <div class="col-md-4">
-            <label for="departments" class="form-label">Khoa/Phòng</label>
-            <select name="departments" id="departments" class="form-select" multiple required>
-                {% for d in departments %}
-                    <option value="{{ d }}">{{ d }}</option>
-                {% endfor %}
-            </select>
-            <small class="text-muted">Nhấn Ctrl (hoặc Cmd trên Mac) để chọn nhiều khoa</small>
-        </div>
 
-        <div class="col-md-2">
-            <label for="hazard_level" class="form-label">Mức độc hại</label>
-            <input type="number" step="0.01" name="hazard_level" class="form-control" required>
-        </div>
-
-        <div class="col-md-2">
-            <label for="unit" class="form-label">Đơn vị</label>
-            <select name="unit" class="form-select">
-                <option value="percent">%</option>
-                <option value="ngay">Ngày</option>
-                <option value="gio">Giờ</option>
-            </select>
-        </div>
-
-        <div class="col-md-2">
-            <label for="duration_hours" class="form-label">Số giờ tính</label>
-            <input type="number" step="0.5" name="duration_hours" class="form-control" required>
-        </div>
-
-        <div class="col-md-2">
-            <label class="form-label">Từ ngày</label>
-            <input type="date" name="start_date" class="form-control" required>
-            <label class="form-label mt-1">Đến ngày</label>
-            <input type="date" name="end_date" class="form-control" required>
-        </div>
-
-        <div class="col-12">
-            <button type="submit" class="btn btn-primary">Lưu cấu hình</button>
-        </div>
-    </form>
-
-    <h4>Danh sách cấu hình</h4>
-    <table class="table table-bordered">
-        <thead>
-            <tr>
-                <th>Khoa</th>
-                <th>Mức %</th>
-                <th>Đơn vị</th>
-                <th>Số giờ</th>
-                <th>Thời gian áp dụng</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for c in configs %}
-            <tr>
-                <td>{{ c.department }}</td>
-                <td>{{ c.hazard_level }}</td>
-                <td>{{ c.unit }}</td>
-                <td>{{ c.duration_hours }}</td>
-                <td>{{ c.start_date.strftime('%d/%m/%Y') }} → {{ c.end_date.strftime('%d/%m/%Y') }}</td>
-                <td>
-                    <a href="{{ url_for('edit_hazard_config', config_id=c.id) }}" class="btn btn-sm btn-warning">Sửa</a>
-                    <a href="{{ url_for('delete_hazard_config', config_id=c.id) }}"
-   			class="btn btn-danger btn-sm"
-   			onclick="return confirm('Bạn có chắc chắn muốn xóa cấu hình này?')">Xóa</a>
-                </td>
-            </tr>
+  <form method="post" class="row g-3 border p-3 mb-4 rounded">
+    <div class="col-md-4">
+        <label for="departments" class="form-label">Khoa/Phòng</label>
+        <select name="departments" id="departments" class="form-select" multiple required>
+            {% for d in departments %}
+                <option value="{{ d }}">{{ d }}</option>
             {% endfor %}
-        </tbody>
-    </table>
+        </select>
+        <small class="text-muted">Nhấn Ctrl (hoặc Cmd trên Mac) để chọn nhiều khoa</small>
+    </div>
+
+    <div class="col-md-2">
+        <label for="position" class="form-label">Chức vụ (nếu áp dụng)</label>
+        <input type="text" name="position" class="form-control" placeholder="VD: HL, KTV">
+    </div>
+
+    <div class="col-md-2">
+        <label for="hazard_level" class="form-label">Mức độc hại</label>
+        <input type="number" step="0.01" name="hazard_level" class="form-control" required>
+    </div>
+
+    <div class="col-md-2">
+        <label for="unit" class="form-label">Đơn vị</label>
+        <select name="unit" class="form-select">
+            <option value="percent">%</option>
+            <option value="ngay">Ngày</option>
+            <option value="gio">Giờ</option>
+        </select>
+    </div>
+
+    <div class="col-md-2">
+        <label for="duration_hours" class="form-label">Số giờ tính</label>
+        <input type="number" step="0.5" name="duration_hours" class="form-control" required>
+    </div>
+
+    <div class="col-md-3">
+        <label class="form-label">Từ ngày</label>
+        <input type="date" name="start_date" class="form-control" required>
+    </div>
+    <div class="col-md-3">
+        <label class="form-label">Đến ngày</label>
+        <input type="date" name="end_date" class="form-control" required>
+    </div>
+
+    <div class="col-12">
+        <button type="submit" class="btn btn-primary">Lưu cấu hình</button>
+    </div>
+  </form>
+
+  <h4>Danh sách cấu hình</h4>
+  <table class="table table-bordered">
+      <thead>
+          <tr>
+              <th>Khoa</th>
+              <th>Chức vụ</th>
+              <th>Mức %</th>
+              <th>Đơn vị</th>
+              <th>Số giờ</th>
+              <th>Thời gian áp dụng</th>
+              <th>Hành động</th>
+          </tr>
+      </thead>
+      <tbody>
+          {% for c in configs %}
+          <tr>
+              <td>{{ c.department }}</td>
+              <td>{{ c.position or 'Tất cả' }}</td>
+              <td>{{ c.hazard_level }}</td>
+              <td>{{ c.unit }}</td>
+              <td>{{ c.duration_hours }}</td>
+              <td>{{ c.start_date.strftime('%d/%m/%Y') }} → {{ c.end_date.strftime('%d/%m/%Y') }}</td>
+              <td>
+                  <a href="{{ url_for('edit_hazard_config', config_id=c.id) }}" class="btn btn-sm btn-warning">Sửa</a>
+                  <a href="{{ url_for('delete_hazard_config', config_id=c.id) }}"
+                     class="btn btn-danger btn-sm"
+                     onclick="return confirm('Bạn có chắc chắn muốn xóa cấu hình này?')">Xóa</a>
+              </td>
+          </tr>
+          {% endfor %}
+      </tbody>
+  </table>
 </body>
 </html>
