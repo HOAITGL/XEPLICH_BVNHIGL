@@ -2,6 +2,7 @@
 {% block content %}
 <h3>🧪 Thiết lập khoa trực Hồi sức cấp cứu (HSCC)</h3>
 
+<!-- Form thêm khoa mới -->
 <form method="post" class="mb-3">
   <input type="text" name="department" placeholder="Nhập tên khoa" class="form-control w-25 d-inline" required>
   <button class="btn btn-success">Thêm</button>
@@ -11,19 +12,25 @@
 
 <table class="table table-bordered w-50">
   <thead>
-    <tr><th>Khoa HSCC</th><th>Hành động</th></tr>
+    <tr>
+      <th>Khoa HSCC</th>
+      <th>Hành động</th>
+    </tr>
   </thead>
   <tbody>
     {% for dept in departments %}
     <tr>
+      <!-- Form sửa tên khoa -->
       <td>
-        <form method="post" action="/configure-hscc/update/{{ dept.id }}" class="d-flex">
+        <form method="post" action="{{ url_for('update_hscc', id=dept.id) }}" class="d-flex">
           <input type="text" name="new_name" value="{{ dept.department_name }}" class="form-control me-2" required>
           <button type="submit" class="btn btn-sm btn-primary">💾</button>
         </form>
       </td>
+
+      <!-- Form xóa khoa -->
       <td>
-        <form method="post" action="/configure-hscc/delete/{{ dept.id }}" onsubmit="return confirm('Bạn chắc chắn muốn xóa?')">
+        <form method="post" action="{{ url_for('delete_hscc', dept_id=dept.id) }}" onsubmit="return confirm('Bạn chắc chắn muốn xóa?')" style="display:inline;">
           <button type="submit" class="btn btn-sm btn-danger">🗑️</button>
         </form>
       </td>
@@ -32,5 +39,3 @@
   </tbody>
 </table>
 {% endblock %}
-
-

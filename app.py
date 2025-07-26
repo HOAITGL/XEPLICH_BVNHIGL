@@ -167,7 +167,7 @@ def inject_permissions():
                     'nhan_su_theo_khoa', 'don_nghi_phep', 'bang_cong_gop',
                     'bang_tinh_tien_truc', 'yeu_cau_cv_ngoai_gio', 'xem_log',
                     'thiet_lap_phong_kham', 'thiet_lap_khoa_hscc', 'cham_cong', 'doi_mat_khau', 'danh_sach_cong_viec',
-                    'cau_hinh_doc_hai'
+                    'cau_hinh_doc_hai', 'unit_config'
                 ],
                 'manager': [
                     'trang_chu', 'xem_lich_truc', 'xep_lich_truc', 'yeu_cau_cv_ngoai_gio',
@@ -1894,7 +1894,7 @@ def manage_roles():
         'trang_chu', 'xem_lich_truc', 'yeu_cau_cv_ngoai_gio', 'don_nghi_phep',
         'xep_lich_truc', 'tong_hop_khth', 'cham_cong', 'bang_cong_gop', 'bang_tinh_tien_truc',
         'cau_hinh_ca_truc', 'cau_hinh_muc_doc_hai','thiet_lap_phong_kham', 'nhan_su_theo_khoa',
-        'cau_hinh_tien_truc', 'thiet_lap_khoa_hscc', 'phan_quyen',
+        'cau_hinh_tien_truc', 'thiet_lap_khoa_hscc', 'cấu hình đơn vị', 'phan_quyen',
         'danh_sach_cong_viec', 'xem_log', 'doi_mat_khau', 'module_config'
     ]
 
@@ -1914,6 +1914,7 @@ def manage_roles():
         'nhan_su_theo_khoa': 'Nhân sự theo khoa',
         'cau_hinh_tien_truc': 'Cấu hình tiền trực',
         'thiet_lap_khoa_hscc': 'Thiết lập khoa HSCC',
+        'cau_hinh_don_vi': 'Cấu hình đơn vị',
         'phan_quyen': 'Phân quyền',
         'danh_sach_cong_viec': 'Danh sách yêu cầu công việc',
         'xem_log': 'Xem log hệ thống',
@@ -2195,7 +2196,7 @@ def bang_cham_cong():
         else:
             query = query.filter(User.contract_type.ilike(selected_contract))
 
-    priority_order = ['TK', 'TP', 'PTK', 'PTP', 'BS', 'BSCK1', 'BSCK2', 'KTV', 'DD', 'NV', 'HL', 'BV']
+    priority_order = ['TK', 'TP', 'PTK', 'PTP', 'BS', 'BSCK1', 'BSCK2', 'ĐDT', 'KTV', 'ĐD',  'NV', 'HL', 'BV']
 
     def sort_by_position(user):
         position = (user.position or '').upper().strip()
@@ -3160,6 +3161,21 @@ def classify_day(date):
     else:
         return "ngày_thường"
 
+@app.route('/configure-hscc/update/<int:id>', methods=['POST'])
+def update_hscc(id):
+    if session.get('role') != 'admin':
+        return "Chỉ admin được phép truy cập."
+
+    hscc = HSCCDepartment.query.get_or_404(id)
+    new_name = request.form.get('new_name') or request.form.get('department')
+
+    if new_name:
+        hscc.department_name = new_name.strip()
+        db.session.commit()
+
+    return redirect('/configure-hscc')
+
+
 @app.route('/shift-payment-view')
 def shift_payment_view():
     user_role = session.get('role')
@@ -3979,7 +3995,7 @@ def bang_doc_hai():
         users = users.filter(User.department == selected_department)
     users = users.all()
 
-    priority_order = ['TK', 'TP', 'PTK', 'PTP', 'BS', 'BSCK1', 'BSCK2', 'KTV', 'DD', 'NV', 'HL', 'BV']
+    priority_order = ['TK', 'TP', 'PTK', 'PTP', 'BS', 'BSCK1', 'BSCK2', 'ĐDT', 'KTV', 'ĐD', 'NV', 'HL', 'BV']
     def sort_by_position(user):
         position = (user.position or '').upper().strip()
         for i, p in enumerate(priority_order):

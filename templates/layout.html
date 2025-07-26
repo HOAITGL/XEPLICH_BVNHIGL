@@ -153,6 +153,10 @@
         <li><a href="/danh-sach-yeu-cau">📂 Danh sách yêu cầu công việc</a></li>
       {% endif %}
 
+      {% if 'unit_config' in allowed_modules %}
+        <li><a href="/unit-config">🏥 Cấu hình đơn vị</a></li>
+      {% endif %}
+
       {% if 'xem_log' in allowed_modules %}
         <li><a href="{{ url_for('view_log') }}">🧾 Xem log hệ thống</a></li>
       {% endif %}
