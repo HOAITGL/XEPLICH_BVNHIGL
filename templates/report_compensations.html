@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <title>Bảng theo dõi nghỉ bù</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        h2 { margin-bottom: 20px; color: #2c3e50; }
+        table { border-collapse: collapse; width: 100%; }
+        th, td { border: 1px solid #aaa; padding: 6px; text-align: center; font-size: 13px; }
+        th { background: #f2f2f2; }
+        tr:nth-child(even) { background: #fafafa; }
+        .highlight-day { background-color: #ffe6e6; }
+    </style>
+</head>
+<body>
+
+<h2>BẢNG THEO DÕI NGÀY NGHỈ BÙ</h2>
+
+<!-- Hiển thị khoa -->
+<div style="margin-bottom: 10px; font-size: 16px;">
+    <strong>Khoa/Phòng:</strong>
+    {% if is_admin %}
+        <form method="get" action="{{ url_for('theo_doi_nghi_bu') }}" style="display:inline;">
+            <select name="department" onchange="this.form.submit()">
+                {% for dept in departments %}
+                    <option value="{{ dept }}" {% if dept == selected_department %}selected{% endif %}>{{ dept }}</option>
+                {% endfor %}
+            </select>
+            <input type="date" name="start" value="{{ start }}">
+            <input type="date" name="end" value="{{ end }}">
+            <button type="submit">Lọc</button>
+        </form>
+    {% else %}
+        <span style="color:#007bff;">{{ selected_department }}</span>
+    {% endif %}
+    <a href="/bang-cham-cong" style="margin-left: 10px;">← Quay lại bảng chấm công</a>
+</div>
+
+<br>
+
+<table>
+    <thead>
+        <tr>
+            <th>STT</th>
+            <th>Họ và tên</th>
+            <th>Chức vụ</th>
+            {% for day in days_range %}
+                <th class="{% if loop.index0 in highlight_days %}highlight-day{% endif %}">
+                    {{ day.strftime('%d') }}
+                </th>
+            {% endfor %}
+            <th>Số ngày NB tháng trước</th>
+            <th>Số ngày NB còn lại</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for data in users_data %}
+        <tr>
+            <td>{{ loop.index }}</td>
+            <td>{{ data.name }}</td>
+            <td>{{ data.position }}</td>
+            {% for day in days_range %}
+                {% set d = day.strftime('%d') %}
+                <td class="{% if loop.index0 in highlight_days %}highlight-day{% endif %}">
+                    {{ data.days.get(d, '') }}
+                </td>
+            {% endfor %}
+            <td>{{ data.prev_total }}</td>
+            <td>{{ data.remain }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+</body>
+</html>

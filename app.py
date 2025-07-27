@@ -1776,16 +1776,17 @@ def add_user():
         contract_type = request.form.get('contract_type')
         phone = request.form.get('phone')
 
-        # ⚠️ Nếu là manager thì luôn ép vai trò nhân viên mới là 'user'
+        # Nếu người tạo là manager -> ép role thành user
         if current_role == 'manager':
             role = 'user'
 
-        # Kiểm tra trùng username
+        # Kiểm tra username trùng
         existing_user = User.query.filter_by(username=username).first()
         if existing_user:
             flash("❌ Tên đăng nhập đã tồn tại. Vui lòng chọn tên khác.", "danger")
             return render_template('add_user.html', old=request.form)
 
+        # Tạo user mới
         new_user = User(
             name=name,
             username=username,
@@ -1801,7 +1802,21 @@ def add_user():
         flash("✅ Đã thêm người dùng mới.", "success")
         return redirect('/users-by-department')
 
-    return render_template('add_user.html')
+    # === DỮ LIỆU ĐỘNG ===
+    # Lấy danh sách khoa từ DB (distinct department)
+    departments = [d[0] for d in db.session.query(User.department)
+                   .filter(User.department != None)
+                   .distinct()
+                   .all()]
+
+    # Danh sách chức danh cố định (có thể chuyển sang DB nếu cần)
+    positions = ['Bác sĩ', 'Điều dưỡng', 'Kỹ thuật viên', 'Nhân viên', 'Hộ lý', 'Bảo vệ', 'Lái xe']
+
+    return render_template(
+        'add_user.html',
+        departments=departments,
+        positions=positions
+    )
 
 @app.route('/import-users', methods=['GET', 'POST'])
 def import_users():
@@ -4334,6 +4349,178 @@ def export_bang_doc_hai_excel():
 
     filename = f"bang_doc_hai_{selected_department or 'tatca'}.xlsx"
     return send_file(output, as_attachment=True, download_name=filename, mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+
+from flask import request, render_template
+from datetime import datetime, timedelta
+from collections import defaultdict
+from dateutil.relativedelta import relativedelta
+
+@app.route('/theo-doi-nghi-bu', methods=['GET'], endpoint='theo_doi_nghi_bu')
+def report_compensations():
+    from collections import defaultdict
+    from dateutil.relativedelta import relativedelta
+    from flask_login import current_user
+
+    # --- Kiểm tra quyền ---
+    is_admin = getattr(current_user, 'role', '') == 'admin'
+
+    # --- Lấy khoa ---
+    if is_admin:
+        selected_department = request.args.get('department')
+        if not selected_department:
+            # Nếu admin chưa chọn khoa → lấy khoa đầu tiên
+            first_dept = db.session.query(User.department).filter(User.department.isnot(None)).first()
+            if first_dept:
+                selected_department = first_dept[0]
+    else:
+        selected_department = getattr(current_user, 'department', None)
+
+    if not selected_department:
+        return "Không xác định được khoa để hiển thị."
+
+    # --- Ngày bắt đầu & kết thúc ---
+    start = request.args.get('start')
+    end = request.args.get('end')
+
+    try:
+        start_date = datetime.strptime(start, '%Y-%m-%d').date() if start else datetime.today().replace(day=1)
+        end_date = datetime.strptime(end, '%Y-%m-%d').date() if end else datetime.today()
+    except ValueError:
+        return "Ngày không hợp lệ. Định dạng cần là YYYY-MM-DD."
+
+    # --- Dải ngày ---
+    days_range = []
+    cur_day = start_date
+    while cur_day <= end_date:
+        days_range.append(cur_day)
+        cur_day += timedelta(days=1)
+
+    # ==== Định nghĩa loại ca ====
+    CA_TRUC_CODES = ['XĐ', 'XĐ16', 'XĐ24', 'XĐ3', 'XĐL16', 'XĐL24', 'XĐT']
+
+    def is_ca_truc(name):
+        return name.startswith('TRỰC') or name in CA_TRUC_CODES
+
+    def is_nghi(name):
+        return ('NB' in name) or ('/X' in name) or ('1/2' in name) or ('NGHỈ' in name)
+
+    # --- Dữ liệu tháng trước ---
+    first_day_this_month = start_date.replace(day=1)
+    first_day_last_month = first_day_this_month - relativedelta(months=1)
+    last_day_last_month = first_day_this_month - timedelta(days=1)
+
+    query_last = Schedule.query.join(User).join(Shift).filter(
+        Schedule.work_date.between(first_day_last_month, last_day_last_month),
+        User.department == selected_department
+    )
+
+    prev_comp = defaultdict(float)
+    for s in query_last.all():
+        shift_name = s.shift.name.strip().upper()
+        if is_ca_truc(shift_name):
+            prev_comp[s.user_id] += 1
+
+    # --- Dữ liệu tháng hiện tại ---
+    query = Schedule.query.join(User).join(Shift).filter(
+        Schedule.work_date.between(start_date, end_date),
+        User.department == selected_department
+    )
+
+    # Chuẩn bị dữ liệu
+    users_data = defaultdict(lambda: {
+        'name': '',
+        'position': '',
+        'department': '',
+        'days': {},
+        'prev_total': 0,
+        'remain': 0
+    })
+
+    schedules_by_user = defaultdict(list)
+    for s in query.all():
+        schedules_by_user[s.user_id].append(s)
+
+    for uid in schedules_by_user:
+        schedules_by_user[uid] = sorted(schedules_by_user[uid], key=lambda x: x.work_date)
+
+    # --- Duyệt từng user ---
+    for uid, schedules in schedules_by_user.items():
+        user = schedules[0].user
+        users_data[uid]['name'] = user.name
+        users_data[uid]['position'] = user.position
+        users_data[uid]['department'] = user.department
+        users_data[uid]['prev_total'] = prev_comp.get(uid, 0)
+
+        for i, s in enumerate(schedules):
+            day_str = s.work_date.strftime('%d')
+            shift_name = s.shift.name.strip().upper()
+
+            # Nếu là ca trực
+            if is_ca_truc(shift_name):
+                users_data[uid]['days'][day_str] = 'XĐ'
+
+                # Kiểm tra hôm sau
+                next_day = schedules[i + 1].work_date if i + 1 < len(schedules) else None
+                next_shift_name = schedules[i + 1].shift.name.strip().upper() if next_day else None
+
+                if next_shift_name and is_nghi(next_shift_name):
+                    if 'NB' in next_shift_name:
+                        users_data[uid]['days'][schedules[i + 1].work_date.strftime('%d')] = 'NB'
+                    elif '/X' in next_shift_name or '1/2' in next_shift_name:
+                        users_data[uid]['days'][schedules[i + 1].work_date.strftime('%d')] = '/X'
+                        users_data[uid]['remain'] += 0.5
+                    elif 'NGHỈ' in next_shift_name:
+                        pass
+                else:
+                    users_data[uid]['remain'] += 1
+
+            # Nếu là ca nghỉ
+            elif is_nghi(shift_name):
+                if 'NB' in shift_name:
+                    users_data[uid]['days'][day_str] = 'NB'
+                    users_data[uid]['remain'] -= 1
+                elif '/X' in shift_name or '1/2' in shift_name:
+                    users_data[uid]['days'][day_str] = '/X'
+                    users_data[uid]['remain'] -= 0.5
+                elif 'NGHỈ' in shift_name:
+                    users_data[uid]['days'][day_str] = 'NT'
+
+        # Cộng dồn từ tháng trước
+        users_data[uid]['remain'] += users_data[uid]['prev_total']
+
+    # --- Sắp xếp nhân viên theo chức vụ ---
+    position_order = ['TK', 'PTK', 'BS', 'ĐDT', 'ĐD', 'NV', 'HL', 'BV']
+    sorted_users = sorted(
+        users_data.values(),
+        key=lambda x: (
+            position_order.index(x['position']) if x['position'] in position_order else 99,
+            x['name']
+        )
+    )
+
+    # --- Tính highlight cuối tuần và ngày lễ ---
+    fixed_holidays = [(4, 30), (5, 1), (9, 2), (1, 1)]
+    highlight_days = []
+    for i, d in enumerate(days_range):
+        if d.weekday() in [5, 6] or (d.month, d.day) in fixed_holidays:
+            highlight_days.append(i)
+
+    # Danh sách khoa chỉ load cho admin
+    departments = []
+    if is_admin:
+        departments = [row[0] for row in db.session.query(User.department).distinct().all() if row[0]]
+
+    return render_template(
+        'report_compensations.html',
+        days_range=days_range,
+        users_data=sorted_users,
+        highlight_days=highlight_days,
+        departments=departments,
+        selected_department=selected_department,
+        is_admin=is_admin,
+        start=start_date.strftime('%Y-%m-%d'),
+        end=end_date.strftime('%Y-%m-%d')
+    )
 
 @app.before_first_request
 def create_missing_tables():

@@ -150,8 +150,9 @@
   <div>
     <button type="submit" class="btn btn-primary">Xem bảng</button>
     <a href="/export-cham-cong?start={{ start_date }}&end={{ end_date }}{% if selected_department %}&department={{ selected_department }}{% endif %}{% if selected_contract %}&contract_type={{ selected_contract }}{% endif %}" class="btn btn-success">📥 Xuất Excel</a>
+    <button type="button" class="btn btn-secondary" onclick="window.print()">🖨 In bảng chấm công</button>
     <a href="{{ url_for('bang_doc_hai', department=request.args.get('department'), start=request.args.get('start'), end=request.args.get('end')) }}" class="btn btn-warning">👷 Bảng chấm công hưởng độc hại</a>
-    <button type="button" class="btn btn-secondary" onclick="window.print()">🖨 In</button>
+    <a href="{{ url_for('theo_doi_nghi_bu') }}" class="btn btn-info">Theo dõi nghỉ bù</a>
   </div>
 </form>
 

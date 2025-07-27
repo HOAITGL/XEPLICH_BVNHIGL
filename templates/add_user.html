@@ -44,27 +44,27 @@
         </select>
       {% endif %}
     </div>
+
     <div class="mb-3">
       <label class="form-label">Khoa/Phòng</label>
       <select name="department" class="form-control" required>
         <option value="">-- Chọn khoa/phòng --</option>
-        <option value="Khoa Nội">Khoa Nội</option>
-        <option value="Khoa Ngoại">Khoa Ngoại</option>
-        <option value="Khoa Nhi">Khoa Nhi</option>
-        <option value="Khoa Hồi sức">Khoa Hồi sức</option>
-        <option value="Phòng CNTT">Phòng CNTT</option>
+        {% for dept in departments %}
+          <option value="{{ dept }}">{{ dept }}</option>
+        {% endfor %}
       </select>
     </div>
+
     <div class="mb-3">
       <label class="form-label">Chức danh</label>
       <select name="position" class="form-control" required>
         <option value="">-- Chọn chức danh --</option>
-        <option value="Bác sĩ">Bác sĩ</option>
-        <option value="Điều dưỡng">Điều dưỡng</option>
-        <option value="Kỹ thuật viên">Kỹ thuật viên</option>
-        <option value="Hộ lý">Hộ lý</option>
+        {% for pos in positions %}
+          <option value="{{ pos }}">{{ pos }}</option>
+        {% endfor %}
       </select>
     </div>
+
     <div class="mb-3">
       <label class="form-label">Loại hợp đồng</label>
       <select name="contract_type" class="form-control">
@@ -73,6 +73,7 @@
         <option value="Hợp đồng">Hợp đồng</option>
       </select>
     </div>
+
     <button type="submit" class="btn btn-success">Thêm</button>
   </form>
 </div>
