@@ -52,34 +52,20 @@ def setup_logging(app):
 
 app = Flask(__name__)
 
+# Lấy DATABASE_URL từ môi trường (Render), nếu không có -> fallback SQLite
+db_url = os.getenv('DATABASE_URL')
+if not db_url:
+    db_url = 'sqlite:///database.db'  # fallback local
+elif db_url.startswith("postgres://"):
+    # Render thường trả postgres:// nhưng SQLAlchemy cần postgresql://
+    db_url = db_url.replace("postgres://", "postgresql://", 1)
 
-import logging
-from logging.handlers import RotatingFileHandler
-import os
-
-def setup_logging(app):
-    if not os.path.exists('logs'):
-        os.mkdir('logs')
-    log_handler = RotatingFileHandler('logs/activity.log', maxBytes=1000000, backupCount=5)
-    log_handler.setLevel(logging.INFO)
-    log_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-    log_handler.setFormatter(log_formatter)
-
-    if not any(isinstance(h, RotatingFileHandler) for h in app.logger.handlers):
-        app.logger.addHandler(log_handler)
-
-    app.logger.setLevel(logging.INFO)
-
-setup_logging(app)
-app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv("DATABASE_URL") or 'sqlite:///database.db'
+app.config['SQLALCHEMY_DATABASE_URI'] = db_url
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.secret_key = 'lichtruc2025'
 
-# ✅ Gắn app vào SQLAlchemy
 db.init_app(app)
-
-from extensions import migrate
-migrate.init_app(app, db)
+migrate = Migrate(app, db)
 
 # ✅ Tạo bảng nếu thiếu (dùng cho Render khi không gọi __main__)
 with app.app_context():
@@ -392,6 +378,8 @@ import csv
 import os
 from models import User  # ✅ đúng
 
+from models.work_request import WorkRequest
+
 @app.route("/yeu-cau-xu-ly-cong-viec", methods=["GET", "POST"])
 def yeu_cau_xu_ly_cong_viec():
     if request.method == "POST":
@@ -405,6 +393,10 @@ def yeu_cau_xu_ly_cong_viec():
         noi_dung = request.form.get("noi_dung", "")
         xac_nhan = request.form.get("xac_nhan")
 
+        # Lấy số điện thoại người yêu cầu
+        user_obj = User.query.filter_by(name=nguoi_yeu_cau).first()
+        so_dien_thoai = user_obj.phone if user_obj and hasattr(user_obj, 'phone') else ""
+
         def mark(name):
             return "✓" if xac_nhan == name else "✗"
         mark_hoa = mark("Hòa")
@@ -412,21 +404,28 @@ def yeu_cau_xu_ly_cong_viec():
         mark_anh = mark("Ánh")
         mark_nam = mark("Nam")
 
-        file_exists = os.path.isfile("data.csv")
-        with open("data.csv", "a", newline="", encoding="utf-8") as f:
-            writer = csv.writer(f)
-            if not file_exists:
-                writer.writerow([
-                    "NGÀY THÁNG", "KHOA / PHÒNG", "LỖI", "SỐ HỒ SƠ", "SỐ PHIẾU", "NỘI DUNG YÊU CẦU CV",
-                    "TÊN NGƯỜI YÊU CẦU", "CHỮ KÝ", "HOÀ", "HIỆP", "ÁNH", "NAM"
-                ])
-            writer.writerow([
-                ngay_thang, khoa, loi, so_ho_so, so_phieu, noi_dung,
-                nguoi_yeu_cau, chu_ky, mark_hoa, mark_hiep, mark_anh, mark_nam
-            ])
+        # Lưu vào PostgreSQL
+        new_request = WorkRequest(
+            ngay_thang=ngay_thang,
+            khoa=khoa,
+            loi=loi,
+            so_ho_so=so_ho_so,
+            so_phieu=so_phieu,
+            noi_dung=noi_dung,
+            nguoi_yeu_cau=nguoi_yeu_cau,
+            so_dien_thoai=so_dien_thoai,
+            chu_ky=chu_ky,
+            hoa=mark_hoa,
+            hiep=mark_hiep,
+            anh=mark_anh,
+            nam=mark_nam
+        )
+        db.session.add(new_request)
+        db.session.commit()
+
         return redirect("/yeu-cau-xu-ly-cong-viec")
 
-    # ✅ Tạo dict nhân sự theo khoa
+    # Tạo dict nhân sự theo khoa
     staff_by_unit = defaultdict(list)
     users = User.query.filter(User.department != None).all()
     for user in users:
@@ -445,10 +444,15 @@ def yeu_cau_xu_ly_cong_viec():
         staff_by_unit_filtered = dict(staff_by_unit)
         current_department = ""
 
+    # Lấy số điện thoại của Nam (CNTT)
+    nam_user = User.query.filter_by(name="Nam").first()
+    nam_phone = nam_user.phone if nam_user and hasattr(nam_user, 'phone') else ""
+
     return render_template(
         "form.html",
         staff_by_unit=staff_by_unit_filtered,
-        current_department=current_department
+        current_department=current_department,
+        nam_phone=nam_phone
     )
 
 @app.route('/api/user-phones')
