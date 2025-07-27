@@ -143,11 +143,11 @@
       <tbody>
         {% for row in data %}
           <tr>
-            {% for cell in row %}
+            {% for cell in row[1:] %} <!-- Bỏ ID khi hiển thị -->
               <td>{{ cell }}</td>
             {% endfor %}
             <td class="no-print">
-              <form method="post" action="/xoa-yeu-cau/{{ loop.index0 }}" onsubmit="return confirm('Bạn chắc chắn muốn xóa mục này?');">
+              <form method="post" action="/xoa-yeu-cau/{{ row[0] }}" onsubmit="return confirm('Bạn chắc chắn muốn xóa mục này?');">
                 <button type="submit" class="delete-btn">🗑️</button>
               </form>
             </td>

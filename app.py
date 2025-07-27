@@ -382,6 +382,9 @@ from models.work_request import WorkRequest
 
 @app.route("/yeu-cau-xu-ly-cong-viec", methods=["GET", "POST"])
 def yeu_cau_xu_ly_cong_viec():
+    from collections import defaultdict
+    from datetime import datetime
+
     if request.method == "POST":
         ngay_thang = request.form.get("ngay_thang")
         khoa = request.form.get("khoa")
@@ -393,18 +396,20 @@ def yeu_cau_xu_ly_cong_viec():
         noi_dung = request.form.get("noi_dung", "")
         xac_nhan = request.form.get("xac_nhan")
 
-        # Lấy số điện thoại người yêu cầu
+        # Lấy số điện thoại người yêu cầu (nếu có)
         user_obj = User.query.filter_by(name=nguoi_yeu_cau).first()
         so_dien_thoai = user_obj.phone if user_obj and hasattr(user_obj, 'phone') else ""
 
+        # Đánh dấu chữ ký
         def mark(name):
             return "✓" if xac_nhan == name else "✗"
+
         mark_hoa = mark("Hòa")
         mark_hiep = mark("Hiệp")
         mark_anh = mark("Ánh")
         mark_nam = mark("Nam")
 
-        # Lưu vào PostgreSQL
+        # Lưu vào bảng WorkRequest
         new_request = WorkRequest(
             ngay_thang=ngay_thang,
             khoa=khoa,
@@ -423,9 +428,10 @@ def yeu_cau_xu_ly_cong_viec():
         db.session.add(new_request)
         db.session.commit()
 
-        return redirect("/yeu-cau-xu-ly-cong-viec")
+        # Chuyển hướng sang danh sách để in
+        return redirect("/")
 
-    # Tạo dict nhân sự theo khoa
+    # --- GET: Load form ---
     staff_by_unit = defaultdict(list)
     users = User.query.filter(User.department != None).all()
     for user in users:
@@ -444,7 +450,7 @@ def yeu_cau_xu_ly_cong_viec():
         staff_by_unit_filtered = dict(staff_by_unit)
         current_department = ""
 
-    # Lấy số điện thoại của Nam (CNTT)
+    # Lấy số điện thoại Nam (CNTT)
     nam_user = User.query.filter_by(name="Nam").first()
     nam_phone = nam_user.phone if nam_user and hasattr(nam_user, 'phone') else ""
 
@@ -463,31 +469,37 @@ def api_user_phones():
 
 @app.route("/danh-sach-yeu-cau")
 def danh_sach_yeu_cau():
-    import csv
-    import os
-    from datetime import datetime
+    # Lấy tất cả yêu cầu từ DB
+    requests = WorkRequest.query.order_by(WorkRequest.id.desc()).all()
 
+    # Tiêu đề bảng
+    headers = [
+        "Ngày tháng", "Khoa", "Người yêu cầu", "Lỗi",
+        "Số hồ sơ", "Số phiếu", "Nội dung",
+        "Hòa", "Hiệp", "Ánh", "Nam",
+        "Chữ ký"
+    ]
+
+    # Dữ liệu kèm ID để xóa
     data = []
-    if os.path.exists("data.csv"):
-        with open("data.csv", "r", encoding="utf-8") as f:
-            reader = csv.reader(f)
-            headers = next(reader, [])
-            for row in reader:
-                if row:
-                    try:
-                        # Chuyển định dạng cột ngày (cột 0) nếu là yyyy-mm-dd
-                        dt_parts = row[0].split("-")
-                        if len(dt_parts) == 3:
-                            row[0] = f"{dt_parts[2]}/{dt_parts[1]}/{dt_parts[0]}"
-                    except:
-                        pass
-                    data.append(row)
-    else:
-        headers = []
+    for req in requests:
+        data.append([
+            req.id,                # ID dùng cho nút XÓA
+            req.ngay_thang,
+            req.khoa,
+            req.nguoi_yeu_cau,
+            req.loi,
+            req.so_ho_so,
+            req.so_phieu,
+            req.noi_dung,
+            req.hoa,
+            req.hiep,
+            req.anh,
+            req.nam,
+            req.chu_ky
+        ])
 
-    month = datetime.today().month
-
-    # Tạo biến current_date với định dạng yêu cầu
+    # Ngày hiện tại để hiển thị
     now = datetime.today()
     current_date = f"Gia Lai, ngày {now.day:02d} tháng {now.month:02d} năm {now.year}"
 
@@ -495,45 +507,72 @@ def danh_sach_yeu_cau():
         "danh_sach_yeu_cau.html",
         headers=headers,
         data=data,
-        month=month,
+        month=now.month,
         current_date=current_date
     )
 
-@app.route("/xoa-yeu-cau/<int:index>", methods=["POST"])
-def xoa_yeu_cau(index):
-    import csv
-    file_path = "data.csv"
+@app.route("/xoa-yeu-cau/<int:req_id>", methods=["POST"])
+def xoa_yeu_cau(req_id):
+    from models.work_request import WorkRequest
+    req = WorkRequest.query.get(req_id)
+    if req:
+        db.session.delete(req)
+        db.session.commit()
+    return redirect("/danh-sach-yeu-cau")
 
-    if not os.path.exists(file_path):
-        return redirect("/danh-sach-yeu-cau")
-
-    with open(file_path, "r", encoding="utf-8") as f:
-        rows = list(csv.reader(f))
-        headers = rows[0]
-        data = rows[1:]
-
-    if 0 <= index < len(data):
-        del data[index]  # Xóa dòng dữ liệu theo chỉ số
-
-        with open(file_path, "w", encoding="utf-8", newline="") as f:
-            writer = csv.writer(f)
-            writer.writerow(headers)
-            writer.writerows(data)
-
-        return redirect("/danh-sach-yeu-cau")
 
 from flask import send_file
 import pandas as pd
 
-@app.route('/xuat-excel')
+@app.route("/xuat-excel")
 def xuat_excel():
-    try:
-        df = pd.read_csv("data.csv", encoding="utf-8")
-        file_path = "yeu_cau_cong_viec.xlsx"
-        df.to_excel(file_path, index=False)
-        return send_file(file_path, as_attachment=True)
-    except Exception as e:
-        return f"Lỗi khi xuất Excel: {str(e)}"
+    from models.work_request import WorkRequest
+    import openpyxl
+    from io import BytesIO
+    from flask import send_file
+
+    # Tạo file Excel mới
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "YeuCauCongViec"
+
+    # Tiêu đề giống bảng hiển thị
+    headers = [
+        "Ngày tháng", "Khoa", "Người yêu cầu", "Lỗi",
+        "Số hồ sơ", "Số phiếu", "Nội dung",
+        "Hòa", "Hiệp", "Ánh", "Nam", "Chữ ký"
+    ]
+    ws.append(headers)
+
+    # Lấy dữ liệu từ DB
+    requests = WorkRequest.query.order_by(WorkRequest.id).all()
+    for r in requests:
+        ws.append([
+            r.ngay_thang,
+            r.khoa,
+            r.nguoi_yeu_cau,
+            r.loi,
+            r.so_ho_so,
+            r.so_phieu,
+            r.noi_dung,
+            r.hoa,
+            r.hiep,
+            r.anh,
+            r.nam,
+            r.chu_ky
+        ])
+
+    # Xuất file Excel
+    stream = BytesIO()
+    wb.save(stream)
+    stream.seek(0)
+
+    return send_file(
+        stream,
+        as_attachment=True,
+        download_name="yeu_cau_cong_viec.xlsx",
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
 
 from flask import render_template
 from datetime import datetime
