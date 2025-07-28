@@ -17,23 +17,27 @@
 
 <h2>BẢNG THEO DÕI NGÀY NGHỈ BÙ</h2>
 
-<!-- Hiển thị khoa -->
+<!-- Bộ lọc khoa + ngày -->
 <div style="margin-bottom: 10px; font-size: 16px;">
     <strong>Khoa/Phòng:</strong>
-    {% if is_admin %}
-        <form method="get" action="{{ url_for('theo_doi_nghi_bu') }}" style="display:inline;">
+    <form method="get" action="{{ url_for('theo_doi_nghi_bu') }}" style="display:inline;">
+        {% if is_admin %}
+            <!-- Admin: hiển thị dropdown chọn khoa -->
             <select name="department" onchange="this.form.submit()">
                 {% for dept in departments %}
                     <option value="{{ dept }}" {% if dept == selected_department %}selected{% endif %}>{{ dept }}</option>
                 {% endfor %}
             </select>
-            <input type="date" name="start" value="{{ start }}">
-            <input type="date" name="end" value="{{ end }}">
-            <button type="submit">Lọc</button>
-        </form>
-    {% else %}
-        <span style="color:#007bff;">{{ selected_department }}</span>
-    {% endif %}
+        {% else %}
+            <!-- Manager: chỉ hiển thị tên khoa -->
+            <span style="color:#007bff;">{{ selected_department }}</span>
+            <input type="hidden" name="department" value="{{ selected_department }}">
+        {% endif %}
+        <!-- Cả admin và manager đều có thể chọn ngày và lọc -->
+        <input type="date" name="start" value="{{ start }}">
+        <input type="date" name="end" value="{{ end }}">
+        <button type="submit">Lọc</button>
+    </form>
     <a href="/bang-cham-cong" style="margin-left: 10px;">← Quay lại bảng chấm công</a>
 </div>
 

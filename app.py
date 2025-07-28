@@ -4400,14 +4400,13 @@ def report_compensations():
     from dateutil.relativedelta import relativedelta
     from flask_login import current_user
 
-    # --- Kiểm tra quyền ---
+    # Kiểm tra quyền admin
     is_admin = getattr(current_user, 'role', '') == 'admin'
 
-    # --- Lấy khoa ---
+    # Lấy khoa phòng
     if is_admin:
         selected_department = request.args.get('department')
         if not selected_department:
-            # Nếu admin chưa chọn khoa → lấy khoa đầu tiên
             first_dept = db.session.query(User.department).filter(User.department.isnot(None)).first()
             if first_dept:
                 selected_department = first_dept[0]
@@ -4417,33 +4416,41 @@ def report_compensations():
     if not selected_department:
         return "Không xác định được khoa để hiển thị."
 
-    # --- Ngày bắt đầu & kết thúc ---
+    # Ngày bắt đầu/kết thúc
     start = request.args.get('start')
     end = request.args.get('end')
-
     try:
         start_date = datetime.strptime(start, '%Y-%m-%d').date() if start else datetime.today().replace(day=1)
         end_date = datetime.strptime(end, '%Y-%m-%d').date() if end else datetime.today()
     except ValueError:
         return "Ngày không hợp lệ. Định dạng cần là YYYY-MM-DD."
 
-    # --- Dải ngày ---
+    # Dải ngày
     days_range = []
     cur_day = start_date
     while cur_day <= end_date:
         days_range.append(cur_day)
         cur_day += timedelta(days=1)
 
-    # ==== Định nghĩa loại ca ====
+    # Các mã ca trực
     CA_TRUC_CODES = ['XĐ', 'XĐ16', 'XĐ24', 'XĐ3', 'XĐL16', 'XĐL24', 'XĐT']
 
     def is_ca_truc(name):
         return name.startswith('TRỰC') or name in CA_TRUC_CODES
 
-    def is_nghi(name):
-        return ('NB' in name) or ('/X' in name) or ('1/2' in name) or ('NGHỈ' in name)
+    def detect_nghi_type(name):
+        name = name.upper().strip()
+        if 'NBC' in name or 'NBS' in name:
+            return 'NBC'
+        if 'NB' in name or 'NGHỈ BÙ' in name:
+            return 'NB'
+        if '/X' in name or '1/2' in name:
+            return '/X'
+        if 'NT' in name or 'NGHỈ TRỰC' in name:
+            return 'NT'
+        return None
 
-    # --- Dữ liệu tháng trước ---
+    # Tính số dư tháng trước
     first_day_this_month = start_date.replace(day=1)
     first_day_last_month = first_day_this_month - relativedelta(months=1)
     last_day_last_month = first_day_this_month - timedelta(days=1)
@@ -4456,16 +4463,22 @@ def report_compensations():
     prev_comp = defaultdict(float)
     for s in query_last.all():
         shift_name = s.shift.name.strip().upper()
+        nghi_type = detect_nghi_type(shift_name)
         if is_ca_truc(shift_name):
             prev_comp[s.user_id] += 1
+        if nghi_type == 'NB':
+            prev_comp[s.user_id] -= 1
+        elif nghi_type in ['NBC', '/X']:
+            prev_comp[s.user_id] -= 0.5
+        elif nghi_type == 'NT':
+            prev_comp[s.user_id] -= 1
 
-    # --- Dữ liệu tháng hiện tại ---
+    # Dữ liệu tháng hiện tại
     query = Schedule.query.join(User).join(Shift).filter(
         Schedule.work_date.between(start_date, end_date),
         User.department == selected_department
     )
 
-    # Chuẩn bị dữ liệu
     users_data = defaultdict(lambda: {
         'name': '',
         'position': '',
@@ -4482,7 +4495,7 @@ def report_compensations():
     for uid in schedules_by_user:
         schedules_by_user[uid] = sorted(schedules_by_user[uid], key=lambda x: x.work_date)
 
-    # --- Duyệt từng user ---
+    # Xử lý từng nhân viên
     for uid, schedules in schedules_by_user.items():
         user = schedules[0].user
         users_data[uid]['name'] = user.name
@@ -4490,44 +4503,27 @@ def report_compensations():
         users_data[uid]['department'] = user.department
         users_data[uid]['prev_total'] = prev_comp.get(uid, 0)
 
-        for i, s in enumerate(schedules):
+        total = 0
+        for s in schedules:
             day_str = s.work_date.strftime('%d')
             shift_name = s.shift.name.strip().upper()
+            nghi_type = detect_nghi_type(shift_name)
 
-            # Nếu là ca trực
             if is_ca_truc(shift_name):
                 users_data[uid]['days'][day_str] = 'XĐ'
+                total += 1
+            elif nghi_type:
+                users_data[uid]['days'][day_str] = nghi_type
+                if nghi_type == 'NB':
+                    total -= 1
+                elif nghi_type in ['NBC', '/X']:
+                    total -= 0.5
+                elif nghi_type == 'NT':
+                    total -= 1
 
-                # Kiểm tra hôm sau
-                next_day = schedules[i + 1].work_date if i + 1 < len(schedules) else None
-                next_shift_name = schedules[i + 1].shift.name.strip().upper() if next_day else None
+        users_data[uid]['remain'] = total + users_data[uid]['prev_total']
 
-                if next_shift_name and is_nghi(next_shift_name):
-                    if 'NB' in next_shift_name:
-                        users_data[uid]['days'][schedules[i + 1].work_date.strftime('%d')] = 'NB'
-                    elif '/X' in next_shift_name or '1/2' in next_shift_name:
-                        users_data[uid]['days'][schedules[i + 1].work_date.strftime('%d')] = '/X'
-                        users_data[uid]['remain'] += 0.5
-                    elif 'NGHỈ' in next_shift_name:
-                        pass
-                else:
-                    users_data[uid]['remain'] += 1
-
-            # Nếu là ca nghỉ
-            elif is_nghi(shift_name):
-                if 'NB' in shift_name:
-                    users_data[uid]['days'][day_str] = 'NB'
-                    users_data[uid]['remain'] -= 1
-                elif '/X' in shift_name or '1/2' in shift_name:
-                    users_data[uid]['days'][day_str] = '/X'
-                    users_data[uid]['remain'] -= 0.5
-                elif 'NGHỈ' in shift_name:
-                    users_data[uid]['days'][day_str] = 'NT'
-
-        # Cộng dồn từ tháng trước
-        users_data[uid]['remain'] += users_data[uid]['prev_total']
-
-    # --- Sắp xếp nhân viên theo chức vụ ---
+    # Sắp xếp
     position_order = ['TK', 'PTK', 'BS', 'ĐDT', 'ĐD', 'NV', 'HL', 'BV']
     sorted_users = sorted(
         users_data.values(),
@@ -4537,14 +4533,13 @@ def report_compensations():
         )
     )
 
-    # --- Tính highlight cuối tuần và ngày lễ ---
+    # Highlight ngày nghỉ
     fixed_holidays = [(4, 30), (5, 1), (9, 2), (1, 1)]
     highlight_days = []
     for i, d in enumerate(days_range):
         if d.weekday() in [5, 6] or (d.month, d.day) in fixed_holidays:
             highlight_days.append(i)
 
-    # Danh sách khoa chỉ load cho admin
     departments = []
     if is_admin:
         departments = [row[0] for row in db.session.query(User.department).distinct().all() if row[0]]
