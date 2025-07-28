@@ -4438,16 +4438,26 @@ def report_compensations():
     def is_ca_truc(name):
         return name.startswith('TRỰC') or name in CA_TRUC_CODES
 
+    # Hàm nhận diện loại nghỉ
     def detect_nghi_type(name):
         name = name.upper().strip()
-        if 'NBC' in name or 'NBS' in name:
-            return 'NBC'
-        if 'NB' in name or 'NGHỈ BÙ' in name:
-            return 'NB'
-        if '/X' in name or '1/2' in name:
+
+        # NB nửa ngày (NBS, NBC hoặc có 1/2) → hiển thị /X
+        if 'NBS' in name or 'NBC' in name or '1/2' in name:
             return '/X'
+
+        # NB nguyên ngày
+        if name == 'NB' or 'NGHỈ BÙ' in name:
+            return 'NB'
+
+        # Nghỉ trực nguyên ngày
         if 'NT' in name or 'NGHỈ TRỰC' in name:
             return 'NT'
+
+        # Nghỉ 1/2 ngày khác
+        if '/X' in name:
+            return '/X'
+
         return None
 
     # Tính số dư tháng trước
@@ -4468,7 +4478,7 @@ def report_compensations():
             prev_comp[s.user_id] += 1
         if nghi_type == 'NB':
             prev_comp[s.user_id] -= 1
-        elif nghi_type in ['NBC', '/X']:
+        elif nghi_type == '/X':
             prev_comp[s.user_id] -= 0.5
         elif nghi_type == 'NT':
             prev_comp[s.user_id] -= 1
@@ -4509,6 +4519,10 @@ def report_compensations():
             shift_name = s.shift.name.strip().upper()
             nghi_type = detect_nghi_type(shift_name)
 
+            # Ẩn chữ "LÀM NGÀY" (bỏ qua không hiển thị)
+            if 'LÀM NGÀY' in shift_name or shift_name == 'X':
+                continue
+
             if is_ca_truc(shift_name):
                 users_data[uid]['days'][day_str] = 'XĐ'
                 total += 1
@@ -4516,7 +4530,7 @@ def report_compensations():
                 users_data[uid]['days'][day_str] = nghi_type
                 if nghi_type == 'NB':
                     total -= 1
-                elif nghi_type in ['NBC', '/X']:
+                elif nghi_type == '/X':
                     total -= 0.5
                 elif nghi_type == 'NT':
                     total -= 1
@@ -4555,6 +4569,7 @@ def report_compensations():
         start=start_date.strftime('%Y-%m-%d'),
         end=end_date.strftime('%Y-%m-%d')
     )
+
 
 @app.before_first_request
 def create_missing_tables():
