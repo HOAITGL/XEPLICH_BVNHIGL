@@ -1026,7 +1026,6 @@ def view_schedule():
     if user_role == 'admin':
         selected_department = request.args.get('department')
     else:
-        # Manager và user luôn xem khoa của mình
         selected_department = user_dept
 
     # Danh sách khoa
@@ -1047,19 +1046,22 @@ def view_schedule():
         end_date = start_date + timedelta(days=6)
 
     # Lấy lịch trực
-    query = Schedule.query.join(User).join(Shift)\
+    query = Schedule.query.join(User).join(Shift) \
         .filter(Schedule.work_date.between(start_date, end_date))
     if selected_department:
         query = query.filter(User.department == selected_department)
 
     schedules = query.order_by(Schedule.work_date).all()
-    print(">>> Các ngày có lịch trực:", sorted({s.work_date for s in schedules}))
     date_range = [start_date + timedelta(days=i) for i in range((end_date - start_date).days + 1)]
 
     # Chuẩn bị dữ liệu lịch trực
     schedule_data = {}
     for s in schedules:
         u = s.user
+        # Bỏ qua Hộ lý
+        if u.position and u.position.upper() == 'HL':
+            continue
+
         if u.id not in schedule_data:
             schedule_data[u.id] = {
                 'id': u.id,
@@ -1083,7 +1085,7 @@ def view_schedule():
         filtered_shifts = {}
         for work_date, shifts in data['shifts_full'].items():
             ca_truc = [
-                ca for ca in shifts 
+                ca for ca in shifts
                 if 'trực' in ca['shift_name'].lower() and 'nghỉ' not in ca['shift_name'].lower()
             ]
             if ca_truc:
@@ -1097,6 +1099,16 @@ def view_schedule():
                 'department': data['department'],
                 'shifts_full': filtered_shifts
             }
+
+    # Sắp xếp theo thứ tự ưu tiên
+    priority_order = ['GĐ', 'PGĐ', 'TK', 'TP', 'PTK', 'PTP', 'PK', 'PP', 'BS', 'ĐDT', 'KTVT','KTV', 'ĐD', 'NV']
+
+    def get_priority(pos):
+        pos = pos.upper() if pos else ''
+        return priority_order.index(pos) if pos in priority_order else 999
+
+    schedule_data = dict(sorted(schedule_data.items(), key=lambda item: (get_priority(item[1]['position']), item[1]['name'])))
+    filtered_for_print = dict(sorted(filtered_for_print.items(), key=lambda item: (get_priority(item[1]['position']), item[1]['name'])))
 
     # Kiểm tra chữ ký
     signature = ScheduleSignature.query.filter_by(
@@ -1119,8 +1131,8 @@ def view_schedule():
         'schedule.html',
         departments=departments,
         selected_department=selected_department,
-        schedule_data=schedule_data,           # 👉 dữ liệu đầy đủ cho bảng chính
-        print_data=filtered_for_print,         # 👉 chỉ dùng khi cần riêng (Excel, xuất in khác)
+        schedule_data=schedule_data,
+        print_data=filtered_for_print,
         date_range=date_range,
         start_date=start_date,
         end_date=end_date,
@@ -1133,7 +1145,7 @@ def view_schedule():
             'department': user_dept,
             'name': session.get('name')
         }
-    )                                                             
+    )
 
 @app.route('/schedule/edit/<int:user_id>', methods=['GET', 'POST'])
 def edit_user_schedule(user_id):
