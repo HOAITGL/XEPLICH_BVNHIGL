@@ -2266,7 +2266,7 @@ def bang_cham_cong():
         else:
             query = query.filter(User.contract_type.ilike(selected_contract))
 
-    priority_order = ['TK', 'TP', 'PTK', 'PTP', 'BS', 'BSCK1', 'BSCK2', 'ĐDT', 'KTV', 'ĐD',  'NV', 'HL', 'BV']
+    priority_order = ['TK', 'TP', 'PTK', 'PTP', 'BS', 'BSCK1', 'BSCK2', 'ĐDT', 'KTVT','KTV', 'ĐD',  'NV', 'HL', 'BV']
 
     def sort_by_position(user):
         position = (user.position or '').upper().strip()
@@ -2299,12 +2299,12 @@ def bang_cham_cong():
 
         if code == "KL":
             summary[s.user_id]['kl'] += 1
-        elif code in ["X", "XĐ", "XĐ16", "XĐ24", "XĐ2", "XĐ3", "XĐL16", "XĐL24"] or code.startswith("XĐ") or code.startswith("XĐL"):
+        elif code in ["X", "/X", "XĐ", "XĐ16", "XĐ24", "XĐ2", "XĐ3", "XĐL16", "XĐL24"] or code.startswith("XĐ") or code.startswith("XĐL"):
             summary[s.user_id]['tg'] += 1
         elif code in ["/X", "/NT"]:
             summary[s.user_id]['tg'] += 0.5
             summary[s.user_id]['100'] += 0.5
-        elif code in ["NB", "P", "H", "CT", "L", "NT", "PC", "NBL", "PT"]:
+        elif code in ["NB", "P", "H", "CT", "L", "NT", "PC", "NBL", "PT","NBS","NBC"]:
             summary[s.user_id]['100'] += 1
         elif code in ["Ô", "CÔ", "DS", "TS", "TN"]:
             summary[s.user_id]['bhxh'] += 1
@@ -2399,8 +2399,8 @@ def export_cham_cong():
         vals = [schedule_map.get((uid, d), '') for d in days]
         return {
             'kl': vals.count('KL'),
-            'tg': sum(1 for c in vals if c in ["X", "XĐ", "XĐ16", "XĐ24", "XĐ2", "XĐ3", "XĐL16", "XĐL24"] or c.startswith("XĐ")),
-            '100': sum(1 for c in vals if c in ["NB", "P", "H", "CT", "L", "NT", "PC", "NBL", "PT"]),
+            'tg': sum(1 for c in vals if c in ["X", "/X", "XĐ", "XĐ16", "XĐ24", "XĐ2", "XĐ3", "XĐL16", "XĐL24"] or c.startswith("XĐ")),
+            '100': sum(1 for c in vals if c in ["NB", "P", "H", "CT", "L", "NT", "PC", "NBL", "PT","NBS","NBC"]),
             'bhxh': sum(1 for c in vals if c in ["Ô", "CÔ", "DS", "TS", "TN"])
         }
 
@@ -3414,8 +3414,9 @@ def tong_hop_cong_truc_view():
         if 'thường trú' in shift_name:
             continue
 
-        # ⚠️ Bỏ qua ca không tính công trực
-        if shift_name in ['nghỉ trực', 'nghỉ phép', 'làm ngày', 'làm 1/2 ngày', 'làm 1/2 ngày c']:
+        # Bỏ qua ca không tính công trực (bao gồm phòng khám)
+        skip_keywords = ['nghỉ trực', 'nghỉ phép', 'làm ngày', 'làm 1/2 ngày', 'làm 1/2 ngày c', 'phòng khám']
+        if any(x in shift_name for x in skip_keywords):
             continue
 
         # Áp dụng theo chế độ

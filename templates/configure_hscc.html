@@ -1,5 +1,12 @@
 {% extends 'layout.html' %}
 {% block content %}
+{% if unit_config %}
+<div class="text-center mb-3">
+  <h3 class="mb-0">{{ unit_config.name }}</h3>
+  <p class="mb-0">{{ unit_config.address }} - {{ unit_config.phone }}</p>
+</div>
+{% endif %}
+
 <h3>🧪 Thiết lập khoa trực Hồi sức cấp cứu (HSCC)</h3>
 
 <!-- Form thêm khoa mới -->

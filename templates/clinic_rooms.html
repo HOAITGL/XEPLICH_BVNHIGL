@@ -2,6 +2,13 @@
 {% block title %}Quản lý Phòng khám{% endblock %}
 
 {% block content %}
+{% if unit_config %}
+<div class="text-center mb-3">
+  <h3 class="mb-0">{{ unit_config.name }}</h3>
+  <p class="mb-0">{{ unit_config.address }} - {{ unit_config.phone }}</p>
+</div>
+{% endif %}
+
 <div class="container">
   <h2 class="my-3">Quản lý Phòng khám</h2>
   <form method="POST" action="/clinic-rooms/add" class="mb-3 d-flex gap-2">

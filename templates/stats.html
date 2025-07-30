@@ -1,6 +1,13 @@
 {% extends 'layout.html' %}
 {% block title %}Thống kê{% endblock %}
 {% block content %}
+{% if unit_config %}
+<div class="text-center mb-3">
+  <h3 class="mb-0">{{ unit_config.name }}</h3>
+  <p class="mb-0">{{ unit_config.address }} - {{ unit_config.phone }}</p>
+</div>
+{% endif %}
+
 <h2>📊 Thống kê tổng hợp</h2>
 <ul>
     <li>Tổng nhân sự: {{ total_users }}</li>

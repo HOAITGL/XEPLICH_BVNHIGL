@@ -2,6 +2,13 @@
 {% block title %}Cấu hình đơn vị{% endblock %}
 
 {% block content %}
+{% if unit_config %}
+<div class="text-center mb-3">
+  <h3 class="mb-0">{{ unit_config.name }}</h3>
+  <p class="mb-0">{{ unit_config.address }} - {{ unit_config.phone }}</p>
+</div>
+{% endif %}
+
 <h2>🏥 Khai báo thông tin đơn vị</h2>
 
 {% with messages = get_flashed_messages(with_categories=true) %}

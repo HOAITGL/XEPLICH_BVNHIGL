@@ -6,7 +6,9 @@
 <div class="d-none d-print-block text-center mb-3">
   <div class="row">
     <div class="col-6 text-center">
-      <strong>BỆNH VIỆN NHI TỈNH GIA LAI</strong><br>
+      <strong>{{ unit_config.name if unit_config else 'Tên đơn vị' }}</strong><br>
+      <span>{{ unit_config.address if unit_config else '' }}</span><br>
+      <span>{{ unit_config.phone if unit_config else '' }}</span><br>
       {% if selected_department %}
         <span style="font-weight:bold; border-bottom:1px solid black;">
           {{ selected_department.upper() }}

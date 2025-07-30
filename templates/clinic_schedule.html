@@ -15,7 +15,9 @@
 <body onload="window.print()">
     <table>
         <tr>
-            <td class="header-center" colspan="3"><strong>BỆNH VIỆN NHI TỈNH GIA LAI</strong></td>
+            <td class="header-center" colspan="3"><strong>{{ unit_config.name if unit_config else 'Tên đơn vị' }}<br>
+<span>{{ unit_config.address if unit_config else '' }}</span><br>
+<span>{{ unit_config.phone if unit_config else '' }}</span></strong></td>
             <td class="header-center" colspan="4">
                 <strong>CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</strong><br>
                 Độc lập - Tự do - Hạnh phúc<br>

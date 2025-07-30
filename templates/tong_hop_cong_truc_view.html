@@ -3,6 +3,13 @@
 {% block title %}Bảng tổng hợp công trực{% endblock %}
 
 {% block content %}
+{% if unit_config %}
+<div class="text-center mb-3">
+  <h3 class="mb-0">{{ unit_config.name }}</h3>
+  <p class="mb-0">{{ unit_config.address }} - {{ unit_config.phone }}</p>
+</div>
+{% endif %}
+
 <h4 class="text-center mb-3">📊 BẢNG TỔNG HỢP CÔNG TRỰC THÁNG {{ thang }}/{{ nam }}</h4>
 
 <form class="row g-2 mb-3" method="get" action="{{ url_for('tong_hop_cong_truc_view') }}">

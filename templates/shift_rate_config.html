@@ -3,6 +3,13 @@
 {% block title %}Cấu hình tiền trực{% endblock %}
 
 {% block content %}
+{% if unit_config %}
+<div class="text-center mb-3">
+  <h3 class="mb-0">{{ unit_config.name }}</h3>
+  <p class="mb-0">{{ unit_config.address }} - {{ unit_config.phone }}</p>
+</div>
+{% endif %}
+
 <h2>⚙️ Cấu hình tiền trực</h2>
 
 <form method="post" class="mb-4">
