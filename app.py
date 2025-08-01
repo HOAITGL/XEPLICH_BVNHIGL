@@ -32,6 +32,7 @@ from models.hazard_config import HazardConfig
 from datetime import date
 import calendar
 from models import User, Shift, HazardConfig, ChamCong
+from sqlalchemy import text as sql_text
 
 from logging.handlers import RotatingFileHandler
 import logging, os
@@ -66,6 +67,37 @@ app.secret_key = 'lichtruc2025'
 
 db.init_app(app)
 migrate = Migrate(app, db)
+
+from sqlalchemy import text
+
+@app.before_first_request
+def add_missing_columns():
+    with app.app_context():
+        required_columns = {
+            'shift': [
+                ('order', 'INTEGER DEFAULT 0')
+            ]
+        }
+
+        for table, columns in required_columns.items():
+            existing_cols = db.session.execute(sql_text(f"PRAGMA table_info({table});")).fetchall()
+            existing_col_names = [col[1] for col in existing_cols]
+
+            for col_name, col_type in columns:
+                if col_name not in existing_col_names:
+                    db.session.execute(sql_text(f'ALTER TABLE {table} ADD COLUMN "{col_name}" {col_type};'))
+                    db.session.commit()
+                    print(f"Đã thêm cột '{col_name}' vào bảng {table}.")
+
+                    # Nếu là bảng shift → gán giá trị mặc định
+                    if table == 'shift' and col_name == 'order':
+                        shifts = Shift.query.order_by(Shift.id).all()
+                        for i, s in enumerate(shifts):
+                            s.order = i
+                        db.session.commit()
+                        print("Đã cập nhật giá trị mặc định cho cột 'order' của bảng shift.")
+                else:
+                    print(f"Cột '{col_name}' đã tồn tại trong bảng {table}, bỏ qua.")
 
 # ✅ Tạo bảng nếu thiếu (dùng cho Render khi không gọi __main__)
 with app.app_context():
@@ -1017,6 +1049,8 @@ from models.schedule import Schedule
 
 from utils.unit_config import get_unit_config
 
+from sqlalchemy import text as sql_text
+
 @app.route('/schedule', methods=['GET', 'POST'])
 def view_schedule():
     user_role = session.get('role')
@@ -1068,6 +1102,7 @@ def view_schedule():
                 'name': u.name,
                 'position': u.position,
                 'department': u.department,
+                'contract_type': getattr(u, 'contract_type', None),  # Thêm loại hợp đồng
                 'shifts': {},
                 'shifts_full': {}
             }
@@ -1097,18 +1132,40 @@ def view_schedule():
                 'name': data['name'],
                 'position': data['position'],
                 'department': data['department'],
+                'contract_type': data['contract_type'],  # Thêm vào print data
                 'shifts_full': filtered_shifts
             }
 
-    # Sắp xếp theo thứ tự ưu tiên
-    priority_order = ['GĐ', 'PGĐ', 'TK', 'TP', 'PTK', 'PTP', 'PK', 'PP', 'BS', 'ĐDT', 'KTVT','KTV', 'ĐD', 'NV']
+    # Thứ tự chức danh
+    priority_order = ['GĐ', 'PGĐ', 'TK', 'TP', 'PTK', 'PTP', 'PK', 'PP', 'BS', 'ĐDT', 'KTVT', 'KTV', 'ĐD', 'NV', 'HL']
 
     def get_priority(pos):
         pos = pos.upper() if pos else ''
         return priority_order.index(pos) if pos in priority_order else 999
 
-    schedule_data = dict(sorted(schedule_data.items(), key=lambda item: (get_priority(item[1]['position']), item[1]['name'])))
-    filtered_for_print = dict(sorted(filtered_for_print.items(), key=lambda item: (get_priority(item[1]['position']), item[1]['name'])))
+    def get_contract_priority(contract_type):
+        if contract_type and 'biên' in contract_type.lower():
+            return 0  # Ưu tiên biên chế
+        return 1  # Hợp đồng sau
+
+    # Sắp xếp với ưu tiên chức danh + loại hợp đồng
+    schedule_data = dict(sorted(
+        schedule_data.items(),
+        key=lambda item: (
+            get_priority(item[1]['position']),
+            get_contract_priority(item[1]['contract_type']),
+            item[1]['name']
+        )
+    ))
+
+    filtered_for_print = dict(sorted(
+        filtered_for_print.items(),
+        key=lambda item: (
+            get_priority(item[1]['position']),
+            get_contract_priority(item[1]['contract_type']),
+            item[1]['name']
+        )
+    ))
 
     # Kiểm tra chữ ký
     signature = ScheduleSignature.query.filter_by(
@@ -1608,7 +1665,11 @@ def export_excel():
 
 @app.route('/shifts')
 def list_shifts():
-    shifts = Shift.query.all()
+    try:
+        shifts = Shift.query.order_by(Shift.order).all()
+    except Exception:
+        shifts = Shift.query.order_by(Shift.id).all()
+
     return render_template('shifts.html', shifts=shifts)
 
 from flask import render_template, request, redirect, flash
@@ -1635,10 +1696,16 @@ def add_shift():
             end_time = parse_time_string(request.form['end_time'])
             duration = float(duration)
         except ValueError as e:
-            flash(str(e), 'danger')  # 🟢 Thông báo lỗi bằng tiếng Việt tại đây
+            flash(str(e), 'danger')
             return render_template('add_shift.html', old=request.form)
 
-        shift = Shift(name=name, code=code, start_time=start_time, end_time=end_time, duration=duration)
+        # Lấy order lớn nhất + 1
+        max_order = db.session.query(db.func.max(Shift.order)).scalar() or 0
+        new_order = max_order + 1
+
+        shift = Shift(name=name, code=code, start_time=start_time,
+                      end_time=end_time, duration=duration, order=new_order)
+
         db.session.add(shift)
         db.session.commit()
 
@@ -1649,6 +1716,37 @@ def add_shift():
         return redirect('/shifts')
 
     return render_template('add_shift.html')
+
+@app.route('/shifts/move_up/<int:shift_id>', methods=['POST'])
+def move_shift_up(shift_id):
+    shift = Shift.query.get_or_404(shift_id)
+
+    above_shift = Shift.query.filter(Shift.order < shift.order)\
+                             .order_by(Shift.order.desc()).first()
+
+    if above_shift:
+        shift.order, above_shift.order = above_shift.order, shift.order
+        db.session.commit()
+    else:
+        flash("Đã ở vị trí đầu tiên, không thể di chuyển lên.", "info")
+
+    return redirect('/shifts')
+
+@app.route('/shifts/move_down/<int:shift_id>', methods=['POST'])
+def move_shift_down(shift_id):
+    shift = Shift.query.get_or_404(shift_id)
+
+    below_shift = Shift.query.filter(Shift.order > shift.order)\
+                             .order_by(Shift.order.asc()).first()
+
+    if below_shift:
+        shift.order, below_shift.order = below_shift.order, shift.order
+        db.session.commit()
+    else:
+        flash("Đã ở vị trí cuối cùng, không thể di chuyển xuống.", "info")
+
+    return redirect('/shifts')
+
 
 from flask import request, redirect, flash
 import openpyxl

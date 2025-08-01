@@ -8,7 +8,9 @@ class Shift(db.Model):
     start_time = Column(Time, nullable=False)
     end_time = Column(Time, nullable=False)
     duration = Column(Float, nullable=False)
+    order = Column(Integer, default=0)  # ➕ Cột sắp xếp
 
     def __repr__(self):
         return f"<Shift {self.name} ({self.code})>"
+
 
