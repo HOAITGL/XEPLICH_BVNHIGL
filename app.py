@@ -1071,8 +1071,6 @@ from models.schedule import Schedule
 
 from utils.unit_config import get_unit_config
 
-from sqlalchemy import text as sql_text
-
 @app.route('/schedule', methods=['GET', 'POST'])
 def view_schedule():
     user_role = session.get('role')
