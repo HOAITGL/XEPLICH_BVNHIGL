@@ -76,6 +76,9 @@ def add_missing_columns():
         required_columns = {
             'shift': [
                 ('order', 'INTEGER DEFAULT 0')
+            ],
+            'user': [
+                ('contract_type', 'TEXT')  # Thêm kiểm tra cột hợp đồng
             ]
         }
 
