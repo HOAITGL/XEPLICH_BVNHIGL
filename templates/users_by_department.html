@@ -50,7 +50,7 @@
   </div>
   {% endif %}
 
-  <table class="table table-bordered">
+  <table class="table table-bordered table-striped">
     <thead class="table-dark">
       <tr>
         <th>Họ tên</th>
@@ -71,13 +71,13 @@
         <td>{{ user.role or '' }}</td>
         <td>{{ user.department }}</td>
         <td>{{ user.position or '' }}</td>
-        <td>{{ user.contract_type or '' }}</td>
+        <td>{{ user.contract_type or 'Chưa thiết lập' }}</td>
         <td>{{ user.phone or '' }}</td>
         <td>
           <a href="{{ url_for('edit_user', user_id=user.id) }}" class="btn btn-sm btn-primary">Sửa</a>
           <form action="{{ url_for('delete_user', user_id=user.id) }}" method="POST" class="d-inline" onsubmit="return confirm('Xác nhận xoá nhân viên này?')">
-  	    <button type="submit" class="btn btn-sm btn-danger">Xoá</button>
-	  </form>
+            <button type="submit" class="btn btn-sm btn-danger">Xoá</button>
+          </form>
           <a href="{{ url_for('deactivate_user', user_id=user.id) }}" class="btn btn-warning btn-sm">Ngừng</a>
         </td>
       </tr>

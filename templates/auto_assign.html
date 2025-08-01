@@ -22,7 +22,7 @@
 </form>
 
 {% if users %}
-<form method="POST" action="{{ url_for('generate_schedule_route') }}">
+<form id="autoAssignForm" method="POST" action="{{ url_for('generate_schedule_route') }}">
   <input type="hidden" name="department" value="{{ selected_department }}">
 
   <div class="row g-3 align-items-end mb-3">
@@ -55,18 +55,56 @@
   <hr>
 
   <div class="mb-3">
-    <label class="form-label">Chọn nhân viên:</label>
+    <label class="form-label">Chọn nhân viên (click để sắp thứ tự):</label>
     <div class="row">
       {% for user in users %}
         <div class="col-md-3 col-sm-4 col-6">
           <div class="form-check">
-            <input class="form-check-input" type="checkbox" name="user_ids" value="{{ user.id }}" id="user{{ user.id }}">
-            <label class="form-check-label" for="user{{ user.id }}">{{ user.name }} ({{ user.position }})</label>
+            <input class="form-check-input user-checkbox" type="checkbox" value="{{ user.id }}" id="user{{ user.id }}">
+            <label class="form-check-label" for="user{{ user.id }}">
+              {{ user.name }} ({{ user.position }})
+              <span class="order-badge" style="font-weight:bold;color:blue;"></span>
+            </label>
           </div>
         </div>
       {% endfor %}
     </div>
   </div>
 </form>
+
+<script>
+let clickOrder = [];
+
+// Xử lý khi click chọn/ bỏ chọn
+document.querySelectorAll('.user-checkbox').forEach(cb => {
+  cb.addEventListener('change', function () {
+    const userId = this.value;
+
+    if (this.checked) {
+      clickOrder.push(userId);
+    } else {
+      clickOrder = clickOrder.filter(id => id !== userId);
+    }
+
+    // Cập nhật badge hiển thị thứ tự
+    document.querySelectorAll('.user-checkbox').forEach(cb2 => {
+      const badge = cb2.parentElement.querySelector('.order-badge');
+      const index = clickOrder.indexOf(cb2.value);
+      badge.textContent = index >= 0 ? `#${index + 1}` : '';
+    });
+  });
+});
+
+// Trước khi submit: thêm input hidden theo thứ tự click
+document.getElementById('autoAssignForm').addEventListener('submit', function () {
+  clickOrder.forEach(id => {
+    const hiddenInput = document.createElement('input');
+    hiddenInput.type = 'hidden';
+    hiddenInput.name = 'ordered_user_ids';
+    hiddenInput.value = id;
+    this.appendChild(hiddenInput);
+  });
+});
+</script>
 {% endif %}
 {% endblock %}
