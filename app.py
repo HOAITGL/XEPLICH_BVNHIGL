@@ -73,27 +73,39 @@ from sqlalchemy import text
 @app.before_first_request
 def add_missing_columns():
     with app.app_context():
+        # Danh sách cột cần kiểm tra
         required_columns = {
             'shift': [
                 ('order', 'INTEGER DEFAULT 0')
             ],
             'user': [
-                ('contract_type', 'TEXT')  # kiểm tra thêm cột này
+                ('contract_type', 'TEXT')
             ]
         }
 
         for table, columns in required_columns.items():
-            existing_cols = db.session.execute(sql_text(f"PRAGMA table_info({table});")).fetchall()
-            existing_col_names = [col[1] for col in existing_cols]
-
             for col_name, col_type in columns:
-                if col_name not in existing_col_names:
-                    # Thêm cột nếu chưa tồn tại
+                # Kiểm tra cột tồn tại
+                if 'postgres' in db.engine.url.drivername:
+                    # Postgres: kiểm tra qua information_schema
+                    check_col = db.session.execute(sql_text(f"""
+                        SELECT column_name FROM information_schema.columns
+                        WHERE table_name='{table}' AND column_name='{col_name}';
+                    """)).fetchall()
+                    column_exists = len(check_col) > 0
+                else:
+                    # SQLite: kiểm tra qua PRAGMA
+                    existing_cols = db.session.execute(sql_text(f"PRAGMA table_info({table});")).fetchall()
+                    existing_col_names = [col[1] for col in existing_cols]
+                    column_exists = col_name in existing_col_names
+
+                # Nếu chưa có cột thì thêm
+                if not column_exists:
                     db.session.execute(sql_text(f'ALTER TABLE {table} ADD COLUMN "{col_name}" {col_type};'))
                     db.session.commit()
                     print(f"Đã thêm cột '{col_name}' vào bảng {table}.")
 
-                    # Nếu là cột order trong bảng shift → cập nhật thứ tự mặc định
+                    # Nếu là cột order trong shift → cập nhật giá trị mặc định
                     if table == 'shift' and col_name == 'order':
                         shifts = Shift.query.order_by(Shift.id).all()
                         for i, s in enumerate(shifts):
@@ -101,9 +113,9 @@ def add_missing_columns():
                         db.session.commit()
                         print("Đã cập nhật giá trị mặc định cho cột 'order'.")
 
-                    # Nếu là cột contract_type trong bảng user → set mặc định 'biên chế'
+                    # Nếu là cột contract_type trong user → set mặc định 'biên chế'
                     if table == 'user' and col_name == 'contract_type':
-                        db.session.execute(sql_text("UPDATE user SET contract_type = 'biên chế' WHERE contract_type IS NULL;"))
+                        db.session.execute(sql_text("UPDATE \"user\" SET contract_type = 'biên chế' WHERE contract_type IS NULL;"))
                         db.session.commit()
                         print("Đã set mặc định contract_type = 'biên chế' cho tất cả user cũ.")
                 else:
