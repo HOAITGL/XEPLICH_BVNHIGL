@@ -78,7 +78,7 @@ def add_missing_columns():
                 ('order', 'INTEGER DEFAULT 0')
             ],
             'user': [
-                ('contract_type', 'TEXT')  # Thêm kiểm tra cột hợp đồng
+                ('contract_type', 'TEXT')  # kiểm tra thêm cột này
             ]
         }
 
@@ -88,17 +88,24 @@ def add_missing_columns():
 
             for col_name, col_type in columns:
                 if col_name not in existing_col_names:
+                    # Thêm cột nếu chưa tồn tại
                     db.session.execute(sql_text(f'ALTER TABLE {table} ADD COLUMN "{col_name}" {col_type};'))
                     db.session.commit()
                     print(f"Đã thêm cột '{col_name}' vào bảng {table}.")
 
-                    # Nếu là bảng shift → gán giá trị mặc định
+                    # Nếu là cột order trong bảng shift → cập nhật thứ tự mặc định
                     if table == 'shift' and col_name == 'order':
                         shifts = Shift.query.order_by(Shift.id).all()
                         for i, s in enumerate(shifts):
                             s.order = i
                         db.session.commit()
-                        print("Đã cập nhật giá trị mặc định cho cột 'order' của bảng shift.")
+                        print("Đã cập nhật giá trị mặc định cho cột 'order'.")
+
+                    # Nếu là cột contract_type trong bảng user → set mặc định 'biên chế'
+                    if table == 'user' and col_name == 'contract_type':
+                        db.session.execute(sql_text("UPDATE user SET contract_type = 'biên chế' WHERE contract_type IS NULL;"))
+                        db.session.commit()
+                        print("Đã set mặc định contract_type = 'biên chế' cho tất cả user cũ.")
                 else:
                     print(f"Cột '{col_name}' đã tồn tại trong bảng {table}, bỏ qua.")
 
