@@ -3471,7 +3471,8 @@ def shift_payment_view():
             return 'ngày_thường'
         
     ca_chon = request.args.get('mode', '16h')
-    selected_department = request.args.get('department', 'all')
+    selected_department = request.args.get('department')
+
     start_date = request.args.get('start_date')
     end_date = request.args.get('end_date')
 
@@ -3489,10 +3490,16 @@ def shift_payment_view():
         end_date_dt = datetime.strptime(end_date, '%Y-%m-%d').date()
 
     # Danh sách khoa
-    if user_role == 'admin':
-        departments = [d[0] for d in db.session.query(User.department).distinct() if d[0]]
+    if user_role in ['admin', 'admin1']:
+        departments = sorted([d[0] for d in db.session.query(User.department)
+                              .filter(User.department.isnot(None))
+                              .distinct().all()])
+        departments.insert(0, 'Tất cả')
+        if not selected_department:
+            selected_department = 'Tất cả'
     else:
-        departments = [user_dept]
+        # User thường chỉ thấy khoa của mình
+        departments = [user_dept] if user_dept else []
         selected_department = user_dept
 
     hscc_depts = [d.department_name for d in HSCCDepartment.query.all()]
@@ -3505,7 +3512,8 @@ def shift_payment_view():
         .filter(Schedule.work_date >= start_date_dt, Schedule.work_date <= end_date_dt)
         .filter(Shift.duration == (16 if ca_chon == '16h' else 24))
     )
-    if selected_department != 'all':
+    # Nếu không phải "Tất cả" mới lọc theo khoa
+    if selected_department not in ['Tất cả', None]:
         query = query.filter(User.department == selected_department)
 
     schedules = query.all()
@@ -3600,12 +3608,16 @@ def tong_hop_cong_truc_view():
     user_dept = session.get('department')
 
     # --- Xử lý khoa được chọn ---
-    selected_department = request.args.get('department', '')
-    if user_role == 'admin':
-        departments = [d[0] for d in db.session.query(User.department).distinct() if d[0]]
+    if user_role in ['admin', 'admin1']:
+        # Admin xem tất cả
+        departments = sorted([d[0] for d in db.session.query(User.department)
+                            .filter(User.department.isnot(None))
+                            .distinct().all()])
+        departments.insert(0, 'Tất cả')
     else:
-        departments = [user_dept]
-        selected_department = user_dept  # Ép khoa người dùng nếu không phải admin
+        # User thường chỉ thấy khoa của mình
+        departments = [user_dept] if user_dept else []
+        selected_department = user_dept
 
     # --- Xử lý ngày bắt đầu/kết thúc ---
     start_date = request.args.get('start_date')
@@ -3641,7 +3653,7 @@ def tong_hop_cong_truc_view():
 
     # --- Query lịch trực trong khoảng ---
     query = Schedule.query.join(User).join(Shift).filter(Schedule.work_date.between(start_date, end_date))
-    if selected_department and selected_department != 'all':
+    if selected_department and selected_department not in ['all', 'Tất cả']:
         query = query.filter(User.department.ilike(selected_department))
 
     schedules = query.all()
@@ -3786,7 +3798,7 @@ def tong_hop_cong_truc_print():
 
     # --- Query dữ liệu lịch trực ---
     query = Schedule.query.join(User).join(Shift).filter(Schedule.work_date.between(start_date, end_date))
-    if selected_department and selected_department != 'all':
+    if selected_department and selected_department not in ['all', 'Tất cả']:
         query = query.filter(User.department.ilike(selected_department))
 
     schedules = query.all()
