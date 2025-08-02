@@ -3599,6 +3599,25 @@ def tong_hop_cong_truc_view():
     mode = request.args.get('mode', '16h')  # '16h' hoặc '24h'
 
     today = datetime.now()
+
+    # ---- Kiểm tra nếu chưa chọn ngày ----
+    if not start_date or not end_date:
+        return render_template(
+            'tong_hop_cong_truc_view.html',
+            rows=[],
+            sum_row={},
+            departments=departments,
+            selected_department=selected_department,
+            start_date=start_date,
+            end_date=end_date,
+            default_start=start_date,
+            default_end=end_date,
+            thang=today.month,
+            nam=today.year,
+            mode=mode,
+            error_message="Bạn chưa chọn ngày bắt đầu và ngày kết thúc để xem báo cáo!"
+        )
+
     try:
         thang = int(start_date.split('-')[1])
         nam = int(start_date.split('-')[0])
@@ -3666,6 +3685,15 @@ def tong_hop_cong_truc_view():
     user_ids = list(result_by_user.keys())
     users = User.query.filter(User.id.in_(user_ids), User.role != 'admin').all() if user_ids else []
 
+    # --- Hàm ưu tiên chức vụ ---
+    priority_order = ['GĐ', 'PGĐ', 'TK', 'PTK', 'PK', 'BS', 'ĐDT', 'ĐD', 'KTV', 'NV', 'HL', 'BV']
+    def get_priority(pos):
+        pos = pos.upper() if pos else ''
+        for i, p in enumerate(priority_order):
+            if p in pos:
+                return i
+        return len(priority_order)
+
     # --- Chuẩn bị dữ liệu hiển thị ---
     rows = []
     for user in users:
@@ -3676,6 +3704,9 @@ def tong_hop_cong_truc_view():
             'tong_ngay': sum([v['so_ngay'] for v in detail.values()]),
             'ghi_chu': ''
         })
+
+    # --- Sắp xếp theo chức vụ ưu tiên ---
+    rows.sort(key=lambda x: get_priority(x['user'].position))
 
     sum_row = {
         'detail': summary,
@@ -3697,6 +3728,7 @@ def tong_hop_cong_truc_view():
         mode=mode
     )
 
+
 @app.route('/tong-hop-cong-truc-print')
 @login_required
 def tong_hop_cong_truc_print():
@@ -3713,6 +3745,24 @@ def tong_hop_cong_truc_print():
     mode = request.args.get('mode', '16h')
 
     today = datetime.now()
+
+    # ---- Kiểm tra nếu chưa chọn ngày ----
+    if not start_date or not end_date:
+        return render_template(
+            'tong_hop_cong_truc.html',
+            rows=[],
+            sum_row={},
+            selected_department=selected_department,
+            start_date=start_date,
+            current_day=today.day,
+            current_month=today.month,
+            current_year=today.year,
+            thang=today.month,
+            nam=today.year,
+            mode=mode,
+            error_message="Bạn chưa chọn ngày bắt đầu và ngày kết thúc để in báo cáo!"
+        )
+
     try:
         thang = int(start_date.split('-')[1])
         nam = int(start_date.split('-')[0])
@@ -3776,6 +3826,15 @@ def tong_hop_cong_truc_print():
     user_ids = list(result_by_user.keys())
     users = User.query.filter(User.id.in_(user_ids)).all() if user_ids else []
 
+    # --- Hàm ưu tiên chức vụ ---
+    priority_order = ['GĐ', 'PGĐ', 'TK', 'PTK', 'PK', 'BS', 'ĐDT', 'ĐD', 'KTV', 'NV', 'HL', 'BV']
+    def get_priority(pos):
+        pos = pos.upper() if pos else ''
+        for i, p in enumerate(priority_order):
+            if p in pos:
+                return i
+        return len(priority_order)
+
     rows = []
     for user in users:
         detail = result_by_user[user.id]
@@ -3785,6 +3844,9 @@ def tong_hop_cong_truc_print():
             'tong_ngay': sum([v['so_ngay'] for v in detail.values()]),
             'ghi_chu': ''
         })
+
+    # --- Sắp xếp theo chức vụ ưu tiên ---
+    rows.sort(key=lambda x: get_priority(x['user'].position))
 
     sum_row = {
         'detail': summary,
