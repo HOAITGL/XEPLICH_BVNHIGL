@@ -826,7 +826,7 @@ def export_leave_word(leave_id):
 def test_export():
     return "Route hoạt động"
 
-@app.route('/assign', methods=['GET', 'POST'])
+@app.route('/assign', methods=['GET', 'POST']) 
 def assign_schedule():
     user_role = session.get('role')
     user_dept = session.get('department')
@@ -846,6 +846,18 @@ def assign_schedule():
 
     # Lấy danh sách nhân sự theo khoa
     users = User.query.filter_by(department=selected_department).all() if selected_department else []
+
+    # --- Sắp xếp theo thứ tự chức danh ---
+    priority_order = ['GĐ', 'PGĐ', 'TK', 'TP', 'PTK', 'PP', 'PK', 'BS', 'ĐDT', 'ĐD', 'KTV', 'NV', 'HL', 'BV', 'LX']
+
+    def get_priority(pos):
+        pos = pos.upper() if pos else ''
+        for i, p in enumerate(priority_order):
+            if p in pos:
+                return i
+        return len(priority_order)  # Nếu không khớp, cho xuống cuối
+
+    users.sort(key=lambda x: get_priority(x.position))
 
     # **Sửa chỗ này: Lấy shifts theo thứ tự `order`**
     shifts = Shift.query.order_by(Shift.order).all()
@@ -1156,9 +1168,7 @@ def view_schedule():
     schedule_data = {}
     for s in schedules:
         u = s.user
-        # Bỏ qua Hộ lý
-        if u.position and u.position.upper() == 'HL':
-            continue
+        # Không bỏ qua HL, BV, LX – giữ lại tất cả các chức danh
 
         if u.id not in schedule_data:
             schedule_data[u.id] = {
@@ -1200,8 +1210,11 @@ def view_schedule():
                 'shifts_full': filtered_shifts
             }
 
-    # Thứ tự chức danh
-    priority_order = ['GĐ', 'PGĐ', 'TK', 'TP', 'PTK', 'PTP', 'PK', 'PP', 'BS', 'ĐDT', 'KTVT', 'KTV', 'ĐD', 'NV', 'HL']
+    # Thứ tự chức danh (đã thêm HL, BV, LX)
+    priority_order = [
+        'GĐ', 'PGĐ', 'TK', 'TP', 'PTK', 'PTP', 'PK', 'PP',
+        'BS', 'ĐDT', 'KTVT', 'KTV', 'ĐD', 'NV', 'HL', 'BV', 'LX'
+    ]
 
     def get_priority(pos):
         pos = pos.upper() if pos else ''
@@ -1267,6 +1280,7 @@ def view_schedule():
             'name': session.get('name')
         }
     )
+
 
 @app.route('/schedule/edit/<int:user_id>', methods=['GET', 'POST'])
 def edit_user_schedule(user_id):
