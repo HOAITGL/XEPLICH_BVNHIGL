@@ -1,4 +1,3 @@
-
 {% extends "layout.html" %}
 {% block title %}Xếp lịch trực theo khoa{% endblock %}
 {% block content %}
@@ -66,26 +65,40 @@
       vertical-align: middle;
       padding: 6px;
     }
+
+    /* Sticky columns */
     .sticky-col {
       position: sticky;
       left: 0;
       background: white;
-      z-index: 2;
+      z-index: 3;
     }
     .sticky-col-2 {
       position: sticky;
-      left: 160px;
+      left: 80px; /* STT width */
       background: white;
-      z-index: 2;
+      z-index: 3;
     }
+    .sticky-col-3 {
+      position: sticky;
+      left: 240px; /* 80 + 160 */
+      background: white;
+      z-index: 3;
+    }
+
+    /* Column widths */
     th:first-child, td:first-child {
-      min-width: 160px;
-      text-align: left;
+      min-width: 80px; /* STT */
+      text-align: center;
     }
     th:nth-child(2), td:nth-child(2) {
-      min-width: 80px;
+      min-width: 160px; /* Họ tên */
+      text-align: left;
     }
-    th:nth-child(n+3), td:nth-child(n+3) {
+    th:nth-child(3), td:nth-child(3) {
+      min-width: 80px; /* Chức danh */
+    }
+    th:nth-child(n+4), td:nth-child(n+4) {
       min-width: 55px;
     }
     </style>
@@ -94,8 +107,9 @@
       <table class="table table-bordered">
         <thead>
           <tr>
-            <th class="sticky-col">Họ tên</th>
-            <th class="sticky-col-2">Chức danh</th>
+            <th class="sticky-col">STT</th>
+            <th class="sticky-col-2">Họ tên</th>
+            <th class="sticky-col-3">Chức danh</th>
             {% for shift in shifts %}
               <th>
                 {{ shift.name }}
@@ -110,7 +124,8 @@
         <tbody>
           {% for user in users %}
             <tr>
-              <td class="sticky-col">
+              <td class="sticky-col">{{ loop.index }}</td>
+              <td class="sticky-col-2">
                 {{ user.name }}
                 {% set leave = leaves | selectattr('user_id', 'equalto', user.id) | list | first %}
                 {% if leave %}
@@ -119,7 +134,7 @@
                   </span>
                 {% endif %}
               </td>
-              <td class="sticky-col-2">{{ user.position }}</td>
+              <td class="sticky-col-3">{{ user.position }}</td>
               {% for shift in shifts %}
                 <td>
                   <input type="checkbox"

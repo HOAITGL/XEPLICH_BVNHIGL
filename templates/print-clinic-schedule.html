@@ -107,6 +107,7 @@
 <table>
   <thead>
     <tr>
+      <th>Số TT</th>
       <th>Phòng khám</th>
       {% for d in date_range %}
         <th>{{ d.strftime('%a') }}<br>{{ d.strftime('%d/%m') }}</th>
@@ -114,14 +115,19 @@
     </tr>
   </thead>
   <tbody>
+    <!-- Hàng đầu tiên -->
     <tr>
+      <td>1</td>
       <td>Khu tiếp đón - Đóng dấu - Dẫn BN</td>
       {% for d in date_range %}
         <td>{{ get_titled_names(clinic_schedule["tiep_don"].get(d, []), user_positions) | safe }}</td>
       {% endfor %}
     </tr>
+
+    <!-- Các phòng khám -->
     {% for room in rooms %}
     <tr>
+      <td>{{ loop.index + 1 }}</td>
       <td>{{ room }}</td>
       {% for d in date_range %}
         <td>{{ get_titled_names(clinic_schedule["phong_kham"].get(room, {}).get(d, []), user_positions) | safe }}</td>

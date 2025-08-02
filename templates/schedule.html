@@ -59,8 +59,6 @@
 <!-- NÚT CHỨC NĂNG -->
 <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
   <div class="d-flex gap-2 flex-wrap">
-   
-    <!-- 🖨 In chỉ ca trực -->
     {% if not request.args.get('print') %}
     <a href="{{ request.path }}?department={{ selected_department }}&start_date={{ start_date }}&end_date={{ end_date }}&print=1" 
        class="btn btn-outline-secondary">
@@ -68,21 +66,18 @@
     </a>
     {% endif %}
 
-    <!-- 🖨 Nút in bản lọc hiện tại -->
     {% if request.args.get('print') %}
     <button onclick="window.print()" class="btn btn-primary">
       🖨 In lịch trực tuần
     </button>
     {% endif %}
 
-    <!-- In lịch khoa khám -->
     <a href="{{ url_for('print_clinic_dept_schedule', start=start_date, end=end_date, department='Khoa khám - cấp cứu') }}"
        target="_blank"
        class="btn btn-outline-danger">
       In lịch khoa khám
     </a>
 
-    <!-- Xuất Excel -->
     <form method="POST" action="/export-template">
       <input type="hidden" name="department" value="{{ selected_department }}">
       <input type="hidden" name="start_date" value="{{ start_date }}">
@@ -90,12 +85,10 @@
       <button type="submit" class="btn btn-outline-success">📥 Xuất Excel theo mẫu</button>
     </form>
 
-    <!-- In phân lịch KHTH -->
     <a href="/print-clinic-schedule?start={{ start_date }}&end={{ end_date }}" class="btn btn-outline-primary" target="_blank">
       🖨 In phân lịch phòng khám-KHTH
     </a>
 
-    <!-- Ký xác nhận -->
     {% if selected_department and not is_signed and user.role == 'manager' %}
     <form method="POST" action="/schedule/sign" onsubmit="return confirm('Xác nhận ký và khóa bảng lịch trực?');">
       <input type="hidden" name="department" value="{{ selected_department }}">
@@ -119,14 +112,14 @@
   </div>
 </div>
 
-
 <!-- BẢNG LỊCH TRỰC -->
 <div class="table-scroll">
 <table class="table table-bordered table-striped">
   <thead class="table-dark">
     <tr>
-      <th>Họ tên</th>
-      <th>Chức danh</th>
+      <th class="sticky-col">STT</th>
+      <th class="sticky-col-2">Họ tên</th>
+      <th class="sticky-col-3">Chức danh</th>
       {% for d in date_range %}
         <th>{{ d.strftime('%d/%m') }}</th>
       {% endfor %}
@@ -137,8 +130,9 @@
     {% set display_data = print_data if request.args.get('print') else schedule_data %}
     {% for u in display_data.values() %}
     <tr class="user-row">
-      <td>{{ u.name }}</td>
-      <td>{{ u.position }}</td>
+      <td class="sticky-col">{{ loop.index }}</td>
+      <td class="sticky-col-2">{{ u.name }}</td>
+      <td class="sticky-col-3">{{ u.position }}</td>
       {% for d in date_range %}
       <td>
         {% set cas = u.shifts_full.get(d) %}
@@ -147,7 +141,7 @@
             <div>
               {{ ca.shift_name }}
               {% if user.role in ['admin', 'manager'] and not is_signed %}
-	      <form method="POST" action="/schedule/delete-one"
+              <form method="POST" action="/schedule/delete-one"
                     onsubmit="return confirm('Xoá ca {{ ca.shift_name }} ngày {{ d.strftime('%d/%m') }}?')"
                     style="display:inline;">
                 <input type="hidden" name="user_id" value="{{ u.id }}">
@@ -174,7 +168,6 @@
 </table>
 </div>
 
-
 <!-- CHÂN IN -->
 <div class="d-none d-print-block mt-3">
   <div class="row">
@@ -191,12 +184,17 @@
   </div>
 </div>
 
-<!-- CSS ẨN KHI IN -->
+<!-- CSS -->
 <style>
 @media print {
   .d-print-block { display: block !important; }
   .d-print-none, .btn, .sidebar, form, nav, .print-hide, .user-greeting {
     display: none !important;
+  }
+  thead.table-dark {
+    display: table-header-group !important;
+    background: #fff !important;
+    color: #000 !important;
   }
   html, body {
     zoom: 100%;
@@ -233,10 +231,36 @@
   .non-duty {
     display: none !important;
   }
+
+  /* Sticky khi in: nền trắng chữ đen */
+  .table-scroll th.sticky-col,
+  .table-scroll th.sticky-col-2,
+  .table-scroll th.sticky-col-3 {
+    background: #fff !important;
+    color: #000 !important;
+  }
 }
+
 @page {
   size: A4 landscape;
   margin: 1cm 1cm 1cm 2cm;
+}
+
+/* Sticky columns (màu đen chữ trắng khi xem) */
+.table-scroll th.sticky-col,
+.table-scroll th.sticky-col-2,
+.table-scroll th.sticky-col-3 {
+  background: #212529 !important; /* nền đen giống table-dark */
+  color: #fff !important;
+  z-index: 5;
+}
+
+.table-scroll td.sticky-col,
+.table-scroll td.sticky-col-2,
+.table-scroll td.sticky-col-3 {
+  background: #fff !important; /* dữ liệu nền trắng */
+  color: #000 !important;
+  z-index: 5;
 }
 </style>
 
