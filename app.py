@@ -3630,11 +3630,18 @@ def tong_hop_cong_truc_view():
     else:
         selected_department = user_dept  # User thường chỉ thấy khoa mình
 
-    start_date = request.args.get('start_date')
-    end_date = request.args.get('end_date')
+    # --- Lấy ngày bắt đầu/kết thúc và chuyển sang kiểu date ---
+    start_date_str = request.args.get('start_date')
+    end_date_str = request.args.get('end_date')
     mode = request.args.get('mode', '16h')
 
     today = datetime.now()
+
+    try:
+        start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date() if start_date_str else None
+        end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date() if end_date_str else None
+    except Exception:
+        start_date, end_date = None, None
 
     # Nếu chưa chọn ngày → báo lỗi
     if not start_date or not end_date:
@@ -3644,32 +3651,34 @@ def tong_hop_cong_truc_view():
             sum_row={},
             departments=departments,
             selected_department=selected_department,
-            start_date=start_date,
-            end_date=end_date,
-            default_start=start_date,
-            default_end=end_date,
+            start_date=start_date_str,
+            end_date=end_date_str,
+            default_start=start_date_str,
+            default_end=end_date_str,
             thang=today.month,
             nam=today.year,
             mode=mode,
             error_message="Bạn chưa chọn ngày bắt đầu và ngày kết thúc để xem báo cáo!"
         )
 
-    try:
-        thang = int(start_date.split('-')[1])
-        nam = int(start_date.split('-')[0])
-    except:
-        thang = today.month
-        nam = today.year
+    # Lấy tháng/năm để hiển thị
+    thang = start_date.month
+    nam = start_date.year
 
     # --- Query lịch trực ---
-    query = Schedule.query.join(User).join(Shift).filter(Schedule.work_date.between(start_date, end_date))
+    query = Schedule.query.join(User).join(Shift).filter(
+        Schedule.work_date.between(start_date, end_date)
+    )
     if selected_department not in ['Tất cả', 'all', None]:
         query = query.filter(User.department.ilike(selected_department))
 
     schedules = query.all()
 
-    # --- Lấy danh sách HSCC ---
-    hscc_depts = [d.department_name for d in HSCCDepartment.query.all()]
+    # --- Lấy danh sách HSCC (bọc try/except nếu bảng trống) ---
+    try:
+        hscc_depts = [d.department_name for d in HSCCDepartment.query.all()]
+    except Exception:
+        hscc_depts = []
 
     result_by_user = defaultdict(lambda: defaultdict(lambda: {'so_ngay': 0}))
     summary = defaultdict(int)
@@ -3680,13 +3689,16 @@ def tong_hop_cong_truc_view():
 
         shift_name = s.shift.name.strip().lower()
 
+        # Bỏ ca thường trú
         if 'thường trú' in shift_name:
             continue
 
+        # Bỏ các từ khóa nghỉ
         skip_keywords = ['nghỉ trực', 'nghỉ phép', 'làm ngày', 'làm 1/2 ngày', 'làm 1/2 ngày c', 'phòng khám']
         if any(x in shift_name for x in skip_keywords):
             continue
 
+        # Lọc theo mode
         if mode == '24h' and '24h' not in shift_name:
             continue
         if mode == '16h' and '24h' in shift_name:
@@ -3697,6 +3709,7 @@ def tong_hop_cong_truc_view():
         mmdd = s.work_date.strftime('%m-%d')
         weekday = s.work_date.weekday()
 
+        # Xác định loại ngày
         if mmdd in ['01-01', '04-30', '05-01', '09-02']:
             loai_ngay = 'ngày_lễ'
         elif weekday >= 5:
@@ -3710,6 +3723,7 @@ def tong_hop_cong_truc_view():
     user_ids = list(result_by_user.keys())
     users = User.query.filter(User.id.in_(user_ids), User.role != 'admin').all() if user_ids else []
 
+    # Thứ tự ưu tiên chức danh
     priority_order = ['GĐ', 'PGĐ', 'TK', 'PTK', 'PK', 'BS', 'ĐDT', 'ĐD', 'KTV', 'NV', 'HL', 'BV']
     def get_priority(pos):
         pos = pos.upper() if pos else ''
@@ -3718,6 +3732,7 @@ def tong_hop_cong_truc_view():
                 return i
         return len(priority_order)
 
+    # Chuẩn bị dữ liệu hiển thị
     rows = []
     for user in users:
         detail = result_by_user[user.id]
@@ -3735,12 +3750,12 @@ def tong_hop_cong_truc_view():
         'tong_ngay': sum(summary.values())
     }
 
-    # --- Xử lý hiển thị tên khoa/phòng ---
+    # --- Xử lý tên khoa/phòng hiển thị ---
     if selected_department in ['Tất cả', 'all', None]:
         if user_role == 'admin1' and user_dept:
-            dept_display = user_dept  # admin1 → hiển thị phòng của chính user
+            dept_display = user_dept
         else:
-            dept_display = ""  # admin → để trống
+            dept_display = ""
     else:
         dept_display = selected_department
 
@@ -3750,10 +3765,10 @@ def tong_hop_cong_truc_view():
         sum_row=sum_row,
         departments=departments,
         selected_department=dept_display,
-        start_date=start_date,
-        end_date=end_date,
-        default_start=start_date,
-        default_end=end_date,
+        start_date=start_date_str,
+        end_date=end_date_str,
+        default_start=start_date_str,
+        default_end=end_date_str,
         thang=thang,
         nam=nam,
         mode=mode
