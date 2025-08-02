@@ -6,9 +6,7 @@
 <div class="d-none d-print-block text-center mb-3">
   <div class="row">
     <div class="col-6 text-center">
-      <strong>{{ unit_config.name if unit_config else 'Tên đơn vị' }}</strong><br>
-      <span>{{ unit_config.address if unit_config else '' }}</span><br>
-      <span>{{ unit_config.phone if unit_config else '' }}</span><br>
+      <strong>{{ unit_config.name if unit_config else 'TÊN ĐƠN VỊ' }}</strong><br>
       {% if selected_department %}
         <span style="font-weight:bold; border-bottom:1px solid black;">
           {{ selected_department.upper() }}
@@ -250,7 +248,7 @@
 .table-scroll th.sticky-col,
 .table-scroll th.sticky-col-2,
 .table-scroll th.sticky-col-3 {
-  background: #212529 !important; /* nền đen giống table-dark */
+  background: #212529 !important;
   color: #fff !important;
   z-index: 5;
 }
@@ -258,7 +256,7 @@
 .table-scroll td.sticky-col,
 .table-scroll td.sticky-col-2,
 .table-scroll td.sticky-col-3 {
-  background: #fff !important; /* dữ liệu nền trắng */
+  background: #fff !important;
   color: #000 !important;
   z-index: 5;
 }

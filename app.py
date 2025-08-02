@@ -1169,14 +1169,13 @@ def view_schedule():
     for s in schedules:
         u = s.user
         # Không bỏ qua HL, BV, LX – giữ lại tất cả các chức danh
-
         if u.id not in schedule_data:
             schedule_data[u.id] = {
                 'id': u.id,
                 'name': u.name,
                 'position': u.position,
                 'department': u.department,
-                'contract_type': getattr(u, 'contract_type', None),  # Thêm loại hợp đồng
+                'contract_type': getattr(u, 'contract_type', None),
                 'shifts': {},
                 'shifts_full': {}
             }
@@ -1206,7 +1205,7 @@ def view_schedule():
                 'name': data['name'],
                 'position': data['position'],
                 'department': data['department'],
-                'contract_type': data['contract_type'],  # Thêm vào print data
+                'contract_type': data['contract_type'],
                 'shifts_full': filtered_shifts
             }
 
@@ -1261,6 +1260,13 @@ def view_schedule():
     ).first()
     locked = bool(lock)
 
+    # ---- Thêm phần này: unit_config ----
+    unit_config = {
+        'name': 'BỆNH VIỆN NHI TỈNH GIA LAI',
+        'address': '123 Đường ABC, Gia Lai',
+        'phone': '0269 123456'
+    }
+
     return render_template(
         'schedule.html',
         departments=departments,
@@ -1278,7 +1284,8 @@ def view_schedule():
             'role': user_role,
             'department': user_dept,
             'name': session.get('name')
-        }
+        },
+        unit_config=unit_config   # Truyền thêm vào template
     )
 
 
