@@ -3611,9 +3611,10 @@ def tong_hop_cong_truc_view():
     if user_role in ['admin', 'admin1']:
         # Admin xem tất cả
         departments = sorted([d[0] for d in db.session.query(User.department)
-                            .filter(User.department.isnot(None))
-                            .distinct().all()])
+                             .filter(User.department.isnot(None))
+                             .distinct().all()])
         departments.insert(0, 'Tất cả')
+        selected_department = request.args.get('department') or 'Tất cả'
     else:
         # User thường chỉ thấy khoa của mình
         departments = [user_dept] if user_dept else []
@@ -3754,7 +3755,6 @@ def tong_hop_cong_truc_view():
         mode=mode
     )
 
-
 @app.route('/tong-hop-cong-truc-print')
 @login_required
 def tong_hop_cong_truc_print():
@@ -3764,8 +3764,23 @@ def tong_hop_cong_truc_print():
     from models.shift import Shift
     from models.hscc_department import HSCCDepartment  # Đảm bảo import model HSCCDepartment
 
-    # --- Lấy tham số ---
-    selected_department = request.args.get('department', '')
+    user_role = session.get('role')
+    user_dept = session.get('department')
+
+    # --- Xử lý khoa được chọn ---
+    if user_role in ['admin', 'admin1']:
+        # Admin xem tất cả
+        departments = sorted([d[0] for d in db.session.query(User.department)
+                              .filter(User.department.isnot(None))
+                              .distinct().all()])
+        departments.insert(0, 'Tất cả')
+        selected_department = request.args.get('department') or 'Tất cả'
+    else:
+        # User thường chỉ thấy khoa của mình
+        departments = [user_dept] if user_dept else []
+        selected_department = user_dept
+
+    # --- Lấy tham số ngày ---
     start_date = request.args.get('start_date')
     end_date = request.args.get('end_date')
     mode = request.args.get('mode', '16h')
