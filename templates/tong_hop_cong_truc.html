@@ -30,9 +30,14 @@
 </div>
 
 <table style="float: left; width: 50%; text-align: center;">
-    <tr><td style="border: none;"><strong>{{ unit_config.name if unit_config else 'Tên đơn vị' }}<br>
-<span>{{ unit_config.address if unit_config else '' }}</span><br>
-<span>{{ unit_config.phone if unit_config else '' }}</span></strong></td></tr>
+    <tr>
+        <td style="border: none;">
+            <strong>
+                {{ unit_config.name if unit_config else 'Tên bệnh viện' }}
+            </strong>
+        </td>
+    </tr>
+    {% if selected_department %}
     <tr>
         <td style="border: none;">
             <div style="display: inline-block; border-bottom: 1px solid black;">
@@ -40,6 +45,7 @@
             </div>
         </td>
     </tr>
+    {% endif %}
 </table>
 
 <table style="float: right; width: 50%; text-align: center;">

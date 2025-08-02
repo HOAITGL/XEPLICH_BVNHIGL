@@ -6,7 +6,9 @@
 {% if unit_config %}
 <div class="text-center mb-3">
   <h3 class="mb-0">{{ unit_config.name }}</h3>
-  <p class="mb-0">{{ unit_config.address }} - {{ unit_config.phone }}</p>
+  {% if selected_department %}
+  <p class="mb-0"><strong>{{ selected_department }}</strong></p>
+  {% endif %}
 </div>
 {% endif %}
 
@@ -16,9 +18,8 @@
   <div class="col-md-3">
     <label class="form-label">Khoa/Phòng:</label>
     <select name="department" class="form-select">
-      <option value="">Tất cả</option>
       {% for dept in departments %}
-        <option value="{{ dept }}" {% if selected_department == dept %}selected{% endif %}>{{ dept }}</option>
+        <option value="{{ dept }}" {% if request.args.get('department', 'Tất cả') == dept %}selected{% endif %}>{{ dept }}</option>
       {% endfor %}
     </select>
   </div>
@@ -44,7 +45,7 @@
   <div class="col-md-3 d-flex align-items-end gap-2">
     <button type="submit" formaction="{{ url_for('tong_hop_cong_truc_print') }}" formtarget="_blank" class="btn btn-primary">📄 In bảng</button>
     <button type="submit" class="btn btn-secondary">👁️ Xem bảng</button>
-    <a href="{{ url_for('export_report_all', start_date=default_start, end_date=default_end, department=selected_department) }}" class="btn btn-success">⬇️ Xuất Excel</a>
+    <a href="{{ url_for('export_report_all', start_date=default_start, end_date=default_end, department=request.args.get('department', 'Tất cả')) }}" class="btn btn-success">⬇️ Xuất Excel</a>
   </div>
 </form>
 

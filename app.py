@@ -3615,17 +3615,20 @@ def tong_hop_cong_truc_view():
         departments.insert(0, 'Tất cả')
     else:
         departments = [user_dept] if user_dept else []
-        selected_department = user_dept
 
-    # --- Lấy tham số ---
-    selected_department = request.args.get('department', selected_department if user_role not in ['admin', 'admin1'] else 'Tất cả')
+    # --- Lấy tham số department ---
+    if user_role in ['admin', 'admin1']:
+        selected_department = request.args.get('department', 'Tất cả')
+    else:
+        selected_department = user_dept  # User thường chỉ thấy khoa mình
+
     start_date = request.args.get('start_date')
     end_date = request.args.get('end_date')
     mode = request.args.get('mode', '16h')
 
     today = datetime.now()
 
-    # Nếu chưa chọn ngày → báo lỗi nhưng không crash
+    # Nếu chưa chọn ngày → báo lỗi
     if not start_date or not end_date:
         return render_template(
             'tong_hop_cong_truc_view.html',
@@ -3652,7 +3655,7 @@ def tong_hop_cong_truc_view():
 
     # --- Query lịch trực ---
     query = Schedule.query.join(User).join(Shift).filter(Schedule.work_date.between(start_date, end_date))
-    if selected_department and selected_department not in ['all', 'Tất cả']:
+    if selected_department not in ['Tất cả', 'all', None]:
         query = query.filter(User.department.ilike(selected_department))
 
     schedules = query.all()
@@ -3724,8 +3727,14 @@ def tong_hop_cong_truc_view():
         'tong_ngay': sum(summary.values())
     }
 
-    # Bỏ chữ "Tất cả" khi hiển thị
-    dept_display = "" if selected_department in ['Tất cả', 'all', None] else selected_department
+    # --- Xử lý hiển thị tên khoa/phòng ---
+    if selected_department in ['Tất cả', 'all', None]:
+        if user_role == 'admin1' and user_dept:
+            dept_display = user_dept  # admin1 → hiển thị phòng của chính user
+        else:
+            dept_display = ""  # admin → để trống
+    else:
+        dept_display = selected_department
 
     return render_template(
         'tong_hop_cong_truc_view.html',
@@ -3742,6 +3751,7 @@ def tong_hop_cong_truc_view():
         mode=mode
     )
 
+from models.unit_config import UnitConfig  # import model cấu hình đơn vị
 
 @app.route('/tong-hop-cong-truc-print')
 @login_required
@@ -3751,6 +3761,10 @@ def tong_hop_cong_truc_print():
     from models.schedule import Schedule
     from models.shift import Shift
     from models.hscc_department import HSCCDepartment
+    from models.unit_config import UnitConfig
+
+    user_role = session.get('role')
+    user_dept = session.get('department')
 
     selected_department = request.args.get('department', '')
     start_date = request.args.get('start_date')
@@ -3759,6 +3773,7 @@ def tong_hop_cong_truc_print():
 
     today = datetime.now()
 
+    # Nếu chưa chọn ngày → báo lỗi
     if not start_date or not end_date:
         return render_template(
             'tong_hop_cong_truc.html',
@@ -3772,6 +3787,7 @@ def tong_hop_cong_truc_print():
             thang=today.month,
             nam=today.year,
             mode=mode,
+            unit_config=UnitConfig.query.first(),  # thêm truyền tên bệnh viện
             error_message="Bạn chưa chọn ngày bắt đầu và ngày kết thúc để in báo cáo!"
         )
 
@@ -3782,12 +3798,14 @@ def tong_hop_cong_truc_print():
         thang = today.month
         nam = today.year
 
+    # --- Query lịch trực ---
     query = Schedule.query.join(User).join(Shift).filter(Schedule.work_date.between(start_date, end_date))
-    if selected_department and selected_department not in ['all', 'Tất cả']:
+    if selected_department not in ['Tất cả', 'all', None]:
         query = query.filter(User.department.ilike(selected_department))
 
     schedules = query.all()
 
+    # --- Danh sách HSCC ---
     hscc_depts = [d.department_name for d in HSCCDepartment.query.all()]
 
     result_by_user = defaultdict(lambda: defaultdict(lambda: {'so_ngay': 0}))
@@ -3854,8 +3872,14 @@ def tong_hop_cong_truc_print():
         'tong_ngay': sum(summary.values())
     }
 
-    # Bỏ chữ "Tất cả" khi in
-    dept_display = "" if selected_department in ['Tất cả', 'all', None] else selected_department
+    # --- Xử lý hiển thị tên khoa/phòng ---
+    if selected_department in ['Tất cả', 'all', None]:
+        if user_role == 'admin1' and user_dept:
+            dept_display = user_dept
+        else:
+            dept_display = ""
+    else:
+        dept_display = selected_department
 
     return render_template(
         'tong_hop_cong_truc.html',
@@ -3868,7 +3892,8 @@ def tong_hop_cong_truc_print():
         current_year=today.year,
         thang=thang,
         nam=nam,
-        mode=mode
+        mode=mode,
+        unit_config=UnitConfig.query.first()  # thêm để hiển thị tên bệnh viện
     )
 
 @app.route('/export-shift-payment-all')
