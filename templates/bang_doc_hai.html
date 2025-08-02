@@ -1,4 +1,3 @@
-
 {% extends "layout.html" %}
 {% block content %}
 {% if unit_config %}
@@ -16,7 +15,9 @@
             <label for="department" class="form-label">Khoa/Phòng</label>
             <select class="form-select" id="department" name="department">
                 {% for dept in departments %}
-                    <option value="{{ dept }}" {% if dept == selected_department %}selected{% endif %}>{{ dept }}</option>
+                    <option value="{{ dept }}" {% if dept == selected_department %}selected{% endif %}>
+                        {{ dept if dept else 'Tất cả' }}
+                    </option>
                 {% endfor %}
             </select>
         </div>
@@ -39,6 +40,7 @@
                 </button>
             {% endif %}
         </div>
+
         {% if all_users %}
         <div class="col-12 mt-3">
             <label class="form-label fw-bold">Chọn nhân viên hưởng độc hại:</label><br>

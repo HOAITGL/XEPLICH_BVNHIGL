@@ -2437,16 +2437,18 @@ def bang_cham_cong():
 
     raw_department = request.args.get('department', '').strip()
 
-    if user_role == 'admin':
-        selected_department = raw_department if raw_department else None
-        if selected_department:
-            query = User.query.filter(User.department == selected_department)
+    # Cho phép admin và admin1 xem tất cả khoa
+    if user_role in ['admin', 'admin1']:
+        # Nếu không chọn khoa → hiển thị 'Tất cả'
+        selected_department = raw_department if raw_department else 'Tất cả'
+        if raw_department:  # Chỉ lọc nếu có chọn khoa cụ thể
+            query = User.query.filter(User.department == raw_department)
         else:
-            query = User.query  # không lọc theo khoa
+            query = User.query  # Không lọc, lấy tất cả khoa
+
     else:
         selected_department = user_dept
         query = User.query.filter(User.department == selected_department)
-
 
     selected_contract = request.args.get('contract_type', '')
     print_filter = request.args.get('print_filter') == 'yes'
@@ -2454,7 +2456,6 @@ def bang_cham_cong():
     start = datetime.strptime(start_date, '%Y-%m-%d').date()
     end = datetime.strptime(end_date, '%Y-%m-%d').date()
     days_in_range = [start + timedelta(days=i) for i in range((end - start).days + 1)]
-
 
     if selected_contract:
         if selected_contract.lower() == "hợp đồng":
@@ -2477,7 +2478,6 @@ def bang_cham_cong():
 
     users = query.filter(User.role != 'admin').all()
     users = sorted(users, key=sort_by_position)
-
 
     schedules = Schedule.query.join(Shift).filter(
         Schedule.user_id.in_([u.id for u in users]),
@@ -2516,7 +2516,8 @@ def bang_cham_cong():
         date(2025, 9, 2),
     ]
 
-    if user_role == 'admin':
+    # Cho phép admin và admin1 thấy tất cả khoa
+    if user_role in ['admin', 'admin1']:
         departments = [d[0] for d in db.session.query(User.department).filter(User.department != None).distinct().all()]
     else:
         departments = [user_dept]
@@ -4398,7 +4399,8 @@ def delete_hazard_config(config_id):
 
 @app.route('/bang-doc-hai', methods=['GET', 'POST'])
 def bang_doc_hai():
-    if session.get('role') not in ['admin', 'manager']:
+    # Cho phép admin, admin1 và manager truy cập
+    if session.get('role') not in ['admin', 'admin1', 'manager']:
         return "Bạn không có quyền truy cập."
 
     selected_department = request.values.get('department')
@@ -4406,6 +4408,7 @@ def bang_doc_hai():
     end_date = request.values.get('end')
     selected_user_ids = request.values.getlist('hazard_user_ids')
 
+    # Nếu không chọn ngày thì lấy mặc định tháng hiện tại
     if not start_date or not end_date:
         today = date.today()
         start_date = date(today.year, today.month, 1)
@@ -4416,18 +4419,23 @@ def bang_doc_hai():
 
     user_role = session.get('role')
     user_dept = session.get('department')
-    if user_role == 'admin':
+
+    # Danh sách khoa hiển thị
+    if user_role in ['admin', 'admin1']:
         departments = ['Tất cả'] + [d[0] for d in db.session.query(User.department).filter(User.department != None).distinct().all()]
     else:
         departments = [user_dept]
 
+    # Lọc user theo khoa
     users = User.query.filter(User.active == True)
-    if user_role != 'admin':
+    if user_role in ['admin', 'admin1']:
+        if selected_department and selected_department != 'Tất cả':
+            users = users.filter(User.department == selected_department)
+    else:
         users = users.filter(User.department == user_dept)
-    elif selected_department and selected_department != 'Tất cả':
-        users = users.filter(User.department == selected_department)
     users = users.all()
 
+    # Sắp xếp theo chức vụ
     priority_order = ['GĐ', 'PGĐ', 'TK', 'TP', 'PTK', 'PTP', 'BS', 'BSCK1', 'BSCK2', 'ĐDT', 'KTV', 'ĐD', 'NV', 'HL', 'BV']
     def sort_by_position(user):
         position = (user.position or '').upper().strip()
@@ -4437,12 +4445,15 @@ def bang_doc_hai():
         return len(priority_order)
     users = sorted(users, key=lambda u: (sort_by_position(u), u.name.lower()))
 
+    # Lấy lịch trực trong khoảng ngày
     schedules = Schedule.query.filter(
         Schedule.work_date >= start_date,
         Schedule.work_date <= end_date
     ).all()
     schedule_map = {(s.user_id, s.work_date): s for s in schedules}
     ca_truc_dict = {ca.id: ca for ca in Shift.query.all()}
+
+    # Lấy config độc hại
     hazard_configs = HazardConfig.query.filter(
         HazardConfig.start_date <= end_date,
         HazardConfig.end_date >= start_date
@@ -4454,6 +4465,7 @@ def bang_doc_hai():
     nhom_ho_ly = []
 
     for user in users:
+        # Nếu chọn lọc theo user cụ thể
         if selected_user_ids and str(user.id) not in selected_user_ids:
             continue
 
@@ -4480,11 +4492,13 @@ def bang_doc_hai():
                 row['daily_hours'].append("–")
                 continue
 
+            # Lọc config áp dụng cho ngày
             configs_in_day = [
                 cfg for cfg in configs
                 if cfg.start_date <= d <= cfg.end_date
             ]
 
+            # Ưu tiên config theo chức vụ, nếu không có thì lấy config chung
             match_chucvu = [
                 cfg for cfg in configs_in_day
                 if cfg.position and cfg.position.strip().upper() == (user.position or '').strip().upper()
@@ -4496,6 +4510,7 @@ def bang_doc_hai():
 
             search_pool = match_chucvu if match_chucvu else match_all
 
+            # Chọn config có số giờ khớp hoặc gần nhất
             exact = [cfg for cfg in search_pool if cfg.duration_hours == ca.duration]
             if exact:
                 best_match = exact[0]
@@ -4510,6 +4525,7 @@ def bang_doc_hai():
             else:
                 row['daily_hours'].append("–")
 
+        # Tách nhóm hộ lý riêng
         chucvu = (row['position'] or '').upper().strip()
         if chucvu.startswith('HL'):
             nhom_ho_ly.append(row)
@@ -4536,7 +4552,8 @@ from models import User, Schedule, Shift, HazardConfig
 
 @app.route('/bang-doc-hai/print', methods=['POST'])
 def bang_doc_hai_print():
-    if session.get('role') not in ['admin', 'manager']:
+    # Cho phép admin, admin1 và manager
+    if session.get('role') not in ['admin', 'admin1', 'manager']:
         return "Bạn không có quyền truy cập."
 
     selected_department = request.values.get('department')
@@ -4544,6 +4561,7 @@ def bang_doc_hai_print():
     end = request.values.get('end')
     selected_user_ids = request.values.getlist('hazard_user_ids')
 
+    # Nếu không có ngày được chọn, mặc định là tháng hiện tại
     if not start or not end:
         today = date.today()
         start_date = date(today.year, today.month, 1)
@@ -4552,21 +4570,26 @@ def bang_doc_hai_print():
         start_date = datetime.strptime(start, '%Y-%m-%d').date()
         end_date = datetime.strptime(end, '%Y-%m-%d').date()
 
+    # Lọc danh sách user
     users = User.query.filter(User.active == True)
     if selected_department and selected_department != 'Tất cả':
         users = users.filter(User.department == selected_department)
     users = users.all()
 
+    # Lọc user theo danh sách đã chọn
     if selected_user_ids:
         ids_int = list(map(int, selected_user_ids))
         users = [u for u in users if u.id in ids_int]
 
+    # Lấy lịch trực và ca trực
     schedules = Schedule.query.filter(
         Schedule.work_date >= start_date,
         Schedule.work_date <= end_date
     ).all()
     schedule_map = {(s.user_id, s.work_date): s for s in schedules}
     ca_map = {ca.id: ca for ca in Shift.query.all()}
+
+    # Lấy cấu hình độc hại trong thời gian in
     hazard_configs = HazardConfig.query.filter(
         HazardConfig.start_date <= end_date,
         HazardConfig.end_date >= start_date
@@ -4574,6 +4597,7 @@ def bang_doc_hai_print():
 
     days_range = [start_date + timedelta(days=i) for i in range((end_date - start_date).days + 1)]
 
+    # Tạo dữ liệu bảng
     table_data = []
     for user in users:
         row = {
@@ -4609,6 +4633,7 @@ def bang_doc_hai_print():
                 cfg for cfg in applicable_cfgs
                 if not cfg.position or cfg.position.strip() == ''
             ]
+
             search_pool = match_chucvu if match_chucvu else match_all
 
             exact = [cfg for cfg in search_pool if cfg.duration_hours == ca.duration]
@@ -4636,7 +4661,6 @@ def bang_doc_hai_print():
         days_range=days_range,
         now=datetime.now()
     )
-
 
 from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment, Border, Side
@@ -4734,7 +4758,8 @@ def export_bang_doc_hai_excel_file(users, schedules, shifts, hazard_configs, sta
 # ✅ ROUTE EXPORT FILE EXCEL
 @app.route('/bang-doc-hai/export-excel', methods=['POST'], endpoint='export_bang_doc_hai_excel')
 def export_bang_doc_hai_excel():
-    if session.get('role') not in ['admin', 'manager']:
+    # Cho phép admin, admin1 và manager xuất Excel
+    if session.get('role') not in ['admin', 'admin1', 'manager']:
         return "Bạn không có quyền truy cập."
 
     selected_department = request.values.get('department')
@@ -4742,11 +4767,13 @@ def export_bang_doc_hai_excel():
     end_date = datetime.strptime(request.values.get('end'), '%Y-%m-%d').date()
     selected_user_ids = request.values.getlist('hazard_user_ids')
 
+    # Lấy danh sách user theo khoa
     users = User.query.filter(User.active == True)
     if selected_department and selected_department != 'Tất cả':
         users = users.filter(User.department == selected_department)
     users = users.all()
 
+    # Lấy dữ liệu lịch trực và hazard config
     schedules = Schedule.query.filter(
         Schedule.work_date >= start_date,
         Schedule.work_date <= end_date
@@ -4759,10 +4786,19 @@ def export_bang_doc_hai_excel():
 
     shifts = Shift.query.all()
 
-    output = export_bang_doc_hai_excel_file(users, schedules, shifts, hazard_configs, start_date, end_date, selected_user_ids)
+    # Xuất file Excel
+    output = export_bang_doc_hai_excel_file(
+        users, schedules, shifts, hazard_configs,
+        start_date, end_date, selected_user_ids
+    )
 
     filename = f"bang_doc_hai_{selected_department or 'tatca'}.xlsx"
-    return send_file(output, as_attachment=True, download_name=filename, mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    return send_file(
+        output,
+        as_attachment=True,
+        download_name=filename,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    )
 
 from flask import request, render_template
 from datetime import datetime, timedelta

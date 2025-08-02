@@ -7,7 +7,7 @@
   <div class="row">
     <div class="col-6 text-center">
       <strong>BỆNH VIỆN NHI TỈNH GIA LAI</strong><br>
-      {% if not selected_department %}
+      {% if not selected_department or selected_department == 'Tất cả' %}
         <strong>PHÒNG TỔ CHỨC - HCQT</strong>
       {% else %}
         <span style="display:inline-block; font-weight:bold; border-bottom:1px solid black; margin-top: 2px;">
@@ -119,7 +119,7 @@
 <form method="GET" class="d-flex gap-3 flex-wrap align-items-end mb-4">
   <div>
     <label class="form-label mb-0">Khoa/Phòng:</label>
-    {% if user.role == 'admin' %}
+    {% if user.role in ['admin', 'admin1'] %}
       <select name="department" class="form-select">
         <option value="">-- Tất cả --</option>
         {% for dept in departments %}
@@ -128,7 +128,7 @@
       </select>
     {% else %}
       <input type="hidden" name="department" value="{{ selected_department }}">
-      <p><strong>Khoa:</strong> {{ selected_department }}</p>
+      <p><strong>Khoa:</strong> {{ selected_department if selected_department else 'Tất cả' }}</p>
     {% endif %}
   </div>
   <div>
