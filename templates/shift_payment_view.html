@@ -12,7 +12,7 @@
   <a href="/print-shift-payment?mode={{ mode }}&department={{ selected_department }}&start_date={{ start_date }}&end_date={{ end_date }}"
      class="btn btn-secondary" target="_blank">🖨️ In bảng</a>
 
-  {% if selected_department == 'all' %}
+  {% if selected_department == 'Tất cả' %}
   <a href="/print-shift-payment-summary?mode={{ mode }}&start_date={{ start_date }}&end_date={{ end_date }}"
      class="btn btn-dark" target="_blank">🖨️ In bảng tổng hợp</a>
   {% endif %}
@@ -22,7 +22,6 @@
   <div>
     <label for="department">Khoa/Phòng:</label>
     <select name="department" class="form-select">
-      <option value="all">Tất cả</option>
       {% for dept in departments %}
         <option value="{{ dept }}" {% if dept == selected_department %}selected{% endif %}>{{ dept }}</option>
       {% endfor %}

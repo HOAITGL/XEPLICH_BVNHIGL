@@ -3451,7 +3451,6 @@ def update_hscc(id):
 
     return redirect('/configure-hscc')
 
-
 @app.route('/shift-payment-view')
 def shift_payment_view():
     user_role = session.get('role')
@@ -3469,14 +3468,14 @@ def shift_payment_view():
             return 'ngày_nghỉ'
         else:
             return 'ngày_thường'
-        
+
     ca_chon = request.args.get('mode', '16h')
     selected_department = request.args.get('department')
 
     start_date = request.args.get('start_date')
     end_date = request.args.get('end_date')
 
-    # Nếu không có ngày → lấy tháng hiện tại
+    # Nếu không có ngày → mặc định tháng hiện tại
     if not start_date or not end_date:
         today = datetime.today()
         start_date_dt = today.replace(day=1)
@@ -3498,22 +3497,22 @@ def shift_payment_view():
         if not selected_department:
             selected_department = 'Tất cả'
     else:
-        # User thường chỉ thấy khoa của mình
         departments = [user_dept] if user_dept else []
         selected_department = user_dept
 
     hscc_depts = [d.department_name for d in HSCCDepartment.query.all()]
     rates = {(r.ca_loai, r.truc_loai, r.ngay_loai): r.don_gia for r in ShiftRateConfig.query.all()}
 
-    # Lọc lịch trực
+    # Query dữ liệu
     query = (
         Schedule.query
         .join(User).join(Shift)
         .filter(Schedule.work_date >= start_date_dt, Schedule.work_date <= end_date_dt)
         .filter(Shift.duration == (16 if ca_chon == '16h' else 24))
     )
-    # Nếu không phải "Tất cả" mới lọc theo khoa
-    if selected_department not in ['Tất cả', None]:
+
+    # Chỉ lọc khi không phải "Tất cả"
+    if selected_department and selected_department != 'Tất cả':
         query = query.filter(User.department == selected_department)
 
     schedules = query.all()
@@ -3524,7 +3523,7 @@ def shift_payment_view():
         user = s.user
         shift = s.shift
 
-        # Bỏ qua trực thường trú
+        # Bỏ ca thường trú
         if "thường trú" in shift.name.strip().lower():
             continue
 
@@ -3533,7 +3532,7 @@ def shift_payment_view():
         key = (truc_loai, ngay_loai)
         data[user][key] += 1
 
-    # Sắp xếp chức danh ưu tiên
+    # Sắp xếp chức danh
     priority_order = ['GĐ', 'PGĐ', 'TK', 'PTK', 'PK', 'BS', 'ĐDT', 'ĐD', 'KTV', 'NV', 'HL', 'BV']
     def get_priority(pos):
         pos = pos.upper() if pos else ''
@@ -3542,7 +3541,7 @@ def shift_payment_view():
                 return i
         return len(priority_order)
 
-    # Tạo dữ liệu trả về
+    # Chuẩn bị dữ liệu hiển thị
     rows = []
     co_ngay_le = False
     for user, info in data.items():
@@ -3575,7 +3574,7 @@ def shift_payment_view():
         row['tong_tien'] = row['tien_ca'] + row['tien_an']
         rows.append(row)
 
-    # Sort theo thứ tự ưu tiên + tên
+    # Sort theo chức danh + tên
     rows = sorted(rows, key=lambda r: (r['priority'], r['user'].name))
 
     thang = start_date_dt.month
@@ -3595,6 +3594,7 @@ def shift_payment_view():
         co_ngay_le=co_ngay_le
     )
 
+
 @app.route('/tong-hop-cong-truc-view')
 @login_required
 def tong_hop_cong_truc_view():
@@ -3602,32 +3602,30 @@ def tong_hop_cong_truc_view():
     from models.user import User
     from models.schedule import Schedule
     from models.shift import Shift
-    from models.hscc_department import HSCCDepartment  # Đảm bảo import đúng model HSCCDepartment
+    from models.hscc_department import HSCCDepartment
 
     user_role = session.get('role')
     user_dept = session.get('department')
 
-    # --- Xử lý khoa được chọn ---
+    # --- Danh sách khoa ---
     if user_role in ['admin', 'admin1']:
-        # Admin xem tất cả
         departments = sorted([d[0] for d in db.session.query(User.department)
-                             .filter(User.department.isnot(None))
-                             .distinct().all()])
+                              .filter(User.department.isnot(None))
+                              .distinct().all()])
         departments.insert(0, 'Tất cả')
-        selected_department = request.args.get('department') or 'Tất cả'
     else:
-        # User thường chỉ thấy khoa của mình
         departments = [user_dept] if user_dept else []
         selected_department = user_dept
 
-    # --- Xử lý ngày bắt đầu/kết thúc ---
+    # --- Lấy tham số ---
+    selected_department = request.args.get('department', selected_department if user_role not in ['admin', 'admin1'] else 'Tất cả')
     start_date = request.args.get('start_date')
     end_date = request.args.get('end_date')
-    mode = request.args.get('mode', '16h')  # '16h' hoặc '24h'
+    mode = request.args.get('mode', '16h')
 
     today = datetime.now()
 
-    # ---- Kiểm tra nếu chưa chọn ngày ----
+    # Nếu chưa chọn ngày → báo lỗi nhưng không crash
     if not start_date or not end_date:
         return render_template(
             'tong_hop_cong_truc_view.html',
@@ -3652,17 +3650,16 @@ def tong_hop_cong_truc_view():
         thang = today.month
         nam = today.year
 
-    # --- Query lịch trực trong khoảng ---
+    # --- Query lịch trực ---
     query = Schedule.query.join(User).join(Shift).filter(Schedule.work_date.between(start_date, end_date))
     if selected_department and selected_department not in ['all', 'Tất cả']:
         query = query.filter(User.department.ilike(selected_department))
 
     schedules = query.all()
 
-    # --- Lấy danh sách khoa HSCC từ bảng cấu hình ---
+    # --- Lấy danh sách HSCC ---
     hscc_depts = [d.department_name for d in HSCCDepartment.query.all()]
 
-    # --- Chuẩn bị dữ liệu ---
     result_by_user = defaultdict(lambda: defaultdict(lambda: {'so_ngay': 0}))
     summary = defaultdict(int)
 
@@ -3672,28 +3669,20 @@ def tong_hop_cong_truc_view():
 
         shift_name = s.shift.name.strip().lower()
 
-        # ➖ Bỏ qua ca Trực thường trú
         if 'thường trú' in shift_name:
             continue
 
-        # Bỏ qua ca không tính công trực
         skip_keywords = ['nghỉ trực', 'nghỉ phép', 'làm ngày', 'làm 1/2 ngày', 'làm 1/2 ngày c', 'phòng khám']
         if any(x in shift_name for x in skip_keywords):
             continue
 
-        # Áp dụng theo chế độ (mode)
         if mode == '24h' and '24h' not in shift_name:
             continue
         if mode == '16h' and '24h' in shift_name:
             continue
 
-        # --- Phân loại ca: Dựa theo HSCCDepartment ---
-        if s.user.department in hscc_depts:
-            loai_ca = 'HSCC'
-        else:
-            loai_ca = 'thường'
+        loai_ca = 'HSCC' if s.user.department in hscc_depts else 'thường'
 
-        # --- Phân loại ngày ---
         mmdd = s.work_date.strftime('%m-%d')
         weekday = s.work_date.weekday()
 
@@ -3704,15 +3693,12 @@ def tong_hop_cong_truc_view():
         else:
             loai_ngay = 'ngày_thường'
 
-        # --- Cộng dồn dữ liệu ---
         result_by_user[s.user_id][(loai_ca, loai_ngay)]['so_ngay'] += 1
         summary[(loai_ca, loai_ngay)] += 1
 
-    # --- Lấy danh sách user ---
     user_ids = list(result_by_user.keys())
     users = User.query.filter(User.id.in_(user_ids), User.role != 'admin').all() if user_ids else []
 
-    # --- Hàm ưu tiên chức vụ ---
     priority_order = ['GĐ', 'PGĐ', 'TK', 'PTK', 'PK', 'BS', 'ĐDT', 'ĐD', 'KTV', 'NV', 'HL', 'BV']
     def get_priority(pos):
         pos = pos.upper() if pos else ''
@@ -3721,7 +3707,6 @@ def tong_hop_cong_truc_view():
                 return i
         return len(priority_order)
 
-    # --- Chuẩn bị dữ liệu hiển thị ---
     rows = []
     for user in users:
         detail = result_by_user[user.id]
@@ -3732,7 +3717,6 @@ def tong_hop_cong_truc_view():
             'ghi_chu': ''
         })
 
-    # --- Sắp xếp theo chức vụ ưu tiên ---
     rows.sort(key=lambda x: get_priority(x['user'].position))
 
     sum_row = {
@@ -3740,12 +3724,15 @@ def tong_hop_cong_truc_view():
         'tong_ngay': sum(summary.values())
     }
 
+    # Bỏ chữ "Tất cả" khi hiển thị
+    dept_display = "" if selected_department in ['Tất cả', 'all', None] else selected_department
+
     return render_template(
         'tong_hop_cong_truc_view.html',
         rows=rows,
         sum_row=sum_row,
         departments=departments,
-        selected_department=selected_department,
+        selected_department=dept_display,
         start_date=start_date,
         end_date=end_date,
         default_start=start_date,
@@ -3755,6 +3742,7 @@ def tong_hop_cong_truc_view():
         mode=mode
     )
 
+
 @app.route('/tong-hop-cong-truc-print')
 @login_required
 def tong_hop_cong_truc_print():
@@ -3762,32 +3750,15 @@ def tong_hop_cong_truc_print():
     from models.user import User
     from models.schedule import Schedule
     from models.shift import Shift
-    from models.hscc_department import HSCCDepartment  # Đảm bảo import model HSCCDepartment
+    from models.hscc_department import HSCCDepartment
 
-    user_role = session.get('role')
-    user_dept = session.get('department')
-
-    # --- Xử lý khoa được chọn ---
-    if user_role in ['admin', 'admin1']:
-        # Admin xem tất cả
-        departments = sorted([d[0] for d in db.session.query(User.department)
-                              .filter(User.department.isnot(None))
-                              .distinct().all()])
-        departments.insert(0, 'Tất cả')
-        selected_department = request.args.get('department') or 'Tất cả'
-    else:
-        # User thường chỉ thấy khoa của mình
-        departments = [user_dept] if user_dept else []
-        selected_department = user_dept
-
-    # --- Lấy tham số ngày ---
+    selected_department = request.args.get('department', '')
     start_date = request.args.get('start_date')
     end_date = request.args.get('end_date')
     mode = request.args.get('mode', '16h')
 
     today = datetime.now()
 
-    # ---- Kiểm tra nếu chưa chọn ngày ----
     if not start_date or not end_date:
         return render_template(
             'tong_hop_cong_truc.html',
@@ -3811,45 +3782,37 @@ def tong_hop_cong_truc_print():
         thang = today.month
         nam = today.year
 
-    # --- Query dữ liệu lịch trực ---
     query = Schedule.query.join(User).join(Shift).filter(Schedule.work_date.between(start_date, end_date))
     if selected_department and selected_department not in ['all', 'Tất cả']:
         query = query.filter(User.department.ilike(selected_department))
 
     schedules = query.all()
 
-    # --- Lấy danh sách khoa HSCC từ bảng cấu hình ---
     hscc_depts = [d.department_name for d in HSCCDepartment.query.all()]
 
     result_by_user = defaultdict(lambda: defaultdict(lambda: {'so_ngay': 0}))
     summary = defaultdict(int)
 
-    # --- Duyệt từng lịch trực ---
     for s in schedules:
         if not s.shift or not s.user:
             continue
 
         shift_name = s.shift.name.strip().lower()
 
-        # ❌ Bỏ ca trực thường trú
         if 'thường trú' in shift_name:
             continue
 
-        # ❌ Bỏ các ca không tính công trực
         skip_keywords = ['nghỉ trực', 'nghỉ phép', 'làm ngày', 'làm 1/2 ngày', 'làm 1/2 ngày c', 'phòng khám']
         if any(x in shift_name for x in skip_keywords):
             continue
 
-        # Áp dụng chế độ 16h/24h
         if mode == '24h' and '24h' not in shift_name:
             continue
         if mode == '16h' and '24h' in shift_name:
             continue
 
-        # --- Xác định loại ca ---
         loai_ca = 'HSCC' if s.user.department in hscc_depts else 'thường'
 
-        # --- Xác định loại ngày ---
         mmdd = s.work_date.strftime('%m-%d')
         weekday = s.work_date.weekday()
 
@@ -3863,11 +3826,9 @@ def tong_hop_cong_truc_print():
         result_by_user[s.user_id][(loai_ca, loai_ngay)]['so_ngay'] += 1
         summary[(loai_ca, loai_ngay)] += 1
 
-    # --- Chuẩn bị dữ liệu user ---
     user_ids = list(result_by_user.keys())
     users = User.query.filter(User.id.in_(user_ids)).all() if user_ids else []
 
-    # --- Hàm ưu tiên chức vụ ---
     priority_order = ['GĐ', 'PGĐ', 'TK', 'PTK', 'PK', 'BS', 'ĐDT', 'ĐD', 'KTV', 'NV', 'HL', 'BV']
     def get_priority(pos):
         pos = pos.upper() if pos else ''
@@ -3886,7 +3847,6 @@ def tong_hop_cong_truc_print():
             'ghi_chu': ''
         })
 
-    # --- Sắp xếp theo chức vụ ưu tiên ---
     rows.sort(key=lambda x: get_priority(x['user'].position))
 
     sum_row = {
@@ -3894,12 +3854,14 @@ def tong_hop_cong_truc_print():
         'tong_ngay': sum(summary.values())
     }
 
-    # --- Render template ---
+    # Bỏ chữ "Tất cả" khi in
+    dept_display = "" if selected_department in ['Tất cả', 'all', None] else selected_department
+
     return render_template(
         'tong_hop_cong_truc.html',
         rows=rows,
         sum_row=sum_row,
-        selected_department=selected_department,
+        selected_department=dept_display,
         start_date=start_date,
         current_day=today.day,
         current_month=today.month,
