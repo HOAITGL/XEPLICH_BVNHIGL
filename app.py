@@ -265,20 +265,18 @@ def login():
 
         app.logger.info(f"[LOGIN] User '{username}' đăng nhập từ IP {request.remote_addr}")
 
-        if not user:
-            return "Không tìm thấy tài khoản"
+        # Không tiết lộ tài khoản hay mật khẩu đúng/sai cụ thể
+        if not user or user.password != password:
+            flash("Tên đăng nhập hoặc mật khẩu không đúng.", "danger")
+            return redirect(url_for('login'))
 
-        if user.password != password:
-            return f"Mật khẩu không đúng. Đúng là: {user.password}"
-
-        login_user(user)  # ✅ Dòng này là BẮT BUỘC khi dùng Flask-Login
+        # Đăng nhập thành công
+        login_user(user)  # ✅ Bắt buộc nếu dùng Flask-Login
         session['user_id'] = user.id
         session['role'] = user.role
         session['department'] = user.department
 
-        # ✅ Ghi lại log đăng nhập
         app.logger.info(f"[LOGIN] Tài khoản '{username}' đã đăng nhập từ IP {request.remote_addr}")
-        
         flash('Đăng nhập thành công!', 'success')
         return redirect(url_for('index'))
 
@@ -2123,7 +2121,8 @@ logging.basicConfig(filename='phanquyen.log', level=logging.INFO)
 
 @app.route('/roles', methods=['GET', 'POST'])
 def manage_roles():
-    if session.get('role') != 'admin':
+    # Kiểm tra quyền: admin và admin1 được truy cập
+    if session.get('role') not in ['admin', 'admin1']:
         return "Bạn không có quyền truy cập trang này."
 
     search = request.args.get('search', '').strip()
@@ -2133,6 +2132,12 @@ def manage_roles():
     per_page = 10
 
     users_query = User.query
+
+    # Admin1 không được xem admin
+    if session.get('role') == 'admin1':
+        users_query = users_query.filter(User.role != 'admin')
+
+    # Lọc theo search, role, department
     if search:
         users_query = users_query.filter(User.name.ilike(f"%{search}%"))
     if role_filter:
@@ -2140,14 +2145,15 @@ def manage_roles():
     if department_filter:
         users_query = users_query.filter_by(department=department_filter)
 
-    pagination = users_query.order_by(User.department).paginate(page=page, per_page=per_page)
+    # Phân trang
+    pagination = users_query.order_by(User.department).paginate(page=page, per_page=per_page, error_out=False)
     users = pagination.items
 
     modules = [
         'trang_chu', 'xem_lich_truc', 'yeu_cau_cv_ngoai_gio', 'don_nghi_phep',
         'xep_lich_truc', 'tong_hop_khth', 'cham_cong', 'bang_cong_gop', 'bang_tinh_tien_truc',
         'cau_hinh_ca_truc', 'cau_hinh_muc_doc_hai','thiet_lap_phong_kham', 'nhan_su_theo_khoa',
-        'cau_hinh_tien_truc', 'thiet_lap_khoa_hscc', 'cấu hình đơn vị', 'phan_quyen',
+        'cau_hinh_tien_truc', 'thiet_lap_khoa_hscc', 'cau_hinh_don_vi', 'phan_quyen',
         'danh_sach_cong_viec', 'xem_log', 'doi_mat_khau', 'module_config'
     ]
 
@@ -2162,7 +2168,7 @@ def manage_roles():
         'bang_cong_gop': 'Bảng công gộp',
         'bang_tinh_tien_truc': 'Bảng thanh toán tiền trực',
         'cau_hinh_ca_truc': 'Cấu hình ca trực',
-        'cau_hinh_muc_doc_hai': 'cấu hình mức độc hại',
+        'cau_hinh_muc_doc_hai': 'Cấu hình mức độc hại',
         'thiet_lap_phong_kham': 'Thiết lập Phòng khám',
         'nhan_su_theo_khoa': 'Nhân sự theo khoa',
         'cau_hinh_tien_truc': 'Cấu hình tiền trực',
@@ -2179,8 +2185,6 @@ def manage_roles():
         all_users = User.query.all()
         for user in all_users:
             selected_modules = request.form.getlist(f'modules_{user.id}[]')
-
-            # Nếu không có modules gửi lên thì bỏ qua → không sửa phân quyền user đó
             if not selected_modules:
                 continue
 
@@ -2196,7 +2200,6 @@ def manage_roles():
                 user.department = dept
                 user.position = position
 
-            # Xoá phân quyền cũ và thêm lại
             Permission.query.filter_by(user_id=user.id).delete()
             for mod in modules:
                 db.session.add(Permission(
@@ -2210,7 +2213,7 @@ def manage_roles():
         return redirect('/roles')
 
     departments = [d[0] for d in db.session.query(User.department).distinct().all() if d[0]]
-    roles = ['admin', 'manager', 'user']
+    roles = ['admin', 'admin1', 'manager', 'user']  # Thêm admin1
     positions = [p[0] for p in db.session.query(User.position).filter(User.position != None).distinct().all()]
 
     for user in users:

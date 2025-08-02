@@ -64,8 +64,11 @@
       </thead>
       <tbody>
         {% for user in users %}
+        {% if session['role'] == 'admin1' and user.role == 'admin' %}
+          {# Ẩn admin với admin1 #}
+        {% else %}
         <tr data-department="{{ user.department }}"
-            class="{% if user.role == 'admin' %}table-danger{% elif user.role == 'manager' %}table-warning{% else %}table-light{% endif %}">
+            class="{% if user.role == 'admin' %}table-danger{% elif user.role == 'admin1' %}table-info{% elif user.role == 'manager' %}table-warning{% else %}table-light{% endif %}">
           <td onclick="markSelectedUser({{ user.id }})" style="cursor: pointer;" title="Click để chọn làm mẫu">
             {{ user.name }}
           </td>
@@ -114,6 +117,7 @@
             </div>
           </td>
         </tr>
+        {% endif %}
         {% endfor %}
       </tbody>
     </table>
@@ -125,7 +129,7 @@
   <ul class="pagination justify-content-center">
     {% if pagination.has_prev %}
       <li class="page-item">
-        <a class="page-link" href="?page={{ pagination.prev_num }}&search={{ current_search }}&role={{ current_role }}">← Trước</a>
+        <a class="page-link" href="?page={{ pagination.prev_num }}&search={{ current_search }}&role={{ current_role }}&department={{ current_department }}">← Trước</a>
       </li>
     {% endif %}
     <li class="page-item disabled">
@@ -133,7 +137,7 @@
     </li>
     {% if pagination.has_next %}
       <li class="page-item">
-        <a class="page-link" href="?page={{ pagination.next_num }}&search={{ current_search }}&role={{ current_role }}">Sau →</a>
+        <a class="page-link" href="?page={{ pagination.next_num }}&search={{ current_search }}&role={{ current_role }}&department={{ current_department }}">Sau →</a>
       </li>
     {% endif %}
   </ul>
