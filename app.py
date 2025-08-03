@@ -3525,14 +3525,27 @@ def shift_payment_view():
 
     schedules = query.all()
 
+    # Danh sách ca hợp lệ
+    valid_shifts = [
+        "trực 16h", "trực 16h t7cn",
+        "trực 24h", "trực 24h t7cn",
+        "trực lễ16h", "trực lễ 24h"
+    ]
+
     # Gom dữ liệu
     data = defaultdict(lambda: defaultdict(int))
     for s in schedules:
         user = s.user
         shift = s.shift
 
+        shift_name = shift.name.strip().lower()
+
+        # Chỉ tính nếu ca hợp lệ
+        if shift_name not in valid_shifts:
+            continue
+
         # Bỏ ca thường trú
-        if "thường trú" in shift.name.strip().lower():
+        if "thường trú" in shift_name:
             continue
 
         ngay_loai = classify_day(s.work_date)
@@ -3601,7 +3614,6 @@ def shift_payment_view():
         nam=nam,
         co_ngay_le=co_ngay_le
     )
-
 
 @app.route('/tong-hop-cong-truc-view')
 @login_required
@@ -3683,11 +3695,22 @@ def tong_hop_cong_truc_view():
     result_by_user = defaultdict(lambda: defaultdict(lambda: {'so_ngay': 0}))
     summary = defaultdict(int)
 
+    # Danh sách ca hợp lệ
+    valid_shifts = [
+        "trực 16h", "trực 16h t7cn",
+        "trực 24h", "trực 24h t7cn",
+        "trực lễ16h", "trực lễ 24h"
+    ]
+
     for s in schedules:
         if not s.shift or not s.user:
             continue
 
         shift_name = s.shift.name.strip().lower()
+
+        # Chỉ tính ca hợp lệ
+        if shift_name not in valid_shifts:
+            continue
 
         # Bỏ ca thường trú
         if 'thường trú' in shift_name:
