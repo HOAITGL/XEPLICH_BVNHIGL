@@ -3500,7 +3500,7 @@ def shift_payment_view():
     if user_role in ['admin', 'admin1']:
         departments = sorted([d[0] for d in db.session.query(User.department)
                               .filter(User.department.isnot(None))
-                              .distinct().all()])
+                              .distinct().all() ])
         departments.insert(0, 'Tất cả')
         if not selected_department:
             selected_department = 'Tất cả'
@@ -3588,7 +3588,11 @@ def shift_payment_view():
             so_ngay = info.get(key, 0)
             if key[1] == 'ngày_lễ' and so_ngay > 0:
                 co_ngay_le = True
-            don_gia = rates.get((ca_chon, *key), 0)
+
+            # Chuẩn hóa ca_chon để khớp với dữ liệu trong ShiftRateConfig
+            ca_key = ca_chon.lower().replace("trực", "").strip()
+            don_gia = rates.get((ca_key, *key), 0) or rates.get((ca_chon, *key), 0)
+
             row['detail'][key] = {'so_ngay': so_ngay, 'don_gia': don_gia}
             row['tien_ca'] += so_ngay * don_gia
 
@@ -3614,6 +3618,7 @@ def shift_payment_view():
         nam=nam,
         co_ngay_le=co_ngay_le
     )
+
 
 @app.route('/tong-hop-cong-truc-view')
 @login_required
