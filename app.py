@@ -3500,7 +3500,7 @@ def shift_payment_view():
     if user_role in ['admin', 'admin1']:
         departments = sorted([d[0] for d in db.session.query(User.department)
                               .filter(User.department.isnot(None))
-                              .distinct().all() ])
+                              .distinct().all()])
         departments.insert(0, 'Tất cả')
         if not selected_department:
             selected_department = 'Tất cả'
@@ -3509,7 +3509,8 @@ def shift_payment_view():
         selected_department = user_dept
 
     hscc_depts = [d.department_name for d in HSCCDepartment.query.all()]
-    rates = {(r.ca_loai, r.truc_loai, r.ngay_loai): r.don_gia for r in ShiftRateConfig.query.all()}
+    rates = {(r.ca_loai.lower().strip(), r.truc_loai.lower().strip(), r.ngay_loai.lower().strip()): r.don_gia
+             for r in ShiftRateConfig.query.all()}
 
     # Query dữ liệu
     query = (
@@ -3589,9 +3590,17 @@ def shift_payment_view():
             if key[1] == 'ngày_lễ' and so_ngay > 0:
                 co_ngay_le = True
 
-            # Chuẩn hóa ca_chon để khớp với dữ liệu trong ShiftRateConfig
+            # Chuẩn hóa toàn bộ key khi lookup rates
             ca_key = ca_chon.lower().replace("trực", "").strip()
-            don_gia = rates.get((ca_key, *key), 0) or rates.get((ca_chon, *key), 0)
+            truc_key = key[0].lower().strip()
+            ngay_key = key[1].lower().strip()
+
+            don_gia = (
+                rates.get((ca_key, truc_key, ngay_key), 0)
+                or rates.get((ca_chon, truc_key, ngay_key), 0)
+                or rates.get((ca_key, key[0], key[1]), 0)
+                or rates.get((ca_chon, key[0], key[1]), 0)
+            )
 
             row['detail'][key] = {'so_ngay': so_ngay, 'don_gia': don_gia}
             row['tien_ca'] += so_ngay * don_gia
