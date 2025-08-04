@@ -989,14 +989,10 @@ def auto_assign_submit():
 def auto_attendance_page():
     from models.user import User
     from models.shift import Shift
-    from models.schedule import Schedule
+    from models.schedule import Schedule  # model lịch trực
     from models.attendance import Attendance
     from datetime import datetime, timedelta
     from flask import request, redirect, url_for, flash, render_template, session
-    import pytz
-
-    # Timezone chuẩn VN
-    vn_tz = pytz.timezone('Asia/Ho_Chi_Minh')
 
     # Giới hạn danh sách khoa theo vai trò
     if session.get('role') == 'admin':
@@ -1005,24 +1001,18 @@ def auto_attendance_page():
         user_department = session.get('department')
         departments = [user_department] if user_department else []
 
-    # Lấy khoa được chọn
     if request.method == 'POST':
         selected_department = request.form.get('department')
     else:
         selected_department = request.args.get('department') or (departments[0] if departments else None)
 
-    # Lấy danh sách ca ngày (fallback: 'làm ngày' hoặc 'ngày')
-    day_shifts = Shift.query.filter(
-        (Shift.name.ilike('%làm ngày%')) | (Shift.name.ilike('%ngày%'))
-    ).all()
+    day_shifts = Shift.query.filter(Shift.name.ilike('%làm ngày%')).all()
 
-    # Lấy danh sách nhân viên theo khoa
     if selected_department:
         users = User.query.filter_by(department=selected_department).order_by(User.name).all()
     else:
         users = []
 
-    # POST: Tạo lịch chấm công tự động
     if request.method == 'POST':
         selected_department = request.form.get('department')
         user_name = session.get('name')
@@ -1031,43 +1021,31 @@ def auto_attendance_page():
         shift_code = request.form.get('shift_code')
         staff_ids = request.form.getlist('staff_ids')
 
-        app.logger.info(
-            f"[AUTO_ATTEND_START] User '{user_name}' tạo lịch {shift_code} cho khoa '{selected_department}' "
-            f"từ {start_date_str} đến {end_date_str} cho {len(staff_ids)} NV."
-        )
+        app.logger.info(f"[AUTO_ATTEND_START] User '{user_name}' bắt đầu tạo lịch trực {shift_code} cho khoa '{selected_department}' từ {start_date_str} đến {end_date_str} cho {len(staff_ids)} nhân viên.")
 
-        # Kiểm tra input
         if not (selected_department and start_date_str and end_date_str and shift_code and staff_ids):
             flash('Vui lòng chọn đầy đủ thông tin.', 'danger')
             return redirect(url_for('auto_attendance_page'))
 
-        # Parse ngày với timezone VN
-        start_date = vn_tz.localize(datetime.strptime(start_date_str, '%Y-%m-%d')).date()
-        end_date = vn_tz.localize(datetime.strptime(end_date_str, '%Y-%m-%d')).date()
+        start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+        end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
 
-        # Lấy shift theo code, fallback theo tên
         shift = Shift.query.filter_by(code=shift_code).first()
         if not shift:
-            shift = Shift.query.filter(Shift.name.ilike(f'%{shift_code}%')).first()
-        if not shift:
-            flash(f"Không tìm thấy ca trực với code hoặc tên: {shift_code}", 'danger')
-            return redirect(url_for('auto_attendance_page', department=selected_department))
+            flash('Ca làm không hợp lệ.', 'danger')
+            return redirect(url_for('auto_attendance_page'))
 
-        # Lấy danh sách nhân viên đã chọn
         staff_members = User.query.filter(User.id.in_(staff_ids)).all()
 
-        # Tạo lịch trực
         current_date = start_date
         try:
             created_count = 0
             while current_date <= end_date:
-                # Bỏ qua cuối tuần và ngày lễ
                 if current_date.weekday() in [5, 6] or current_date.strftime('%m-%d') in {'01-01', '04-30', '05-01', '09-02'}:
                     current_date += timedelta(days=1)
                     continue
 
                 for staff in staff_members:
-                    # Kiểm tra nếu đã có lịch trực ngày này
                     if not Schedule.query.filter_by(user_id=staff.id, work_date=current_date).first():
                         db.session.add(Schedule(user_id=staff.id, work_date=current_date, shift_id=shift.id))
                         created_count += 1
@@ -1084,7 +1062,6 @@ def auto_attendance_page():
         flash(f'Đã tạo lịch trực cho {len(staff_members)} nhân viên từ {start_date} đến {end_date}.', 'success')
         return redirect(url_for('auto_attendance_page', department=selected_department))
 
-    # GET: render giao diện
     return render_template('auto_attendance.html',
                            departments=departments,
                            selected_department=selected_department,
@@ -1151,12 +1128,6 @@ from utils.unit_config import get_unit_config
 
 @app.route('/schedule', methods=['GET', 'POST'])
 def view_schedule():
-    from datetime import datetime, timedelta
-    import pytz
-
-    # Timezone VN
-    vn_tz = pytz.timezone('Asia/Ho_Chi_Minh')
-
     user_role = session.get('role')
     user_dept = session.get('department')
 
@@ -1173,14 +1144,14 @@ def view_schedule():
     else:
         departments = [user_dept] if user_dept else []
 
-    # Ngày bắt đầu và kết thúc (timezone VN)
+    # Ngày bắt đầu và kết thúc
     start_date_str = request.args.get('start_date')
     end_date_str = request.args.get('end_date')
     if start_date_str and end_date_str:
-        start_date = vn_tz.localize(datetime.strptime(start_date_str, '%Y-%m-%d')).date()
-        end_date = vn_tz.localize(datetime.strptime(end_date_str, '%Y-%m-%d')).date()
+        start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+        end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
     else:
-        start_date = datetime.now(vn_tz).date()
+        start_date = datetime.today().date()
         end_date = start_date + timedelta(days=6)
 
     # Lấy lịch trực
@@ -1196,15 +1167,14 @@ def view_schedule():
     schedule_data = {}
     for s in schedules:
         u = s.user
-        contract_type = getattr(u, 'contract_type', None)  # fallback an toàn
-
+        # Không bỏ qua HL, BV, LX – giữ lại tất cả các chức danh
         if u.id not in schedule_data:
             schedule_data[u.id] = {
                 'id': u.id,
                 'name': u.name,
                 'position': u.position,
                 'department': u.department,
-                'contract_type': contract_type,
+                'contract_type': getattr(u, 'contract_type', None),
                 'shifts': {},
                 'shifts_full': {}
             }
@@ -1238,7 +1208,7 @@ def view_schedule():
                 'shifts_full': filtered_shifts
             }
 
-    # Thứ tự chức danh
+    # Thứ tự chức danh (đã thêm HL, BV, LX)
     priority_order = [
         'GĐ', 'PGĐ', 'TK', 'TP', 'PTK', 'PTP', 'PK', 'PP',
         'BS', 'ĐDT', 'KTVT', 'KTV', 'ĐD', 'NV', 'HL', 'BV', 'LX'
@@ -1253,7 +1223,7 @@ def view_schedule():
             return 0  # Ưu tiên biên chế
         return 1  # Hợp đồng sau
 
-    # Sắp xếp
+    # Sắp xếp với ưu tiên chức danh + loại hợp đồng
     schedule_data = dict(sorted(
         schedule_data.items(),
         key=lambda item: (
@@ -1272,33 +1242,24 @@ def view_schedule():
         )
     ))
 
-    # Kiểm tra chữ ký (fallback nếu model không tồn tại)
-    try:
-        from models.schedule_signature import ScheduleSignature
-        signature = ScheduleSignature.query.filter_by(
-            department=selected_department,
-            from_date=start_date,
-            to_date=end_date
-        ).first()
-        is_signed = bool(signature)
-        signed_at = signature.signed_at if signature else None
-    except ImportError:
-        is_signed = False
-        signed_at = None
+    # Kiểm tra chữ ký
+    signature = ScheduleSignature.query.filter_by(
+        department=selected_department,
+        from_date=start_date,
+        to_date=end_date
+    ).first()
+    is_signed = bool(signature)
+    signed_at = signature.signed_at if signature else None
 
-    # Kiểm tra khóa (fallback nếu model không tồn tại)
-    try:
-        from models.schedule_lock import ScheduleLock
-        lock = ScheduleLock.query.filter_by(
-            department=selected_department,
-            start_date=start_date,
-            end_date=end_date
-        ).first()
-        locked = bool(lock)
-    except ImportError:
-        locked = False
+    # Kiểm tra khóa
+    lock = ScheduleLock.query.filter_by(
+        department=selected_department,
+        start_date=start_date,
+        end_date=end_date
+    ).first()
+    locked = bool(lock)
 
-    # unit_config
+    # ---- Thêm phần này: unit_config ----
     unit_config = {
         'name': 'BỆNH VIỆN NHI TỈNH GIA LAI',
         'address': '123 Đường ABC, Gia Lai',
@@ -1314,7 +1275,7 @@ def view_schedule():
         date_range=date_range,
         start_date=start_date,
         end_date=end_date,
-        now=datetime.now(vn_tz),
+        now=datetime.now(),
         is_signed=is_signed,
         signed_at=signed_at,
         locked=locked,
@@ -1323,7 +1284,7 @@ def view_schedule():
             'department': user_dept,
             'name': session.get('name')
         },
-        unit_config=unit_config
+        unit_config=unit_config   # Truyền thêm vào template
     )
 
 @app.route('/schedule/edit/<int:user_id>', methods=['GET', 'POST'])
