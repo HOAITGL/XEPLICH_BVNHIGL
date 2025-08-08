@@ -1,146 +1,189 @@
 {% extends "layout.html" %}
 {% block content %}
-{% if unit_config %}
-<div class="text-center mb-3">
-  <h3 class="mb-0">{{ unit_config.name }}</h3>
-  <p class="mb-0">{{ unit_config.address }} - {{ unit_config.phone }}</p>
-</div>
-{% endif %}
-
 <div class="container mt-4">
-    <h2 class="mb-4 text-center text-uppercase">BẢNG CHẤM CÔNG HƯỞNG MỨC ĐỘC HẠI</h2>
+  <h2 class="mb-4 text-center text-uppercase">BẢNG CHẤM CÔNG HƯỞNG MỨC ĐỘC HẠI</h2>
 
-    <form method="post" id="form-filter" action="/bang-doc-hai" class="row g-3 align-items-end">
-        <div class="col-md-3">
-            <label for="department" class="form-label">Khoa/Phòng</label>
-            <select class="form-select" id="department" name="department">
-                {% for dept in departments %}
-                    <option value="{{ dept }}" {% if dept == selected_department %}selected{% endif %}>
-                        {{ dept if dept else 'Tất cả' }}
-                    </option>
-                {% endfor %}
-            </select>
-        </div>
-        <div class="col-md-2">
-            <label for="start" class="form-label">Từ ngày</label>
-            <input type="date" class="form-control" id="start" name="start" value="{{ start }}">
-        </div>
-        <div class="col-md-2">
-            <label for="end" class="form-label">Đến ngày</label>
-            <input type="date" class="form-control" id="end" name="end" value="{{ end }}">
-        </div>
-        <div class="col-md-5 d-flex gap-2">
-            <button type="submit" class="btn btn-primary">Xem dữ liệu</button>
-            {% if nhom_chung or nhom_ho_ly %}
-                <button type="button" class="btn btn-success" id="btn-export-excel">
-                    <i class="bi bi-file-earmark-excel"></i> Xuất Excel
-                </button>
-                <button type="button" class="btn btn-secondary" id="btn-print" target="_blank">
-                    <i class="bi bi-printer"></i> In
-                </button>
-            {% endif %}
-        </div>
-
-        {% if all_users %}
-        <div class="col-12 mt-3">
-            <label class="form-label fw-bold">Chọn nhân viên hưởng độc hại:</label><br>
-            <div class="form-check form-check-inline">
-                <input class="form-check-input" type="checkbox" id="select-all">
-                <label class="form-check-label" for="select-all">Chọn tất cả</label>
-            </div>
-            {% for user in all_users %}
-                <div class="form-check form-check-inline">
-                    <input class="form-check-input hazard-checkbox" type="checkbox" name="hazard_user_ids"
-                        value="{{ user.id }}" id="user{{ user.id }}"
-                        {% if not selected_user_ids or user.id|string in selected_user_ids %}checked{% endif %}>
-                    <label class="form-check-label" for="user{{ user.id }}">{{ user.name }}</label>
-                </div>
-            {% endfor %}
-        </div>
-        {% endif %}
-    </form>
-
-    <div class="mt-4">
-        {% for title, group in [('Nhóm chung', nhom_chung), ('Nhóm hộ lý', nhom_ho_ly)] %}
-            {% if group %}
-            <h5 class="mt-4 text-primary">{{ title }}</h5>
-            <div class="table-responsive">
-                <table class="table table-bordered text-center align-middle small">
-                    <thead class="table-light">
-                        <tr>
-                            <th>STT</th>
-                            <th>Họ tên</th>
-                            <th>Chức vụ</th>
-                            <th>Mức %</th>
-                            {% for d in days_in_month %}
-                                <th>{{ "%02d"|format(d.day) }}</th>
-                            {% endfor %}
-                            <th>Tổng ngày</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for row in group %}
-                            <tr>
-                                <td>{{ loop.index }}</td>
-                                <td class="text-start">{{ row.name }}</td>
-                                <td>{{ row.position }}</td>
-                                <td><strong>{{ "%.1f"|format(row.hazard_level or 0) }}</strong></td>
-                                {% for val in row.daily_hours %}
-                                    <td>{{ val }}</td>
-                                {% endfor %}
-                                <td><strong>{{ row.total_days }} ngày</strong></td>
-                            </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-            {% endif %}
+  <form method="post" id="form-filter" action="/bang-doc-hai" class="row g-3 align-items-end" autocomplete="off">
+    <div class="col-md-3">
+      <label for="department" class="form-label">Khoa/Phòng</label>
+      <select class="form-select" id="department" name="department">
+        {% for dept in departments %}
+          <option value="{{ dept }}" {% if dept == selected_department %}selected{% endif %}>{{ dept }}</option>
         {% endfor %}
+      </select>
     </div>
+
+    <!-- Dropdown chọn máy (chỉ hiện với khoa Xét nghiệm) -->
+    <div class="col-md-3" id="machine-select-container" style="display:none;">
+      <label for="machine_type" class="form-label">Chọn máy</label>
+      <select class="form-select" id="machine_type" name="machine_type">
+        <option value="">-- Tất cả --</option>
+      </select>
+    </div>
+
+    <div class="col-md-2">
+      <label for="start" class="form-label">Từ ngày</label>
+      <input type="date" class="form-control" id="start" name="start" value="{{ start }}">
+    </div>
+    <div class="col-md-2">
+      <label for="end" class="form-label">Đến ngày</label>
+      <input type="date" class="form-control" id="end" name="end" value="{{ end }}">
+    </div>
+
+    <div class="col-md-5 d-flex gap-2">
+      <button type="submit" class="btn btn-primary">Xem dữ liệu</button>
+      {% if nhom_chung or nhom_ho_ly %}
+      <button type="button" class="btn btn-success" id="btn-export-excel">
+        <i class="bi bi-file-earmark-excel"></i> Xuất Excel
+      </button>
+      <button type="button" class="btn btn-secondary" id="btn-print" target="_blank">
+        <i class="bi bi-printer"></i> In
+      </button>
+      {% endif %}
+    </div>
+
+    {% if all_users %}
+    <div class="col-12 mt-3">
+      <label class="form-label fw-bold">Chọn nhân viên hưởng độc hại:</label><br>
+      <div class="form-check form-check-inline">
+        <input class="form-check-input" type="checkbox" id="select-all">
+        <label class="form-check-label" for="select-all">Chọn tất cả</label>
+      </div>
+      {% for user in all_users %}
+      <div class="form-check form-check-inline">
+        <input class="form-check-input hazard-checkbox" type="checkbox" name="hazard_user_ids"
+               value="{{ user.id }}" id="user{{ user.id }}"
+               {% if not selected_user_ids or user.id|string in selected_user_ids %}checked{% endif %}>
+        <label class="form-check-label" for="user{{ user.id }}">{{ user.name }}</label>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </form>
+
+  <div class="mt-4">
+    {% for title, group in [('Nhóm chung', nhom_chung), ('Nhóm hộ lý', nhom_ho_ly)] %}
+      {% if group %}
+      <h5 class="mt-4 text-primary">{{ title }}</h5>
+      <div class="table-responsive">
+        <table class="table table-bordered text-center align-middle small">
+          <thead class="table-light">
+            <tr>
+              <th>STT</th>
+              <th>Họ tên</th>
+              <th>Chức vụ</th>
+              <th>Mức %</th>
+              {% for d in days_in_month %}
+                <th>{{ "%02d"|format(d.day) }}</th>
+              {% endfor %}
+              <th>Tổng ngày</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in group %}
+            <tr>
+              <td>{{ loop.index }}</td>
+              <td class="text-start">{{ row.name }}</td>
+              <td>{{ row.position }}</td>
+              <td><strong>{{ "%.1f"|format(row.hazard_level or 0) }}</strong></td>
+              {% for val in row.daily_hours %}
+                <td>{{ val }}</td>
+              {% endfor %}
+              <td><strong>{{ row.total_days }} ngày</strong></td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% endif %}
+    {% endfor %}
+  </div>
 </div>
 
 <script>
+// --- Chọn tất cả nhân viên ---
 const selectAll = document.getElementById('select-all');
 if (selectAll) {
-    selectAll.addEventListener('change', function () {
-        document.querySelectorAll('.hazard-checkbox').forEach(cb => cb.checked = this.checked);
-    });
+  selectAll.addEventListener('change', function () {
+    document.querySelectorAll('.hazard-checkbox').forEach(cb => cb.checked = this.checked);
+  });
 }
 
-function buildPostAndSubmit(actionUrl) {
-    const form = document.getElementById('form-filter');
-    const formData = new FormData(form);
+// --- Utils ---
+const normalize = s => (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+const isLabDept = text => normalize(text).includes('xet nghiem');
 
-    const tempForm = document.createElement('form');
-    tempForm.method = 'POST';
-    tempForm.action = actionUrl;
-    tempForm.target = '_blank';
+// --- Máy theo khoa ---
+async function loadMachinesForDept(dept, preselect = '') {
+  const select = document.getElementById('machine_type');
+  select.innerHTML = '<option value="">-- Tất cả --</option>';
+  if (!dept) return;
+  const res = await fetch('/machines-by-department?department=' + encodeURIComponent(dept));
+  const data = await res.json();
+  data.forEach(m => {
+    const opt = document.createElement('option');
+    opt.value = m;
+    opt.textContent = m;
+    if (preselect && preselect === m) opt.selected = true;
+    select.appendChild(opt);
+  });
+}
 
-    for (const [key, value] of formData.entries()) {
-        const input = document.createElement('input');
-        input.type = 'hidden';
-        input.name = key;
-        input.value = value;
-        tempForm.appendChild(input);
+function toggleMachineBox() {
+  const deptSel = document.getElementById('department');
+  const container = document.getElementById('machine-select-container');
+  const machineSel = document.getElementById('machine_type');
+  const text = deptSel.options[deptSel.selectedIndex]?.text || deptSel.value || '';
+  const show = isLabDept(text);
+  container.style.display = show ? 'block' : 'none';
+  if (!show) {
+    machineSel.value = '';
+    machineSel.innerHTML = '<option value="">-- Tất cả --</option>';
+  }
+}
+
+document.addEventListener('DOMContentLoaded', async () => {
+  const deptSel = document.getElementById('department');
+  const preselectedMachine = "{{ selected_machine or '' }}";
+
+  toggleMachineBox();
+
+  const label = deptSel.options[deptSel.selectedIndex]?.text || deptSel.value || '';
+  if (isLabDept(label)) {
+    await loadMachinesForDept(deptSel.value, preselectedMachine);
+  }
+
+  deptSel.addEventListener('change', async () => {
+    toggleMachineBox();
+    const t = deptSel.options[deptSel.selectedIndex]?.text || deptSel.value || '';
+    if (isLabDept(t)) {
+      await loadMachinesForDept(deptSel.value);
     }
+  });
+});
 
-    document.body.appendChild(tempForm);
-    tempForm.submit();
-    document.body.removeChild(tempForm);
+// --- Xuất Excel & In ---
+function buildPostAndSubmit(actionUrl) {
+  const form = document.getElementById('form-filter');
+  const formData = new FormData(form);
+  const tempForm = document.createElement('form');
+  tempForm.method = 'POST';
+  tempForm.action = actionUrl;
+  tempForm.target = '_blank';
+  for (const [key, value] of formData.entries()) {
+    const input = document.createElement('input');
+    input.type = 'hidden';
+    input.name = key;
+    input.value = value;
+    tempForm.appendChild(input);
+  }
+  document.body.appendChild(tempForm);
+  tempForm.submit();
+  document.body.removeChild(tempForm);
 }
-
 const btnExport = document.getElementById('btn-export-excel');
-if (btnExport) {
-    btnExport.addEventListener('click', function () {
-        buildPostAndSubmit('/bang-doc-hai/export-excel');
-    });
-}
-
+if (btnExport) btnExport.addEventListener('click', () => buildPostAndSubmit('/bang-doc-hai/export-excel'));
 const btnPrint = document.getElementById('btn-print');
-if (btnPrint) {
-    btnPrint.addEventListener('click', function () {
-        buildPostAndSubmit('/bang-doc-hai/print');
-    });
-}
+if (btnPrint) btnPrint.addEventListener('click', () => buildPostAndSubmit('/bang-doc-hai/print'));
 </script>
 {% endblock %}

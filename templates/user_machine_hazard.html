@@ -1,0 +1,56 @@
+{% extends "layout.html" %}
+{% block content %}
+<div class="container mt-4">
+    <h2 class="mb-4 text-center">Khai báo máy xét nghiệm cho nhân viên</h2>
+
+    <form method="POST" class="row g-3 border p-3 rounded mb-4">
+        <div class="col-md-4">
+            <label class="form-label">Nhân viên</label>
+            <select name="user_id" class="form-select" required>
+                {% for u in users %}
+                <option value="{{ u.id }}">{{ u.name }} - {{ u.department }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-4">
+            <label class="form-label">Loại máy</label>
+            <select name="machine_type" class="form-select" required>
+                {% for m in machine_types %}
+                <option value="{{ m }}">{{ m }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-4 d-flex align-items-end">
+            <button type="submit" class="btn btn-primary w-100">Thêm khai báo</button>
+        </div>
+    </form>
+
+    <h4>Danh sách khai báo</h4>
+    <table class="table table-bordered table-striped text-center">
+        <thead>
+            <tr>
+                <th>STT</th>
+                <th>Nhân viên</th>
+                <th>Khoa</th>
+                <th>Loại máy</th>
+                <th>Hành động</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for mapping, user in mappings %}
+            <tr>
+                <td>{{ loop.index }}</td>
+                <td>{{ user.name }}</td>
+                <td>{{ user.department }}</td>
+                <td>{{ mapping.machine_type }}</td>
+                <td>
+                    <form method="POST" action="/user-machine-hazard/delete/{{ mapping.id }}" onsubmit="return confirm('Xóa khai báo này?');">
+                        <button class="btn btn-danger btn-sm">Xóa</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

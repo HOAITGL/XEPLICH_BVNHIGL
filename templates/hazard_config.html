@@ -1,9 +1,10 @@
 <!DOCTYPE html>
 <html lang="vi">
 <head>
-    <meta charset="UTF-8">
-    <title>Thiết lập mức độc hại</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <meta charset="UTF-8" />
+  <title>Thiết lập mức độc hại</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
 </head>
 <body class="container mt-4">
   <div class="d-flex justify-content-between align-items-center mb-4">
@@ -12,85 +13,129 @@
   </div>
 
   <form method="post" class="row g-3 border p-3 mb-4 rounded">
+    <!-- Khoa -->
     <div class="col-md-4">
-        <label for="departments" class="form-label">Khoa/Phòng</label>
-        <select name="departments" id="departments" class="form-select" multiple required>
-            {% for d in departments %}
-                <option value="{{ d }}">{{ d }}</option>
-            {% endfor %}
-        </select>
-        <small class="text-muted">Nhấn Ctrl (hoặc Cmd trên Mac) để chọn nhiều khoa</small>
+      <label for="departments" class="form-label">Khoa/Phòng</label>
+      <select name="departments" id="departments" class="form-select" multiple required>
+        {% for d in departments %}
+          <option value="{{ d.name }}" data-is-lab="{{ 1 if d.is_lab else 0 }}">{{ d.name }}</option>
+        {% endfor %}
+      </select>
+      <small class="text-muted">Nhấn Ctrl (hoặc Cmd trên Mac) để chọn nhiều khoa</small>
     </div>
 
+    <!-- Chức vụ -->
     <div class="col-md-2">
-        <label for="position" class="form-label">Chức vụ (nếu áp dụng)</label>
-        <input type="text" name="position" class="form-control" placeholder="VD: HL, KTV">
+      <label for="position" class="form-label">Chức vụ (nếu áp dụng)</label>
+      <input type="text" name="position" class="form-control" placeholder="VD: HL, KTV" />
     </div>
 
+    <!-- Loại máy -->
+    <div class="col-md-2" id="machine-type-group">
+      <label for="machine_type" class="form-label">Loại máy</label>
+      <select name="machine_type" class="form-select">
+        <option value="">Tất cả máy</option>
+        <option value="Máy huyết học">Máy huyết học</option>
+        <option value="Máy truyền máu">Máy truyền máu</option>
+        <option value="Máy vi sinh">Máy vi sinh</option>
+        <!-- Có thể bổ sung thêm các loại máy khác tại đây -->
+      </select>
+      <small class="text-muted">Chỉ áp dụng khi chọn khoa xét nghiệm.</small>
+    </div>
+
+    <!-- Mức độc hại -->
     <div class="col-md-2">
-        <label for="hazard_level" class="form-label">Mức độc hại</label>
-        <input type="number" step="0.01" name="hazard_level" class="form-control" required>
+      <label for="hazard_level" class="form-label">Mức độc hại</label>
+      <input type="number" step="0.01" name="hazard_level" class="form-control" required />
     </div>
 
+    <!-- Đơn vị -->
     <div class="col-md-2">
-        <label for="unit" class="form-label">Đơn vị</label>
-        <select name="unit" class="form-select">
-            <option value="percent">%</option>
-            <option value="ngay">Ngày</option>
-            <option value="gio">Giờ</option>
-        </select>
+      <label for="unit" class="form-label">Đơn vị</label>
+      <select name="unit" class="form-select">
+        <option value="percent">%</option>
+        <option value="ngay">Ngày</option>
+        <option value="gio">Giờ</option>
+      </select>
     </div>
 
+    <!-- Số giờ -->
     <div class="col-md-2">
-        <label for="duration_hours" class="form-label">Số giờ tính</label>
-        <input type="number" step="0.5" name="duration_hours" class="form-control" required>
+      <label for="duration_hours" class="form-label">Số giờ tính</label>
+      <input type="number" step="0.5" name="duration_hours" class="form-control" required />
     </div>
 
+    <!-- Ngày áp dụng -->
     <div class="col-md-3">
-        <label class="form-label">Từ ngày</label>
-        <input type="date" name="start_date" class="form-control" required>
+      <label class="form-label">Từ ngày</label>
+      <input type="date" name="start_date" class="form-control" required />
     </div>
     <div class="col-md-3">
-        <label class="form-label">Đến ngày</label>
-        <input type="date" name="end_date" class="form-control" required>
+      <label class="form-label">Đến ngày</label>
+      <input type="date" name="end_date" class="form-control" required />
     </div>
 
+    <!-- Nút lưu -->
     <div class="col-12">
-        <button type="submit" class="btn btn-primary">Lưu cấu hình</button>
+      <button type="submit" class="btn btn-primary">Lưu cấu hình</button>
     </div>
   </form>
 
   <h4>Danh sách cấu hình</h4>
   <table class="table table-bordered">
-      <thead>
-          <tr>
-              <th>Khoa</th>
-              <th>Chức vụ</th>
-              <th>Mức %</th>
-              <th>Đơn vị</th>
-              <th>Số giờ</th>
-              <th>Thời gian áp dụng</th>
-              <th>Hành động</th>
-          </tr>
-      </thead>
-      <tbody>
-          {% for c in configs %}
-          <tr>
-              <td>{{ c.department }}</td>
-              <td>{{ c.position or 'Tất cả' }}</td>
-              <td>{{ c.hazard_level }}</td>
-              <td>{{ c.unit }}</td>
-              <td>{{ c.duration_hours }}</td>
-              <td>{{ c.start_date.strftime('%d/%m/%Y') }} → {{ c.end_date.strftime('%d/%m/%Y') }}</td>
-              <td>
-                  <a href="{{ url_for('edit_hazard_config', config_id=c.id) }}" class="btn btn-sm btn-warning">Sửa</a>
-                  <a href="{{ url_for('delete_hazard_config', config_id=c.id) }}"
-                     class="btn btn-danger btn-sm"
-                     onclick="return confirm('Bạn có chắc chắn muốn xóa cấu hình này?')">Xóa</a>
-              </td>
-          </tr>
-          {% endfor %}
-      </tbody>
+    <thead>
+      <tr>
+        <th>Khoa</th>
+        <th>Chức vụ</th>
+        <th>Loại máy</th>
+        <th>Mức %</th>
+        <th>Đơn vị</th>
+        <th>Số giờ</th>
+        <th>Thời gian áp dụng</th>
+        <th>Hành động</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for c in configs %}
+      <tr>
+        <td>{{ c.department }}</td>
+        <td>{{ c.position or 'Tất cả' }}</td>
+        <td>{{ c.machine_type or 'Tất cả máy' }}</td>
+        <td>{{ c.hazard_level }}</td>
+        <td>{{ c.unit }}</td>
+        <td>{{ c.duration_hours }}</td>
+        <td>{{ c.start_date.strftime('%d/%m/%Y') }} → {{ c.end_date.strftime('%d/%m/%Y') }}</td>
+        <td>
+          <a href="{{ url_for('edit_hazard_config', config_id=c.id) }}" class="btn btn-sm btn-warning">Sửa</a>
+          <a href="{{ url_for('delete_hazard_config', config_id=c.id) }}"
+             class="btn btn-danger btn-sm"
+             onclick="return confirm('Bạn có chắc chắn muốn xóa cấu hình này?')">Xóa</a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
   </table>
+
+  <script>
+    document.addEventListener("DOMContentLoaded", function () {
+      const deptSelect = document.getElementById('departments');
+      const machineTypeContainer = document.getElementById('machine-type-group');
+      const machineTypeSelect = document.querySelector('select[name="machine_type"]');
+
+      function toggleMachineType() {
+        const isLab = Array.from(deptSelect.selectedOptions)
+          .some(opt => opt.dataset.isLab === "1");
+        if (isLab) {
+          machineTypeContainer.style.display = "";
+        } else {
+          machineTypeContainer.style.display = "none";
+          machineTypeSelect.value = "";
+        }
+      }
+
+      deptSelect.addEventListener('change', toggleMachineType);
+      toggleMachineType(); // chạy khi tải trang
+    });
+  </script>
 </body>
 </html>

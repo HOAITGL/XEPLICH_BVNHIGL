@@ -1,75 +1,78 @@
-import os
+# seed.py
+from datetime import date, timedelta, time
 from extensions import db
+from app import app
 from models.user import User
-from models.shift_rate_config import ShiftRateConfig
-from models.department_setting import DepartmentSetting
-from sqlalchemy import inspect, text
-from flask import Flask
-
-app = Flask(__name__)
-
-# Cấu hình kết nối DB (fallback SQLite nếu local không có PostgreSQL)
-db_url = os.getenv("DATABASE_URL") or "sqlite:///database.db"
-if db_url.startswith("postgres://"):
-    db_url = db_url.replace("postgres://", "postgresql://", 1)
-
-app.config['SQLALCHEMY_DATABASE_URI'] = db_url
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-db.init_app(app)
+from models.shift import Shift
+from models.schedule import Schedule
+from models.hazard_config import HazardConfig
 
 with app.app_context():
-    # KHÔNG dùng create_all() để tránh mất dữ liệu – chỉ chạy upgrade migration
+    db.drop_all()
+    db.create_all()
 
-    # 1. Seed admin user
-    if not User.query.filter_by(username='admin').first():
-        admin = User(
-            name="Quản trị viên",
-            username="admin",
-            password="admin",
-            role="admin",
-            department="Phòng CNTT",
-            position="Bác sĩ",
-            start_year=2010
-        )
-        db.session.add(admin)
-        print("✅ Đã thêm tài khoản admin mặc định.")
-
-    # 2. Seed bảng đơn giá trực
-    rates = [
-        {"ca_loai": "16h", "truc_loai": "thường", "ngay_loai": "ngày_thường", "don_gia": 67500},
-        {"ca_loai": "16h", "truc_loai": "thường", "ngay_loai": "ngày_nghỉ", "don_gia": 117000},
-        {"ca_loai": "16h", "truc_loai": "thường", "ngay_loai": "ngày_lễ", "don_gia": 162000},
-        {"ca_loai": "16h", "truc_loai": "HSCC", "ngay_loai": "ngày_thường", "don_gia": 101250},
-        {"ca_loai": "16h", "truc_loai": "HSCC", "ngay_loai": "ngày_nghỉ", "don_gia": 175500},
-        {"ca_loai": "16h", "truc_loai": "HSCC", "ngay_loai": "ngày_lễ", "don_gia": 243000},
-        {"ca_loai": "24h", "truc_loai": "thường", "ngay_loai": "ngày_thường", "don_gia": 90000},
-        {"ca_loai": "24h", "truc_loai": "thường", "ngay_loai": "ngày_nghỉ", "don_gia": 117000},
-        {"ca_loai": "24h", "truc_loai": "thường", "ngay_loai": "ngày_lễ", "don_gia": 162000},
-        {"ca_loai": "24h", "truc_loai": "HSCC", "ngay_loai": "ngày_thường", "don_gia": 101250},
-        {"ca_loai": "24h", "truc_loai": "HSCC", "ngay_loai": "ngày_nghỉ", "don_gia": 175500},
-        {"ca_loai": "24h", "truc_loai": "HSCC", "ngay_loai": "ngày_lễ", "don_gia": 243000},
+    # ===== 1. Seed Users =====
+    users = [
+        User(name="Nguyễn Thị Lệ Xuân", position="TK", department="Khoa Xét Nghiệm - GPB", active=True),
+        User(name="Vũ Thị Kim Thu", position="PTK", department="Khoa Xét Nghiệm - GPB", active=True),
+        User(name="Hồ Anh Tuấn", position="PTK", department="Khoa Hồi sức - TCCĐ", active=True),
+        User(name="Trần Ngọc Đức", position="BS", department="Khoa Hồi sức - TCCĐ", active=True),
     ]
-    for rate in rates:
-        if not ShiftRateConfig.query.filter_by(**rate).first():
-            db.session.add(ShiftRateConfig(**rate))
-
-    # 3. Seed cấu hình khoa
-    if not DepartmentSetting.query.filter_by(department="Khoa xét nghiệm", key="max_people_per_day").first():
-        db.session.add(DepartmentSetting(department="Khoa xét nghiệm", key="max_people_per_day", value="2"))
-
-    # 4. Thêm cột 'active' vào bảng user nếu chưa có (PostgreSQL)
-    inspector = inspect(db.engine)
-    user_columns = [col['name'] for col in inspector.get_columns('user')]
-    if 'active' not in user_columns:
-        engine_name = db.engine.url.get_backend_name()
-        if engine_name == "postgresql":
-            try:
-                db.session.execute(text('ALTER TABLE "user" ADD COLUMN active BOOLEAN DEFAULT TRUE'))
-                print("✅ Đã thêm cột 'active' vào bảng user.")
-            except Exception as e:
-                print(f"⚠ Không thể thêm cột 'active': {e}")
-        else:
-            print("⚠ SQLite: Bỏ qua thêm cột 'active' (cần migrate thủ công)")
-
+    db.session.add_all(users)
     db.session.commit()
-    print("✅ Seed dữ liệu mẫu hoàn tất.")
+
+    # ===== 2. Seed Shifts =====
+    shifts = [
+        Shift(name="Ca sáng", code="S", start_time=time(7, 0), end_time=time(15, 0), duration=8, order=1),
+        Shift(name="Ca chiều", code="C", start_time=time(15, 0), end_time=time(23, 0), duration=8, order=2),
+        Shift(name="Ca đêm", code="D", start_time=time(23, 0), end_time=time(7, 0), duration=8, order=3),
+    ]
+    db.session.add_all(shifts)
+    db.session.commit()
+
+    # ===== 3. Seed HazardConfig =====
+    hazard_configs = [
+        # Khoa Xét nghiệm – máy Huyết học
+        HazardConfig(department="Khoa Xét Nghiệm - GPB", position="TK",
+                     machine_type="Huyết học", duration_hours=8, hazard_level=0.3,
+                     start_date=date(2025, 8, 1), end_date=date(2025, 8, 31)),
+        HazardConfig(department="Khoa Xét Nghiệm - GPB", position="PTK",
+                     machine_type="Sinh hóa", duration_hours=8, hazard_level=0.3,
+                     start_date=date(2025, 8, 1), end_date=date(2025, 8, 31)),
+
+        # Khoa Hồi sức – không theo máy
+        HazardConfig(department="Khoa Hồi sức - TCCĐ", position="PTK",
+                     duration_hours=8, hazard_level=0.2,
+                     start_date=date(2025, 8, 1), end_date=date(2025, 8, 31)),
+        HazardConfig(department="Khoa Hồi sức - TCCĐ", position="BS",
+                     duration_hours=8, hazard_level=0.2,
+                     start_date=date(2025, 8, 1), end_date=date(2025, 8, 31)),
+    ]
+    db.session.add_all(hazard_configs)
+    db.session.commit()
+
+    # ===== 4. Seed Schedule =====
+    today = date(2025, 8, 1)
+    end_date = date(2025, 8, 25)
+    day_count = (end_date - today).days + 1
+
+    schedules = []
+    for i in range(day_count):
+        work_day = today + timedelta(days=i)
+
+        # Khoa Xét nghiệm – 2 user, 2 máy khác nhau
+        schedules.append(Schedule(user_id=users[0].id, shift_id=shifts[0].id,
+                                   work_date=work_day, machine_type="Huyết học", work_hours=8))
+        schedules.append(Schedule(user_id=users[1].id, shift_id=shifts[0].id,
+                                   work_date=work_day, machine_type="Sinh hóa", work_hours=8))
+
+        # Khoa Hồi sức – 2 user, không máy
+        schedules.append(Schedule(user_id=users[2].id, shift_id=shifts[1].id,
+                                   work_date=work_day, work_hours=8))
+        schedules.append(Schedule(user_id=users[3].id, shift_id=shifts[1].id,
+                                   work_date=work_day, work_hours=8))
+
+    db.session.add_all(schedules)
+    db.session.commit()
+
+    print("✅ Seed dữ liệu hoàn tất.")
