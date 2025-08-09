@@ -75,6 +75,9 @@ app.secret_key = 'lichtruc2025'
 db.init_app(app)
 migrate = Migrate(app, db)
 
+setup_logging(app)
+app.logger.info('[BOOT] Logging system started')
+
 from sqlalchemy import text
 
 @app.before_first_request
@@ -141,7 +144,6 @@ with app.app_context():
     else:
         print("✅ Các bảng chính đã tồn tại.")
 
-setup_logging(app)
 
 migrate = Migrate(app, db)
 
@@ -2464,6 +2466,18 @@ def unit_config():
 
 from flask import send_file
 
+import os
+from flask import Flask, render_template, request, redirect, session, send_file
+
+LOG_DIR = os.path.join(os.path.dirname(__file__), 'logs')
+LOG_FILE = os.path.join(LOG_DIR, 'activity.log')
+
+def ensure_log_file():
+    os.makedirs(LOG_DIR, exist_ok=True)
+    if not os.path.exists(LOG_FILE):
+        # tạo file rỗng để tránh lỗi không tồn tại
+        open(LOG_FILE, 'a', encoding='utf-8').close()     
+
 @app.route('/view-log')
 def view_log():
     if session.get('role') != 'admin':
@@ -4631,6 +4645,8 @@ def _unit_normalize(unit_raw: str) -> str:
     return mapping.get(u, u)
 
 
+import unicodedata
+
 @app.route('/hazard-config', methods=['GET', 'POST'])
 def hazard_config():
     if session.get('role') != 'admin':
@@ -4687,8 +4703,11 @@ def hazard_config():
         .all()
     ]
 
+    # Hàm chuẩn hóa bỏ dấu tiếng Việt và lowercase
     def _normalize_local(s: str) -> str:
-        return (s or '').lower().strip()
+        s = (s or '').strip().lower()
+        s = ''.join(c for c in unicodedata.normalize('NFD', s) if unicodedata.category(c) != 'Mn')
+        return s
 
     departments = [
         {"name": d, "is_lab": ("xet nghiem" in _normalize_local(d))}
