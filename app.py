@@ -1847,10 +1847,13 @@ def export_excel():
 
 @app.route('/shifts')
 def list_shifts():
+    ORDER_COL = Shift.__table__.c.order  # đảm bảo escape "order" khi query
+
     try:
-        shifts = Shift.query.order_by(Shift.order.asc(), Shift.id.asc()).all()
+        shifts = Shift.query.order_by(ORDER_COL.asc()).all()
     except Exception:
-        shifts = Shift.query.order_by(Shift.id.asc()).all()
+        shifts = Shift.query.order_by(Shift.id).all()
+
     return render_template('shifts.html', shifts=shifts)
 
 from flask import render_template, request, redirect, flash
@@ -1898,13 +1901,18 @@ def add_shift():
 
     return render_template('add_shift.html')
 
+from sqlalchemy import asc, desc
+
 @app.route('/shifts/move_up/<int:shift_id>', methods=['GET', 'POST'])
 def move_shift_up(shift_id):
+    ORDER_COL = Shift.__table__.c.order  # cột "order" đã quote cho Postgres
     shift = Shift.query.get_or_404(shift_id)
+
     above_shift = (Shift.query
-                   .filter(Shift.order < shift.order)
-                   .order_by(Shift.order.desc())
+                   .filter(ORDER_COL < shift.order)
+                   .order_by(desc(ORDER_COL))
                    .first())
+
     if above_shift:
         shift.order, above_shift.order = above_shift.order, shift.order
         db.session.commit()
@@ -1915,11 +1923,14 @@ def move_shift_up(shift_id):
 
 @app.route('/shifts/move_down/<int:shift_id>', methods=['GET', 'POST'])
 def move_shift_down(shift_id):
+    ORDER_COL = Shift.__table__.c.order
     shift = Shift.query.get_or_404(shift_id)
+
     below_shift = (Shift.query
-                   .filter(Shift.order > shift.order)
-                   .order_by(Shift.order.asc())
+                   .filter(ORDER_COL > shift.order)
+                   .order_by(asc(ORDER_COL))
                    .first())
+
     if below_shift:
         shift.order, below_shift.order = below_shift.order, shift.order
         db.session.commit()
