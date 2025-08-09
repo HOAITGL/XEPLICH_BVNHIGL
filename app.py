@@ -296,83 +296,164 @@ def logout():
     flash("Bạn đã đăng xuất.", "info")
     return redirect(url_for('login'))
 
+# --- Helper: tìm / tạo đúng ca "Nghỉ phép" mã "P" ---
+from datetime import time
+from models.shift import Shift
+
+def get_or_create_leave_shift():
+    # ƯU TIÊN: đúng mã "P"
+    leave = Shift.query.filter_by(code="P").first()
+    if not leave:
+        # Không lấy "Nghỉ trực" nữa; tạo mới đúng chuẩn
+        leave = Shift(
+            name="Nghỉ phép",
+            code="P",
+            start_time=time(7, 0),
+            end_time=time(7, 0),
+            duration=24.0
+        )
+        db.session.add(leave)
+        db.session.flush()  # để có leave.id ngay
+    return leave
+
+
 @app.route('/leaves')
 @login_required
 def view_leaves():
     from models.leave_request import LeaveRequest
+    from models.user import User
+    from sqlalchemy import desc
 
-    user_id = session.get('user_id')
     role = session.get('role')
+    user_dept = session.get('department')
 
-    if role in ['admin', 'manager']:
-        leaves = LeaveRequest.query.order_by(LeaveRequest.start_date.desc()).all()
+    # Admin/admin1 có thể lọc theo khoa (query ?department=...)
+    selected_department = request.args.get('department')
+
+    if role in ['admin', 'admin1']:
+        q = LeaveRequest.query.join(User)
+        if selected_department:
+            q = q.filter(User.department == selected_department)
+        leaves = q.order_by(desc(LeaveRequest.start_date)).all()
+
+        # Danh sách khoa để admin chọn lọc
+        departments = [d[0] for d in db.session.query(User.department)
+                       .filter(User.department.isnot(None))
+                       .distinct().order_by(User.department).all()]
     else:
-        leaves = LeaveRequest.query.filter_by(user_id=user_id).order_by(LeaveRequest.start_date.desc()).all()
+        # Nhân sự thường chỉ xem đơn của KHOA MÌNH
+        if not user_dept:
+            flash("Tài khoản chưa có thông tin khoa.", "warning")
+            return render_template('leaves.html', leaves=[], departments=[])
 
-    return render_template('leaves.html', leaves=leaves)
+        leaves = (LeaveRequest.query
+                  .join(User)
+                  .filter(User.department == user_dept)
+                  .order_by(desc(LeaveRequest.start_date))
+                  .all())
+        departments = []  # non-admin không cần combobox khoa
 
-from flask_migrate import Migrate
-from extensions import db
-
-migrate = Migrate(app, db)
-
+    return render_template(
+        'leaves.html',
+        leaves=leaves,
+        departments=departments,
+        selected_department=selected_department,
+        current_department=user_dept,
+        current_role=role
+    )
+ 
 @app.route('/leaves/add', methods=['GET', 'POST'])
 @login_required
 def add_leave():
     from models.leave_request import LeaveRequest
+    from models.user import User
+    from models.schedule import Schedule
     from utils.unit_config import get_unit_config
 
     user_role = session.get('role')
     user_dept = session.get('department')
     current_user_id = session.get('user_id')
 
-    # ✅ Danh sách khoa
-    if user_role == 'admin':
+    # Danh sách khoa
+    if user_role in ['admin', 'admin1']:
         departments = [d[0] for d in db.session.query(User.department)
-                       .filter(User.department != None).distinct().all()]
+                       .filter(User.department.isnot(None))
+                       .distinct().all()]
     else:
         departments = [user_dept]
 
-    # ✅ Lấy khoa được chọn
+    # Khoa được chọn
     if request.method == 'POST':
-        selected_department = request.form.get('department') if user_role == 'admin' else user_dept
+        selected_department = request.form.get('department') if user_role in ['admin', 'admin1'] else user_dept
     else:
-        selected_department = request.args.get('department') if user_role == 'admin' else user_dept
+        selected_department = request.args.get('department') if user_role in ['admin', 'admin1'] else user_dept
 
-    # ✅ Lấy danh sách user theo khoa
-    if user_role == 'admin':
-        users = User.query.filter(User.department == selected_department).order_by(User.name).all() if selected_department else []
+    # Danh sách user theo khoa
+    if user_role in ['admin', 'admin1']:
+        users = (User.query
+                 .filter(User.department == selected_department)
+                 .order_by(User.name).all() if selected_department else [])
     else:
-        users = [User.query.get(current_user_id)]
+        # Non-admin chỉ được tạo đơn cho chính mình
+        users = [db.session.get(User, current_user_id)]
 
-    # ✅ Xử lý tạo đơn nghỉ
+    # Xử lý tạo đơn
     if request.method == 'POST' and 'user_id' in request.form:
-        user_id_str = request.args.get('user_id')
-        if user_id_str and user_id_str.isdigit():
-            user_id = int(user_id_str)
-        else:
-            user_id = None  # hoặc xử lý giá trị mặc định
         user_id_str = request.form.get('user_id', '').strip()
         if not user_id_str.isdigit():
             flash("❌ Vui lòng chọn nhân viên hợp lệ.", "danger")
             return redirect('/leaves/add')
 
         user_id = int(user_id_str)
-        start_date = datetime.strptime(request.form['start_date'], '%Y-%m-%d').date()
-        end_date = datetime.strptime(request.form['end_date'], '%Y-%m-%d').date()
+        try:
+            start_date = datetime.strptime(request.form['start_date'], '%Y-%m-%d').date()
+            end_date = datetime.strptime(request.form['end_date'], '%Y-%m-%d').date()
+        except Exception:
+            flash("❌ Ngày bắt đầu/kết thúc không hợp lệ.", "danger")
+            return redirect('/leaves/add')
+
+        if start_date > end_date:
+            flash("❌ Khoảng thời gian nghỉ không hợp lệ.", "danger")
+            return redirect('/leaves/add')
+
         reason = request.form.get('reason')
         location = request.form.get('location')
 
+        # Thông tin bổ sung (nếu có)
         birth_day = request.form.get('birth_day')
         birth_month = request.form.get('birth_month')
         birth_year = request.form.get('birth_year')
-        birth_date_str = f"{birth_year}-{birth_month.zfill(2)}-{birth_day.zfill(2)}"
-        birth_date = datetime.strptime(birth_date_str, '%Y-%m-%d').date()
-        start_work_year = int(request.form.get('start_work_year'))
+        birth_date = None
+        if birth_day and birth_month and birth_year:
+            birth_date_str = f"{birth_year}-{birth_month.zfill(2)}-{birth_day.zfill(2)}"
+            try:
+                birth_date = datetime.strptime(birth_date_str, '%Y-%m-%d').date()
+            except Exception:
+                birth_date = None
 
-        user = User.query.get(user_id)
-        user.start_year = start_work_year
+        if request.form.get('start_work_year'):
+            try:
+                start_work_year = int(request.form.get('start_work_year'))
+                user_obj = db.session.get(User, user_id)
+                if user_obj:
+                    user_obj.start_year = start_work_year
+            except Exception:
+                pass
 
+        # 🔒 Ràng buộc quyền: Non-admin chỉ cho chính mình & đúng khoa
+        target_user = db.session.get(User, user_id)
+        if not target_user:
+            flash("❌ Nhân viên không tồn tại.", "danger")
+            return redirect('/leaves/add')
+        if user_role not in ['admin', 'admin1']:
+            if user_id != current_user_id:
+                flash("❌ Bạn chỉ được tạo đơn nghỉ cho chính mình.", "danger")
+                return redirect('/leaves/add')
+            if target_user.department != user_dept:
+                flash("❌ Bạn không thể tạo đơn cho nhân viên khác khoa.", "danger")
+                return redirect('/leaves/add')
+
+        # 1) Lưu đơn nghỉ
         leave = LeaveRequest(
             user_id=user_id,
             start_date=start_date,
@@ -382,13 +463,35 @@ def add_leave():
             birth_date=birth_date
         )
         db.session.add(leave)
-        db.session.commit()
-        flash("✅ Đã tạo đơn nghỉ phép thành công.", "success")
+
+        # 2) Tự động chấm nghỉ -> gán ca "Nghỉ phép"
+        leave_shift = get_or_create_leave_shift()
+        cur = start_date
+        overwritten = 0
+        created = 0
+        while cur <= end_date:
+            sched = Schedule.query.filter_by(user_id=user_id, work_date=cur).first()
+            if sched:
+                sched.shift_id = leave_shift.id
+                overwritten += 1
+            else:
+                db.session.add(Schedule(user_id=user_id, shift_id=leave_shift.id, work_date=cur))
+                created += 1
+            cur += timedelta(days=1)
+
+        # 3) Commit
+        try:
+            db.session.commit()
+            flash(f"✅ Đã tạo đơn nghỉ phép. Đã chấm nghỉ {created} ngày, cập nhật {overwritten} ngày.", "success")
+        except Exception as e:
+            db.session.rollback()
+            app.logger.error(f"[LEAVE_ADD_ERROR] {e}", exc_info=True)
+            flash(f"❌ Lỗi khi lưu: {e}", "danger")
+
         return redirect('/leaves')
 
-    # ✅ Đơn vị để in ra trong form (nếu cần)
+    # Dữ liệu hiển thị form
     unit = get_unit_config()
-
     return render_template(
         'add_leave.html',
         departments=departments,
