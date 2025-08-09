@@ -3,15 +3,98 @@
 
 {% block content %}
 
+<!-- ====== TIÊU ĐỀ CHUẨN CÔNG VĂN (chỉ hiện khi in) ====== -->
+<div class="d-none d-print-block text-center mb-3">
+  <div class="row">
+    <div class="col-6 text-center">
+      <strong>BỆNH VIỆN NHI TỈNH GIA LAI</strong><br>
+      {% if not selected_department %}
+        <strong>PHÒNG TỔ CHỨC - HCQT</strong>
+      {% else %}
+        <span style="display:inline-block; font-weight:bold; border-bottom:1px solid black; margin-top:2px;">
+          {{ selected_department.upper() }}
+        </span>
+      {% endif %}
+    </div>
+    <div class="col-6 text-center">
+      <strong>CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</strong><br>
+      <div style="margin-top: 4px;">
+        <span style="display:inline-block; font-weight:normal; border-bottom:1px solid black;">
+          Độc lập - Tự do - Hạnh phúc
+        </span>
+      </div>
+      {% if now %}
+      <div style="margin-top: 4px;">
+        <em>Gia Lai, ngày {{ now.strftime('%d') }} tháng {{ now.strftime('%m') }} năm {{ now.strftime('%Y') }}</em>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
 <style>
-  .weekend-holiday {
-    background-color: #ffd6cc !important; /* CN - đỏ nhạt */
+  /* Màu T7/CN/ngày lễ */
+  .weekend-holiday { background-color:#ffd6cc !important; } /* CN - đỏ nhạt */
+  .weekend-holiday[data-weekday="5"] { background-color:#d9eaf7 !important; } /* T7 - xanh nhạt */
+  .weekend-holiday[data-holiday="true"] { background-color:#fff2cc !important; } /* Lễ - vàng nhạt */
+
+  /* --- Thiết lập khi in --- */
+  @media print {
+    .d-print-block { display:block !important; }
+    .d-print-none, .btn, .sidebar, form, nav, .print-hide, .user-greeting { display:none !important; }
+
+    html, body {
+      margin:0 !important; padding:0 !important; width:100%; height:100%;
+      -webkit-print-color-adjust:exact; print-color-adjust:exact;
+    }
+    .container, .row, .main, .wrapper, .content { width:100% !important; margin:0 !important; padding:0 !important; }
+
+    table {
+      width:100% !important;
+      table-layout:auto !important;
+      border-collapse:collapse;
+      font-size:9.5px;
+    }
+    th, td {
+      padding:4px 6px;
+      border:3px solid black;
+      text-align:center;
+      vertical-align:middle;
+      line-height:1.2;
+      word-break:break-word;
+    }
+
+    /* Cột họ tên rộng hơn */
+    th.hoten, td.hoten { min-width:3.5cm; max-width:5.0cm; }
+
+    /* Cột cấp bậc/chức vụ nhỏ lại và 2 dòng */
+    th.chucvu, td.chucvu {
+      min-width:1.2cm; max-width:1.6cm;
+      white-space:pre-line; line-height:1.2;
+      font-size:9.3px; padding:4px 2px;
+    }
+
+    td.code-cell {
+      white-space:pre-line !important;
+      font-size:9.5px; line-height:1.1; padding:4px 2px;
+      word-break:break-word;
+    }
+
+    th.so-cong-kl, td.so-cong-kl,
+    th.so-cong-tg, td.so-cong-tg,
+    th.so-cong-100, td.so-cong-100,
+    th.so-cong-bhxh, td.so-cong-bhxh {
+      min-width:1.0cm !important; max-width:1.2cm !important;
+      text-align:center; white-space:normal;
+    }
+
+    thead { display: table-header-group; }
+    tr { page-break-inside: avoid; }
   }
-  .weekend-holiday[data-weekday="5"] {
-    background-color: #d9eaf7 !important; /* T7 - xanh nhạt */
-  }
-  .weekend-holiday[data-holiday="true"] {
-    background-color: #fff2cc !important; /* Ngày lễ - vàng nhạt */
+
+  @page {
+    size: A4 landscape;
+    margin: 1cm 1cm 0.7cm 1cm; /* chừa chân cho block chữ ký */
   }
 </style>
 
@@ -19,10 +102,11 @@
   BẢNG CHẤM CÔNG THÁNG {{ month }} NĂM {{ year }}
 </h5>
 
+<!-- Bộ lọc: giữ nguyên bản chuẩn -->
 <form method="GET" class="d-flex gap-3 flex-wrap align-items-end mb-4">
   <div>
     <label class="form-label mb-0">Khoa/Phòng:</label>
-    {% if user.role in ['admin', 'admin1'] %}
+    {% if user.role in ['admin','admin1'] %}
       <select name="department" class="form-select">
         <option value="">-- Tất cả --</option>
         {% for dept in departments %}
@@ -38,7 +122,7 @@
     <label class="form-label mb-0">Loại hợp đồng:</label>
     <select name="contract_type" class="form-select">
       <option value="">-- Tất cả --</option>
-      <option value="biên chế" {% if selected_contract == 'biên chế' %}selected{% endif %}>Biên chế</option>
+      <option value="biên chế"  {% if selected_contract == 'biên chế' %}selected{% endif %}>Biên chế</option>
       <option value="hợp đồng" {% if selected_contract == 'hợp đồng' %}selected{% endif %}>Hợp đồng</option>
     </select>
   </div>
@@ -73,35 +157,32 @@
         {% endif %}
       </th>
       <th colspan="{{ days_in_month|length }}" style="background-color:#fff2cc; font-weight:bold;">NGÀY TRONG THÁNG</th>
-      <th class="so-cong-kl" rowspan="3" style="background-color:#d9ead3;">Số công không hưởng lương</th>
-      <th class="so-cong-tg" rowspan="3" style="background-color:#d9ead3;">Số công hưởng lương TG</th>
+      <th class="so-cong-kl"  rowspan="3" style="background-color:#d9ead3;">Số công không hưởng lương</th>
+      <th class="so-cong-tg"  rowspan="3" style="background-color:#d9ead3;">Số công hưởng lương TG</th>
       <th class="so-cong-100" rowspan="3" style="background-color:#d9ead3;">Số công nghỉ việc 100%</th>
       <th class="so-cong-bhxh" rowspan="3" style="background-color:#d9ead3;">Số công BHXH</th>
     </tr>
     <tr>
       <th rowspan="2" style="background-color:#d9ead3;">STT</th>
       <th rowspan="2" class="hoten" style="background-color:#d9ead3;">Họ và tên</th>
-      <th rowspan="2" style="background-color:#d9ead3;">Cấp bậc/ chức vụ</th>
+      <th rowspan="2" class="chucvu" style="background-color:#d9ead3;">Cấp bậc/ chức vụ</th>
       {% for day in days_in_month %}
         {% set weekday = day.weekday() %}
         {% set is_holiday = day in holidays %}
         <th class="ngay {% if weekday in [5,6] or is_holiday %}weekend-holiday{% endif %}"
-            data-weekday="{{ weekday }}"
-            data-holiday="{{ 'true' if is_holiday else 'false' }}">
+            data-weekday="{{ weekday }}" data-holiday="{{ 'true' if is_holiday else 'false' }}">
           {{ "%02d"|format(day.day) }}
         </th>
       {% endfor %}
     </tr>
     <tr>
-      {% set thu_map = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'] %}
+      {% set thu_map = ['T2','T3','T4','T5','T6','T7','CN'] %}
       {% for day in days_in_month %}
         {% set weekday = day.weekday() %}
         {% set is_holiday = day in holidays %}
-        {% set thu = thu_map[weekday] %}
         <th class="ngay {% if weekday in [5,6] or is_holiday %}weekend-holiday{% endif %}"
-            data-weekday="{{ weekday }}"
-            data-holiday="{{ 'true' if is_holiday else 'false' }}">
-          {{ thu }}
+            data-weekday="{{ weekday }}" data-holiday="{{ 'true' if is_holiday else 'false' }}">
+          {{ thu_map[weekday] }}
         </th>
       {% endfor %}
     </tr>
@@ -117,18 +198,44 @@
         {% set is_holiday = day in holidays %}
         {% set code = schedule_map.get((user.id, day), '') %}
         <td class="code-cell {% if weekday in [5,6] or is_holiday %}weekend-holiday{% endif %}"
-            data-weekday="{{ weekday }}"
-            data-holiday="{{ 'true' if is_holiday else 'false' }}">
+            data-weekday="{{ weekday }}" data-holiday="{{ 'true' if is_holiday else 'false' }}">
           {{ code|break_code }}
         </td>
       {% endfor %}
-      <td>{{ summary[user.id]['kl'] }}</td>
-      <td>{{ summary[user.id]['tg'] }}</td>
-      <td>{{ summary[user.id]['100'] }}</td>
-      <td>{{ summary[user.id]['bhxh'] }}</td>
+      <td class="so-cong-kl">{{ summary[user.id]['kl'] }}</td>
+      <td class="so-cong-tg">{{ summary[user.id]['tg'] }}</td>
+      <td class="so-cong-100">{{ summary[user.id]['100'] }}</td>
+      <td class="so-cong-bhxh">{{ summary[user.id]['bhxh'] }}</td>
     </tr>
     {% endfor %}
   </tbody>
 </table>
+
+<!-- ====== CHÂN IN (ký tên) – chỉ hiện khi in ====== -->
+<div class="d-none d-print-block" style="width:100%; font-size:13px; margin-top:0.5cm; page-break-inside:avoid;">
+  <div style="display:grid; grid-template-columns:25% 25% 25% 25%;">
+    <div style="text-align:center;">
+      <strong>NGƯỜI LẬP BẢNG</strong><br><em>(Ký, ghi rõ họ tên)</em>
+    </div>
+    {% if selected_department and "phòng tổ chức" not in selected_department.lower() %}
+      <div style="text-align:center;">
+        {% if "phòng" in selected_department.lower() %}
+          <strong>TRƯỞNG PHÒNG</strong>
+        {% elif "khoa" in selected_department.lower() %}
+          <strong>TRƯỞNG KHOA</strong>
+        {% endif %}
+        <br><em>(Ký, ghi rõ họ tên)</em>
+      </div>
+    {% else %}
+      <div></div>
+    {% endif %}
+    <div style="text-align:center;">
+      <strong>PHÒNG TỔ CHỨC - HCQT</strong><br><em>(Ký, ghi rõ họ tên)</em>
+    </div>
+    <div style="text-align:center;">
+      <strong>GIÁM ĐỐC</strong><br><em>(Ký, ghi rõ họ tên)</em>
+    </div>
+  </div>
+</div>
 
 {% endblock %}
