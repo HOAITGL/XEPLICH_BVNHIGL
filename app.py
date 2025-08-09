@@ -4593,24 +4593,106 @@ def hazard_config():
         machine_types=machine_types
     )
 
+# Nếu chưa có:
+# from models.hazard_config import HazardConfig
+# from datetime import datetime
+# from flask import request, redirect, render_template, session
+
 @app.route('/hazard-config/edit/<int:config_id>', methods=['GET', 'POST'])
 def edit_hazard_config(config_id):
-    config = HazardConfig.query.get_or_404(config_id)
-    
-    if request.method == 'POST':
-        config.department = request.form['department']
-        config.position = request.form.get('position') or None  # ✅ Thêm dòng này
-        config.hazard_level = float(request.form['hazard_level'])
-        config.unit = request.form['unit']
-        config.duration_hours = float(request.form['duration_hours'])
-        config.start_date = datetime.strptime(request.form['start_date'], '%Y-%m-%d').date()
-        config.end_date = datetime.strptime(request.form['end_date'], '%Y-%m-%d').date()
-        db.session.commit()
-        return redirect('/hazard-config')
+    if session.get('role') != 'admin':
+        return "Bạn không có quyền truy cập.", 403
 
-    departments = [d[0] for d in db.session.query(User.department).filter(User.department != None).distinct().all()]
-    
-    return render_template('edit_hazard_config.html', config=config, departments=departments)
+    config = HazardConfig.query.get_or_404(config_id)
+
+    if request.method == 'POST':
+        try:
+            # 1) Lấy & chuẩn hoá dữ liệu form
+            department = request.form['department'].strip()
+            hazard_level = float(request.form['hazard_level'])
+            unit = (request.form.get('unit') or '').strip()
+            if unit not in ('%', 'đ'):  # tuỳ rule hệ thống của bạn
+                pass  # hoặc trả lỗi/validate chi tiết
+
+            duration_hours = float(request.form['duration_hours'])
+            position = (request.form.get('position') or None)
+            machine_type = (request.form.get('machine_type') or None)
+
+            start_date = datetime.strptime(request.form['start_date'], '%Y-%m-%d').date()
+            end_date   = datetime.strptime(request.form['end_date'],   '%Y-%m-%d').date()
+            if start_date > end_date:
+                return "Khoảng thời gian không hợp lệ.", 400
+
+            # 2) Kiểm tra overlap với cấu hình khác (cùng tiêu chí) để "gộp"
+            overlap = HazardConfig.query.filter(
+                HazardConfig.id != config.id,
+                HazardConfig.department == department,
+                (HazardConfig.position == position) if position else HazardConfig.position.is_(None),
+                HazardConfig.unit == unit,
+                (HazardConfig.machine_type == machine_type) if machine_type else HazardConfig.machine_type.is_(None),
+                HazardConfig.start_date <= end_date,
+                HazardConfig.end_date >= start_date
+            ).first()
+
+            if overlap:
+                # Gộp vào bản overlap (tránh trùng nhiều dòng)
+                overlap.hazard_level = hazard_level
+                overlap.duration_hours = duration_hours
+                overlap.start_date = min(overlap.start_date, start_date)
+                overlap.end_date   = max(overlap.end_date,   end_date)
+
+                # Nếu bản hiện tại khác overlap, xoá bản hiện tại sau khi cập nhật overlap
+                db.session.delete(config)
+            else:
+                # Không có overlap -> cập nhật trực tiếp bản hiện tại
+                config.department = department
+                config.position = position
+                config.hazard_level = hazard_level
+                config.unit = unit
+                config.duration_hours = duration_hours
+                config.start_date = start_date
+                config.end_date = end_date
+                config.machine_type = machine_type
+
+            db.session.commit()
+            return redirect('/hazard-config')
+
+        except Exception as e:
+            db.session.rollback()
+            return f"Lỗi xử lý: {e}", 400
+
+    # GET: chuẩn bị dữ liệu giống route /hazard-config
+    departments_raw = [
+        d[0] for d in db.session.query(User.department)
+        .filter(User.department.isnot(None))
+        .distinct()
+        .order_by(User.department)
+        .all()
+    ]
+
+    # nếu bạn đang dùng _normalize ở route /hazard-config, tận dụng lại:
+    def _normalize_local(s: str) -> str:
+        # nếu đã có _normalize() global thì thay bằng bản đó
+        return (s or '').lower().strip()
+
+    departments = [
+        {"name": d, "is_lab": ("xet nghiem" in _normalize_local(d))}
+        for d in departments_raw
+    ]
+
+    machine_types = [
+        ("", "Tất cả máy"),
+        ("Máy huyết học", "Máy huyết học"),
+        ("Máy truyền máu", "Máy truyền máu"),
+        ("Máy vi sinh", "Máy vi sinh"),
+    ]
+
+    return render_template(
+        'edit_hazard_config.html',
+        config=config,
+        departments=departments,
+        machine_types=machine_types
+    )
 
 @app.route('/hazard-config/delete/<int:config_id>')
 def delete_hazard_config(config_id):
