@@ -24,7 +24,7 @@
             </select>
         </div>
 
-        <!-- Chức vụ (optional) -->
+        <!-- Chức vụ -->
         <div class="col-md-2">
             <label class="form-label">Chức vụ áp dụng</label>
             <input type="text" name="position" class="form-control"
@@ -32,7 +32,7 @@
             <small class="text-muted">Để trống nếu áp dụng cho mọi chức vụ</small>
         </div>
 
-        <!-- Loại máy (optional) -->
+        <!-- Loại máy -->
         <div class="col-md-3">
             <label class="form-label">Loại máy</label>
             <select name="machine_type" class="form-select">
@@ -48,22 +48,19 @@
         <!-- Mức độc hại -->
         <div class="col-md-3">
             <label class="form-label">Mức độc hại</label>
-            <select name="hazard_level" class="form-select">
-                <option value="0.1" {% if config.hazard_level == 0.1 %}selected{% endif %}>10%</option>
-                <option value="0.2" {% if config.hazard_level == 0.2 %}selected{% endif %}>20%</option>
-                <option value="0.3" {% if config.hazard_level == 0.3 %}selected{% endif %}>30%</option>
-                <option value="0.4" {% if config.hazard_level == 0.4 %}selected{% endif %}>40%</option>
-            </select>
+            <input type="number" step="0.01" name="hazard_level" class="form-control"
+                   value="{{ config.hazard_level }}" required>
         </div>
 
         <!-- Đơn vị -->
         <div class="col-md-2">
             <label class="form-label">Đơn vị</label>
-            <select name="unit" class="form-select">
+            <select name="unit" class="form-select" required>
                 <option value="%" {% if config.unit == '%' %}selected{% endif %}>%</option>
-                <option value="đ" {% if config.unit == 'đ' %}selected{% endif %}>đ</option>
+                <option value="ngay" {% if config.unit == 'ngay' %}selected{% endif %}>Ngày</option>
+                <option value="gio" {% if config.unit == 'gio' %}selected{% endif %}>Giờ</option>
             </select>
-            <small class="text-muted">Hệ thống chấp nhận % hoặc đ</small>
+            <small class="text-muted">Hệ thống chấp nhận %, ngày hoặc giờ</small>
         </div>
 
         <!-- Số giờ tính -->

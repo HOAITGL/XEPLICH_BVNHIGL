@@ -1848,10 +1848,9 @@ def export_excel():
 @app.route('/shifts')
 def list_shifts():
     try:
-        shifts = Shift.query.order_by(Shift.order).all()
+        shifts = Shift.query.order_by(Shift.order.asc(), Shift.id.asc()).all()
     except Exception:
-        shifts = Shift.query.order_by(Shift.id).all()
-
+        shifts = Shift.query.order_by(Shift.id.asc()).all()
     return render_template('shifts.html', shifts=shifts)
 
 from flask import render_template, request, redirect, flash
@@ -1899,34 +1898,33 @@ def add_shift():
 
     return render_template('add_shift.html')
 
-@app.route('/shifts/move_up/<int:shift_id>', methods=['POST'])
+@app.route('/shifts/move_up/<int:shift_id>', methods=['GET', 'POST'])
 def move_shift_up(shift_id):
     shift = Shift.query.get_or_404(shift_id)
-
-    above_shift = Shift.query.filter(Shift.order < shift.order)\
-                             .order_by(Shift.order.desc()).first()
-
+    above_shift = (Shift.query
+                   .filter(Shift.order < shift.order)
+                   .order_by(Shift.order.desc())
+                   .first())
     if above_shift:
         shift.order, above_shift.order = above_shift.order, shift.order
         db.session.commit()
     else:
         flash("Đã ở vị trí đầu tiên, không thể di chuyển lên.", "info")
-
     return redirect('/shifts')
 
-@app.route('/shifts/move_down/<int:shift_id>', methods=['POST'])
+
+@app.route('/shifts/move_down/<int:shift_id>', methods=['GET', 'POST'])
 def move_shift_down(shift_id):
     shift = Shift.query.get_or_404(shift_id)
-
-    below_shift = Shift.query.filter(Shift.order > shift.order)\
-                             .order_by(Shift.order.asc()).first()
-
+    below_shift = (Shift.query
+                   .filter(Shift.order > shift.order)
+                   .order_by(Shift.order.asc())
+                   .first())
     if below_shift:
         shift.order, below_shift.order = below_shift.order, shift.order
         db.session.commit()
     else:
         flash("Đã ở vị trí cuối cùng, không thể di chuyển xuống.", "info")
-
     return redirect('/shifts')
 
 
@@ -2021,7 +2019,7 @@ def export_shifts():
 from datetime import datetime, time
 from flask import flash  # cần import để sử dụng thông báo
 
-@app.route('/import-shifts', methods=['POST'])
+@app.route('/import-shifts', methods=['POST'], endpoint='import_shifts')
 def import_shifts_excel():  # ✅ Đổi tên hàm
     import openpyxl
     from datetime import datetime, time
@@ -4497,10 +4495,32 @@ def _normalize(s: str) -> str:
     s = ''.join(ch for ch in s if unicodedata.category(ch) != 'Mn')
     return s.lower().strip()
 
+# =========================
+# HAZARD CONFIG (NO MERGE)
+# =========================
+
+from datetime import datetime
+from flask import request, redirect, render_template, session
+# from models import db
+# from models.user import User
+# from models.hazard_config import HazardConfig
+
+def _unit_normalize(unit_raw: str) -> str:
+    """Chuẩn hoá đơn vị từ form → một trong: '%', 'đ', 'ngay', 'gio'."""
+    u = (unit_raw or '').strip().lower()
+    mapping = {
+        '%': '%', 'percent': '%', 'pct': '%',
+        'đ': 'đ', 'd': 'đ', 'vnđ': 'đ', 'vnd': 'đ',
+        'ngày': 'ngay', 'ngay': 'ngay', 'day': 'ngay',
+        'giờ': 'gio', 'gio': 'gio', 'hour': 'gio'
+    }
+    return mapping.get(u, u)
+
+
 @app.route('/hazard-config', methods=['GET', 'POST'])
 def hazard_config():
     if session.get('role') != 'admin':
-        return "Bạn không có quyền truy cập."
+        return "Bạn không có quyền truy cập.", 403
 
     if request.method == 'POST':
         try:
@@ -4509,60 +4529,42 @@ def hazard_config():
                 return "Chưa chọn khoa.", 400
 
             hazard_level = float(request.form['hazard_level'])
-            unit = (request.form['unit'] or '').strip()
-            if unit not in ('%', 'đ'):  # ví dụ: tuỳ hệ thống của bạn
-                pass  # hoặc validate theo rules của bạn
 
-            # Nên để Float (xem phần migrate ở trên)
+            unit = _unit_normalize(request.form.get('unit'))
+            if unit not in ('%', 'đ', 'ngay', 'gio'):
+                return "Đơn vị không hợp lệ. Chỉ chấp nhận %, đ, ngày, giờ.", 400
+
             duration_hours = float(request.form['duration_hours'])
 
             position = (request.form.get('position') or None)
             machine_type = (request.form.get('machine_type') or None)
 
             start_date = datetime.strptime(request.form['start_date'], '%Y-%m-%d').date()
-            end_date = datetime.strptime(request.form['end_date'], '%Y-%m-%d').date()
+            end_date   = datetime.strptime(request.form['end_date'],   '%Y-%m-%d').date()
             if start_date > end_date:
                 return "Khoảng thời gian không hợp lệ.", 400
 
-            # Tạo theo từng khoa, tránh overlap
+            # KHÔNG GỘP: luôn tạo bản ghi mới cho từng khoa
             for department in departments:
-                # Optional: chặn overlap
-                overlap = HazardConfig.query.filter(
-                    HazardConfig.department == department,
-                    (HazardConfig.position == position) if position else HazardConfig.position.is_(None),
-                    HazardConfig.unit == unit,
-                    (HazardConfig.machine_type == machine_type) if machine_type else HazardConfig.machine_type.is_(None),
-                    HazardConfig.start_date <= end_date,
-                    HazardConfig.end_date >= start_date
-                ).first()
-
-                if overlap:
-                    # tuỳ bạn: bỏ qua, cập nhật bản cũ, hay báo lỗi
-                    # Ở đây mình chọn cập nhật bản cũ để "gộp" cấu hình
-                    overlap.hazard_level = hazard_level
-                    overlap.duration_hours = duration_hours
-                    overlap.start_date = min(overlap.start_date, start_date)
-                    overlap.end_date = max(overlap.end_date, end_date)
-                else:
-                    db.session.add(HazardConfig(
-                        department=department,
-                        position=position,
-                        hazard_level=hazard_level,
-                        unit=unit,
-                        duration_hours=duration_hours,
-                        start_date=start_date,
-                        end_date=end_date,
-                        machine_type=machine_type
-                    ))
+                db.session.add(HazardConfig(
+                    department=department,
+                    position=position,
+                    hazard_level=hazard_level,
+                    unit=unit,
+                    duration_hours=duration_hours,
+                    start_date=start_date,
+                    end_date=end_date,
+                    machine_type=machine_type
+                ))
 
             db.session.commit()
             return redirect('/hazard-config')
+
         except Exception as e:
             db.session.rollback()
-            # Log e nếu cần
             return f"Lỗi xử lý: {e}", 400
 
-    # lấy danh sách khoa
+    # --- GET: chuẩn bị dữ liệu cho form ---
     departments_raw = [
         d[0] for d in db.session.query(User.department)
         .filter(User.department.isnot(None))
@@ -4571,13 +4573,14 @@ def hazard_config():
         .all()
     ]
 
-    # ✅ gắn cờ is_lab
+    def _normalize_local(s: str) -> str:
+        return (s or '').lower().strip()
+
     departments = [
-        {"name": d, "is_lab": ("xet nghiem" in _normalize(d))}
+        {"name": d, "is_lab": ("xet nghiem" in _normalize_local(d))}
         for d in departments_raw
     ]
 
-    # (khuyến nghị) để frontend load /machines-by-department khi chọn khoa
     machine_types = [
         ("", "Tất cả máy"),
         ("Máy huyết học", "Máy huyết học"),
@@ -4585,7 +4588,11 @@ def hazard_config():
         ("Máy vi sinh", "Máy vi sinh"),
     ]
 
-    configs = HazardConfig.query.order_by(HazardConfig.department, HazardConfig.start_date.desc()).all()
+    configs = HazardConfig.query.order_by(
+        HazardConfig.department.asc(),
+        HazardConfig.start_date.desc()
+    ).all()
+
     return render_template(
         'hazard_config.html',
         configs=configs,
@@ -4593,10 +4600,6 @@ def hazard_config():
         machine_types=machine_types
     )
 
-# Nếu chưa có:
-# from models.hazard_config import HazardConfig
-# from datetime import datetime
-# from flask import request, redirect, render_template, session
 
 @app.route('/hazard-config/edit/<int:config_id>', methods=['GET', 'POST'])
 def edit_hazard_config(config_id):
@@ -4607,12 +4610,15 @@ def edit_hazard_config(config_id):
 
     if request.method == 'POST':
         try:
-            # 1) Lấy & chuẩn hoá dữ liệu form
-            department = request.form['department'].strip()
+            department = (request.form.get('department') or '').strip()
+            if not department:
+                return "Thiếu khoa.", 400
+
             hazard_level = float(request.form['hazard_level'])
-            unit = (request.form.get('unit') or '').strip()
-            if unit not in ('%', 'đ'):  # tuỳ rule hệ thống của bạn
-                pass  # hoặc trả lỗi/validate chi tiết
+
+            unit = _unit_normalize(request.form.get('unit'))
+            if unit not in ('%', 'đ', 'ngay', 'gio'):
+                return "Đơn vị không hợp lệ. Chỉ chấp nhận %, đ, ngày, giờ.", 400
 
             duration_hours = float(request.form['duration_hours'])
             position = (request.form.get('position') or None)
@@ -4623,36 +4629,15 @@ def edit_hazard_config(config_id):
             if start_date > end_date:
                 return "Khoảng thời gian không hợp lệ.", 400
 
-            # 2) Kiểm tra overlap với cấu hình khác (cùng tiêu chí) để "gộp"
-            overlap = HazardConfig.query.filter(
-                HazardConfig.id != config.id,
-                HazardConfig.department == department,
-                (HazardConfig.position == position) if position else HazardConfig.position.is_(None),
-                HazardConfig.unit == unit,
-                (HazardConfig.machine_type == machine_type) if machine_type else HazardConfig.machine_type.is_(None),
-                HazardConfig.start_date <= end_date,
-                HazardConfig.end_date >= start_date
-            ).first()
-
-            if overlap:
-                # Gộp vào bản overlap (tránh trùng nhiều dòng)
-                overlap.hazard_level = hazard_level
-                overlap.duration_hours = duration_hours
-                overlap.start_date = min(overlap.start_date, start_date)
-                overlap.end_date   = max(overlap.end_date,   end_date)
-
-                # Nếu bản hiện tại khác overlap, xoá bản hiện tại sau khi cập nhật overlap
-                db.session.delete(config)
-            else:
-                # Không có overlap -> cập nhật trực tiếp bản hiện tại
-                config.department = department
-                config.position = position
-                config.hazard_level = hazard_level
-                config.unit = unit
-                config.duration_hours = duration_hours
-                config.start_date = start_date
-                config.end_date = end_date
-                config.machine_type = machine_type
+            # KHÔNG GỘP: chỉ cập nhật bản hiện tại
+            config.department = department
+            config.position = position
+            config.hazard_level = hazard_level
+            config.unit = unit
+            config.duration_hours = duration_hours
+            config.start_date = start_date
+            config.end_date = end_date
+            config.machine_type = machine_type
 
             db.session.commit()
             return redirect('/hazard-config')
@@ -4661,7 +4646,7 @@ def edit_hazard_config(config_id):
             db.session.rollback()
             return f"Lỗi xử lý: {e}", 400
 
-    # GET: chuẩn bị dữ liệu giống route /hazard-config
+    # --- GET: dữ liệu cho form ---
     departments_raw = [
         d[0] for d in db.session.query(User.department)
         .filter(User.department.isnot(None))
@@ -4670,9 +4655,7 @@ def edit_hazard_config(config_id):
         .all()
     ]
 
-    # nếu bạn đang dùng _normalize ở route /hazard-config, tận dụng lại:
     def _normalize_local(s: str) -> str:
-        # nếu đã có _normalize() global thì thay bằng bản đó
         return (s or '').lower().strip()
 
     departments = [

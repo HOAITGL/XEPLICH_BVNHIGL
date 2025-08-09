@@ -12,7 +12,7 @@
     <a href="/" class="btn btn-secondary">🏠 Về trang chủ</a>
   </div>
 
-  <form method="post" class="row g-3 border p-3 mb-4 rounded">
+  <form method="post" class="row g-3 border p-3 mb-4 rounded" autocomplete="off">
     <!-- Khoa -->
     <div class="col-md-4">
       <label for="departments" class="form-label">Khoa/Phòng</label>
@@ -38,7 +38,6 @@
         <option value="Máy huyết học">Máy huyết học</option>
         <option value="Máy truyền máu">Máy truyền máu</option>
         <option value="Máy vi sinh">Máy vi sinh</option>
-        <!-- Có thể bổ sung thêm các loại máy khác tại đây -->
       </select>
       <small class="text-muted">Chỉ áp dụng khi chọn khoa xét nghiệm.</small>
     </div>
@@ -46,14 +45,14 @@
     <!-- Mức độc hại -->
     <div class="col-md-2">
       <label for="hazard_level" class="form-label">Mức độc hại</label>
-      <input type="number" step="0.01" name="hazard_level" class="form-control" required />
+      <input type="number" step="0.01" name="hazard_level" class="form-control" placeholder="VD: 0.3" required />
     </div>
 
     <!-- Đơn vị -->
     <div class="col-md-2">
       <label for="unit" class="form-label">Đơn vị</label>
-      <select name="unit" class="form-select">
-        <option value="percent">%</option>
+      <select name="unit" class="form-select" required>
+        <option value="%">%</option>
         <option value="ngay">Ngày</option>
         <option value="gio">Giờ</option>
       </select>
@@ -62,7 +61,7 @@
     <!-- Số giờ -->
     <div class="col-md-2">
       <label for="duration_hours" class="form-label">Số giờ tính</label>
-      <input type="number" step="0.5" name="duration_hours" class="form-control" required />
+      <input type="number" step="0.5" min="0" name="duration_hours" class="form-control" required />
     </div>
 
     <!-- Ngày áp dụng -->
@@ -96,13 +95,14 @@
       </tr>
     </thead>
     <tbody>
+      {% set unit_label = {'%':'%', 'đ':'đ', 'gio':'giờ', 'ngay':'ngày'} %}
       {% for c in configs %}
       <tr>
         <td>{{ c.department }}</td>
         <td>{{ c.position or 'Tất cả' }}</td>
         <td>{{ c.machine_type or 'Tất cả máy' }}</td>
         <td>{{ c.hazard_level }}</td>
-        <td>{{ c.unit }}</td>
+        <td>{{ unit_label.get(c.unit, c.unit) }}</td>
         <td>{{ c.duration_hours }}</td>
         <td>{{ c.start_date.strftime('%d/%m/%Y') }} → {{ c.end_date.strftime('%d/%m/%Y') }}</td>
         <td>
@@ -134,7 +134,7 @@
       }
 
       deptSelect.addEventListener('change', toggleMachineType);
-      toggleMachineType(); // chạy khi tải trang
+      toggleMachineType();
     });
   </script>
 </body>
