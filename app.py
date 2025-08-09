@@ -36,6 +36,9 @@ from sqlalchemy import text as sql_text
 from datetime import date, datetime, timedelta
 import calendar, unicodedata
 from flask import jsonify
+from flask import jsonify, request, session
+from sqlalchemy import func
+import unicodedata
 
 
 from logging.handlers import RotatingFileHandler
@@ -4484,40 +4487,85 @@ def _normalize(s: str) -> str:
     s = ''.join(ch for ch in s if unicodedata.category(ch) != 'Mn')
     return s.lower().strip()
 
+from flask import request, redirect, render_template
+from datetime import datetime
+import unicodedata
+from sqlalchemy import func
+
+def _normalize(s: str) -> str:
+    s = unicodedata.normalize('NFD', s or '')
+    s = ''.join(ch for ch in s if unicodedata.category(ch) != 'Mn')
+    return s.lower().strip()
+
 @app.route('/hazard-config', methods=['GET', 'POST'])
 def hazard_config():
     if session.get('role') != 'admin':
         return "Bạn không có quyền truy cập."
 
     if request.method == 'POST':
-        departments = request.form.getlist('departments')
-        hazard_level = float(request.form['hazard_level'])
-        unit = request.form['unit']
-        duration_hours = float(request.form['duration_hours'])
-        position = request.form.get('position') or None
-        machine_type = request.form.get('machine_type') or None
+        try:
+            departments = request.form.getlist('departments')
+            if not departments:
+                return "Chưa chọn khoa.", 400
 
-        start_date = datetime.strptime(request.form['start_date'], '%Y-%m-%d').date()
-        end_date = datetime.strptime(request.form['end_date'], '%Y-%m-%d').date()
+            hazard_level = float(request.form['hazard_level'])
+            unit = (request.form['unit'] or '').strip()
+            if unit not in ('%', 'đ'):  # ví dụ: tuỳ hệ thống của bạn
+                pass  # hoặc validate theo rules của bạn
 
-        for department in departments:
-            db.session.add(HazardConfig(
-                department=department,
-                position=position,
-                hazard_level=hazard_level,
-                unit=unit,
-                duration_hours=duration_hours,
-                start_date=start_date,
-                end_date=end_date,
-                machine_type=machine_type
-            ))
-        db.session.commit()
-        return redirect('/hazard-config')
+            # Nên để Float (xem phần migrate ở trên)
+            duration_hours = float(request.form['duration_hours'])
+
+            position = (request.form.get('position') or None)
+            machine_type = (request.form.get('machine_type') or None)
+
+            start_date = datetime.strptime(request.form['start_date'], '%Y-%m-%d').date()
+            end_date = datetime.strptime(request.form['end_date'], '%Y-%m-%d').date()
+            if start_date > end_date:
+                return "Khoảng thời gian không hợp lệ.", 400
+
+            # Tạo theo từng khoa, tránh overlap
+            for department in departments:
+                # Optional: chặn overlap
+                overlap = HazardConfig.query.filter(
+                    HazardConfig.department == department,
+                    (HazardConfig.position == position) if position else HazardConfig.position.is_(None),
+                    HazardConfig.unit == unit,
+                    (HazardConfig.machine_type == machine_type) if machine_type else HazardConfig.machine_type.is_(None),
+                    HazardConfig.start_date <= end_date,
+                    HazardConfig.end_date >= start_date
+                ).first()
+
+                if overlap:
+                    # tuỳ bạn: bỏ qua, cập nhật bản cũ, hay báo lỗi
+                    # Ở đây mình chọn cập nhật bản cũ để "gộp" cấu hình
+                    overlap.hazard_level = hazard_level
+                    overlap.duration_hours = duration_hours
+                    overlap.start_date = min(overlap.start_date, start_date)
+                    overlap.end_date = max(overlap.end_date, end_date)
+                else:
+                    db.session.add(HazardConfig(
+                        department=department,
+                        position=position,
+                        hazard_level=hazard_level,
+                        unit=unit,
+                        duration_hours=duration_hours,
+                        start_date=start_date,
+                        end_date=end_date,
+                        machine_type=machine_type
+                    ))
+
+            db.session.commit()
+            return redirect('/hazard-config')
+        except Exception as e:
+            db.session.rollback()
+            # Log e nếu cần
+            return f"Lỗi xử lý: {e}", 400
 
     # lấy danh sách khoa
     departments_raw = [
         d[0] for d in db.session.query(User.department)
-        .filter(User.department != None)
+        .filter(User.department.isnot(None))
         .distinct()
         .order_by(User.department)
         .all()
@@ -4525,13 +4573,11 @@ def hazard_config():
 
     # ✅ gắn cờ is_lab
     departments = [
-        {
-            "name": d,
-            "is_lab": ("xet nghiem" in _normalize(d))  # khớp mọi biến thể "Xét Nghiệm"
-        }
+        {"name": d, "is_lab": ("xet nghiem" in _normalize(d))}
         for d in departments_raw
     ]
 
+    # (khuyến nghị) để frontend load /machines-by-department khi chọn khoa
     machine_types = [
         ("", "Tất cả máy"),
         ("Máy huyết học", "Máy huyết học"),
@@ -4539,11 +4585,11 @@ def hazard_config():
         ("Máy vi sinh", "Máy vi sinh"),
     ]
 
-    configs = HazardConfig.query.order_by(HazardConfig.department).all()
+    configs = HazardConfig.query.order_by(HazardConfig.department, HazardConfig.start_date.desc()).all()
     return render_template(
         'hazard_config.html',
         configs=configs,
-        departments=departments,      # 👈 giờ là list dict
+        departments=departments,
         machine_types=machine_types
     )
 
@@ -4761,29 +4807,63 @@ def bang_doc_hai():
     )
 
 
-@app.route('/machines-by-department')
-def machines_by_department():  # nếu bị trùng endpoint, giữ tên cũ, chỉ thay nội dung
-    dept = request.args.get('department', '')
-    if not dept:
-        return jsonify([])
+def _normalize_no_accent(s: str) -> str:
+    """Dùng để khử trùng lặp theo kiểu 'Huyết học' vs 'Huyet hoc'."""
+    s = (s or '').strip()
+    s = unicodedata.normalize('NFD', s)
+    s = ''.join(ch for ch in s if unicodedata.category(ch) != 'Mn')
+    return s.casefold()
 
-    # Lấy loại máy xuất hiện trong schedule theo khoa (join User vì Schedule không có department)
-    q1 = (db.session.query(Schedule.machine_type)
-          .join(User, User.id == Schedule.user_id)
-          .filter(User.department == dept,
-                  Schedule.machine_type.isnot(None),
-                  Schedule.machine_type != '')
-          .distinct())
+@app.route('/machines-by-department', endpoint='machines_by_department', methods=['GET'])
+def machines_by_department():
+    # 1) Lấy khoa
+    dept = (request.args.get('department') or '').strip()
+    if not dept or dept == 'Tất cả':
+        # Nếu không truyền khoa: 
+        # - user thường/manager → dùng khoa của user trong session
+        # - admin mà không chọn khoa → trả rỗng (tránh quét toàn DB)
+        role = session.get('role')
+        user_dept = session.get('department')
+        if role != 'admin' and user_dept:
+            dept = user_dept
+        else:
+            return jsonify([])
 
-    # Fallback: nếu schedule chưa có machine_type, lấy theo cấu hình độc hại của khoa
-    q2 = (db.session.query(HazardConfig.machine_type)
-          .filter(HazardConfig.department == dept,
-                  HazardConfig.machine_type.isnot(None),
-                  HazardConfig.machine_type != '')
-          .distinct())
+    # 2) Lấy loại máy từ schedule (join User vì Schedule không có department)
+    q1 = (
+        db.session.query(Schedule.machine_type)
+        .join(User, User.id == Schedule.user_id)
+        .filter(
+            User.department == dept,
+            Schedule.machine_type.isnot(None),
+            func.trim(Schedule.machine_type) != ''
+        )
+        .distinct()
+    )
 
-    machines = {m[0] for m in q1.all()} | {m[0] for m in q2.all()}
-    return jsonify(sorted(machines))
+    # 3) Fallback: lấy theo cấu hình độc hại
+    q2 = (
+        db.session.query(HazardConfig.machine_type)
+        .filter(
+            HazardConfig.department == dept,
+            HazardConfig.machine_type.isnot(None),
+            func.trim(HazardConfig.machine_type) != ''
+        )
+        .distinct()
+    )
+
+    # 4) Gộp, khử trùng lặp theo "chữ thường + bỏ dấu", nhưng trả tên “đẹp” nhất
+    raw = [r[0] for r in q1.all()] + [r[0] for r in q2.all()]
+    best_by_key = {}
+    for name in raw:
+        key = _normalize_no_accent(name)
+        # Ưu tiên biến thể có chữ hoa/đúng chính tả dài hơn (thường là tên “đẹp” hơn)
+        if key not in best_by_key or len(name) > len(best_by_key[key]):
+            best_by_key[key] = name.strip()
+
+    # 5) Sắp xếp tên máy theo thứ tự chữ cái, không phân biệt dấu
+    result = sorted(best_by_key.values(), key=_normalize_no_accent)
+    return jsonify(result)
 
 # ----------- Trang gán máy cho nhân viên -----------
 @app.route('/user-machine-hazard', methods=['GET', 'POST'])
