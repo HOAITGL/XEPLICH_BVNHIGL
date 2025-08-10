@@ -1950,6 +1950,23 @@ def normalize_shift_order():
         db.session.query(Shift).filter(Shift.id == sid).update({ORDER_COL: i})
     db.session.commit()
 
+from sqlalchemy import asc, desc
+from flask import redirect, url_for, flash
+
+def normalize_shift_order():
+    """Đánh lại thứ tự 1..n để tránh NULL/trùng 'order' khi mới deploy."""
+    ORDER_COL = Shift.__table__.c.order
+    ids = [row[0] for row in db.session.query(Shift.id).order_by(Shift.id.asc()).all()]
+    for i, sid in enumerate(ids, start=1):
+        db.session.query(Shift).filter(Shift.id == sid).update({ORDER_COL: i})
+    db.session.commit()
+
+@app.route('/shifts/reindex', methods=['POST'])
+def reindex_shifts():
+    normalize_shift_order()
+    flash("Đã sắp xếp lại thứ tự ca trực.", "success")
+    return redirect(url_for('list_shifts'))
+
 @app.route('/shifts')
 def list_shifts():
     ORDER_COL = Shift.__table__.c.order
