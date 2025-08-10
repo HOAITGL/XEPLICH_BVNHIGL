@@ -1685,67 +1685,57 @@ def report_by_department():
 
     return render_template('report_by_department.html', report=report)
 
-from sqlalchemy import case
+from sqlalchemy import or_
+
+from sqlalchemy import or_
 
 @app.route('/users-by-department')
 def users_by_department():
     user_role = session.get('role')
     user_dept = session.get('department')
-    user_name = session.get('name')
 
-    selected_department = request.args.get('department')
+    # Lấy tham số lọc
+    selected_department = (request.args.get('department') or '').strip()
+    q = (request.args.get('q') or '').strip()
 
-    # Tạo order ưu tiên: biên chế = 0, hợp đồng = 1
-    contract_order = case(
-        (User.contract_type.ilike('%biên%'), 0),
-        else_=1
-    )
-
-    # Danh sách sắp xếp theo chức vụ
-    priority_order = ['GĐ', 'PGĐ', 'TK', 'PTK', 'PK', 'BS', 'ĐDT', 'ĐD', 'KTV', 'NV', 'HL', 'BV']
-
-    def sort_by_position(u):
-        pos = (u.position or '').upper().strip()
-        for i, p in enumerate(priority_order):
-            if pos.startswith(p):
-                return i
-        return len(priority_order)
-
-    if user_role in ['manager', 'user']:
-        # Nhân viên hoặc trưởng khoa chỉ xem khoa mình
-        users = User.query.filter(
-            User.department == user_dept,
-            User.active == True
-        ).order_by(contract_order, User.name).all()
-        selected_department = user_dept
-        departments = [user_dept]
+    # Danh sách khoa cho dropdown
+    if user_role in ('admin', 'admin1'):
+        departments = [d[0] for d in db.session.query(User.department)
+                       .filter(User.department != None).distinct().all()]
     else:
-        # Admin có thể chọn khoa bất kỳ
-        departments = [
-            d[0] for d in db.session.query(User.department)
-            .filter(User.department != None)
-            .distinct()
-            .all()
-        ]
-        if selected_department:
-            users = User.query.filter(
-                User.department == selected_department
-            ).order_by(contract_order, User.name).all()
-        else:
-            users = User.query.filter(
-                User.active == True
-            ).order_by(User.department, contract_order, User.name).all()
+        departments = [user_dept]
+        selected_department = user_dept  # nhân viên/manager chỉ xem khoa mình
 
-    # Áp dụng sắp xếp theo priority_order
-    users = sorted(users, key=lambda u: (sort_by_position(u), u.name.lower()))
+    # Base query
+    query = User.query
+    if selected_department:
+        query = query.filter(User.department == selected_department)
+    elif user_role not in ('admin', 'admin1'):
+        # Phòng trường hợp selected_department rỗng nhưng không phải admin
+        query = query.filter(User.department == user_dept)
 
-    app.logger.info(f"[USER_VIEW] User '{user_name}' ({user_role}) xem danh sách nhân sự khoa '{selected_department}'")
+    # Tìm kiếm theo tên / username / chức danh
+    if q:
+        query = query.filter(or_(
+            User.name.ilike(f"%{q}%"),
+            User.username.ilike(f"%{q}%"),
+            User.position.ilike(f"%{q}%")
+        ))
+
+    # Sắp xếp
+    if user_role in ('admin', 'admin1') and not selected_department:
+        query = query.order_by(User.department, User.name)
+    else:
+        query = query.order_by(User.name)
+
+    users = query.all()
 
     return render_template(
         'users_by_department.html',
         users=users,
         departments=departments,
         selected_department=selected_department,
+        q=q,
         current_user_role=user_role
     )
 
@@ -3610,15 +3600,25 @@ from models.shift_rate_config import ShiftRateConfig
 
 @app.route('/shift-rate-config', methods=['GET', 'POST'])
 def shift_rate_config():
-    if session.get('role') != 'admin':
+    # Cho phép admin và admin1
+    if session.get('role') not in ('admin', 'admin1'):
         return "Chỉ admin mới được phép truy cập."
 
     if request.method == 'POST':
         ca_loai = request.form['ca_loai']
         truc_loai = request.form['truc_loai']
         ngay_loai = request.form['ngay_loai']
-        don_gia = int(request.form['don_gia'])
-        new_rate = ShiftRateConfig(ca_loai=ca_loai, truc_loai=truc_loai, ngay_loai=ngay_loai, don_gia=don_gia)
+        try:
+            don_gia = int(request.form['don_gia'])
+        except (TypeError, ValueError):
+            don_gia = 0
+
+        new_rate = ShiftRateConfig(
+            ca_loai=ca_loai,
+            truc_loai=truc_loai,
+            ngay_loai=ngay_loai,
+            don_gia=don_gia
+        )
         db.session.add(new_rate)
         db.session.commit()
         return redirect('/shift-rate-config')
@@ -3639,8 +3639,8 @@ from models.hscc_department import HSCCDepartment  # Import đầu file
 
 @app.route('/configure-hscc', methods=['GET', 'POST'])
 def configure_hscc():
-    if session.get('role') != 'admin':
-        return "Chỉ admin được phép truy cập."
+    if session.get('role') not in ('admin', 'admin1'):
+        return "Chỉ admin hoặc admin1 được phép truy cập."
 
     if request.method == 'POST':
         new_dept = request.form.get('department').strip()
@@ -3648,21 +3648,15 @@ def configure_hscc():
             hscc = HSCCDepartment(department_name=new_dept)
             db.session.add(hscc)
             db.session.commit()
+
     departments = HSCCDepartment.query.all()
     return render_template('configure_hscc.html', departments=departments)
 
-def classify_day(date):
-    if date.weekday() >= 5:  # Thứ 7, Chủ nhật
-        return "ngày_nghỉ"
-    elif date.day in [1, 30, 31] or date.month in [1]:  # Giả định ngày lễ đơn giản
-        return "ngày_lễ"
-    else:
-        return "ngày_thường"
 
 @app.route('/configure-hscc/update/<int:id>', methods=['POST'])
 def update_hscc(id):
-    if session.get('role') != 'admin':
-        return "Chỉ admin được phép truy cập."
+    if session.get('role') not in ('admin', 'admin1'):
+        return "Chỉ admin hoặc admin1 được phép truy cập."
 
     hscc = HSCCDepartment.query.get_or_404(id)
     new_name = request.form.get('new_name') or request.form.get('department')
@@ -3672,6 +3666,7 @@ def update_hscc(id):
         db.session.commit()
 
     return redirect('/configure-hscc')
+
 
 @app.route('/shift-payment-view')
 def shift_payment_view():

@@ -1,0 +1,323 @@
+INFO:werkzeug:127.0.0.1 - - [07/Jul/2025 20:56:42] "[32mPOST /clear-log HTTP/1.1[0m" 302 -
+INFO:werkzeug:127.0.0.1 - - [07/Jul/2025 20:56:42] "GET /view-log HTTP/1.1" 200 -
+INFO:werkzeug:[31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://192.168.1.165:5000
+INFO:werkzeug:[33mPress CTRL+C to quit[0m
+INFO:werkzeug:127.0.0.1 - - [07/Jul/2025 21:08:49] "GET / HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [07/Jul/2025 21:08:49] "[36mGET /static/logo.png HTTP/1.1[0m" 304 -
+ERROR:app:Exception on /users-by-department [GET]
+Traceback (most recent call last):
+  File "C:\Users\Sony\AppData\Local\Programs\Python\Python313\Lib\site-packages\flask\app.py", line 2529, in wsgi_app
+    response = self.full_dispatch_request()
+  File "C:\Users\Sony\AppData\Local\Programs\Python\Python313\Lib\site-packages\flask\app.py", line 1825, in full_dispatch_request
+    rv = self.handle_user_exception(e)
+  File "C:\Users\Sony\AppData\Local\Programs\Python\Python313\Lib\site-packages\flask\app.py", line 1823, in full_dispatch_request
+    rv = self.dispatch_request()
+  File "C:\Users\Sony\AppData\Local\Programs\Python\Python313\Lib\site-packages\flask\app.py", line 1799, in dispatch_request
+    return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+  File "D:\XEPLICH_BVNHIGL\app.py", line 1126, in users_by_department
+    app.logger.info(f"[USER_VIEW] User '{user_name}' ({user_role}) xem danh sách nhân s\u1ef1 khoa '{selected_department}'")
+                                         ^^^^^^^^^
+NameError: name 'user_name' is not defined. Did you mean: 'user_role'?
+INFO:werkzeug:127.0.0.1 - - [07/Jul/2025 21:08:51] "[35m[1mGET /users-by-department HTTP/1.1[0m" 500 -
+INFO:werkzeug:[31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://192.168.1.165:5000
+INFO:werkzeug:[33mPress CTRL+C to quit[0m
+INFO:werkzeug:127.0.0.1 - - [07/Jul/2025 21:09:48] "GET / HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [07/Jul/2025 21:09:49] "[36mGET /static/logo.png HTTP/1.1[0m" 304 -
+INFO:app:[USER_VIEW] User 'None' (admin) xem danh sách nhân s\u1ef1 khoa 'None'
+INFO:werkzeug:127.0.0.1 - - [07/Jul/2025 21:09:50] "GET /users-by-department HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [07/Jul/2025 21:10:33] "GET /view-log HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [07/Jul/2025 21:10:35] "GET /view-log HTTP/1.1" 200 -
+INFO:werkzeug:[31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://192.168.1.165:5000
+INFO:werkzeug:[33mPress CTRL+C to quit[0m
+INFO:werkzeug:127.0.0.1 - - [07/Jul/2025 21:13:37] "GET /view-log HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [07/Jul/2025 21:13:38] "GET /view-log HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [07/Jul/2025 21:13:38] "GET /view-log HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [07/Jul/2025 21:13:38] "GET /view-log HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [07/Jul/2025 21:13:38] "GET /view-log HTTP/1.1" 200 -
+INFO:app:[USER_VIEW] User 'None' (admin) xem danh sách nhân s\u1ef1 khoa 'None'
+INFO:werkzeug:127.0.0.1 - - [07/Jul/2025 21:13:40] "GET /users-by-department HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [07/Jul/2025 21:13:42] "GET /view-log HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [07/Jul/2025 21:15:06] "GET /view-log HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [07/Jul/2025 21:15:07] "GET /view-log HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [07/Jul/2025 21:15:07] "GET /view-log HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [07/Jul/2025 21:15:07] "GET /view-log HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [07/Jul/2025 21:15:07] "GET /view-log HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [07/Jul/2025 21:15:07] "GET /view-log HTTP/1.1" 200 -
+INFO:werkzeug:[31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://192.168.1.165:5000
+INFO:werkzeug:[33mPress CTRL+C to quit[0m
+INFO:werkzeug:127.0.0.1 - - [07/Jul/2025 21:15:49] "GET /view-log HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [07/Jul/2025 21:15:50] "GET /view-log HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [07/Jul/2025 21:15:50] "GET /view-log HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [07/Jul/2025 21:15:50] "GET /view-log HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [07/Jul/2025 21:15:50] "GET /view-log HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [07/Jul/2025 21:15:58] "GET /view-log HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [07/Jul/2025 21:16:32] "GET /view-log HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [07/Jul/2025 21:17:28] "GET /view-log HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [07/Jul/2025 21:17:28] "GET /view-log HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [07/Jul/2025 21:17:28] "GET /view-log HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [07/Jul/2025 21:17:29] "GET /view-log HTTP/1.1" 200 -
+INFO:werkzeug:[31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://192.168.1.165:5000
+INFO:werkzeug:[33mPress CTRL+C to quit[0m
+INFO:werkzeug:127.0.0.1 - - [07/Jul/2025 21:19:11] "GET /view-log HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [07/Jul/2025 21:19:12] "GET /view-log HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [07/Jul/2025 21:19:12] "GET /view-log HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [07/Jul/2025 21:19:12] "GET /view-log HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [07/Jul/2025 21:19:12] "GET /view-log HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [07/Jul/2025 21:19:12] "GET /view-log HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [07/Jul/2025 21:19:12] "GET /view-log HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [07/Jul/2025 21:19:13] "GET /view-log HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [07/Jul/2025 21:19:13] "GET /view-log HTTP/1.1" 200 -
+INFO:werkzeug:[31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://192.168.1.165:5000
+INFO:werkzeug:[33mPress CTRL+C to quit[0m
+INFO:werkzeug:127.0.0.1 - - [07/Jul/2025 21:21:55] "GET /view-log HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [07/Jul/2025 21:21:56] "GET /view-log HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [07/Jul/2025 21:21:56] "GET /view-log HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [07/Jul/2025 21:21:56] "GET /view-log HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [07/Jul/2025 21:21:56] "GET /view-log HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [07/Jul/2025 21:21:57] "GET /view-log HTTP/1.1" 200 -
+INFO:app:[VIEW] User 'None' (admin) xem l\u1ecbch khoa 'None' t\u1eeb 2025-07-07 \u0111\u1ebfn 2025-07-13
+INFO:werkzeug:127.0.0.1 - - [07/Jul/2025 21:21:59] "GET /schedule HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [07/Jul/2025 21:22:12] "GET /assign HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [07/Jul/2025 21:22:27] "GET /auto-assign HTTP/1.1" 200 -
+ERROR:app:Exception on /auto-assign [GET]
+Traceback (most recent call last):
+  File "C:\Users\Sony\AppData\Local\Programs\Python\Python313\Lib\site-packages\flask\app.py", line 2529, in wsgi_app
+    response = self.full_dispatch_request()
+  File "C:\Users\Sony\AppData\Local\Programs\Python\Python313\Lib\site-packages\flask\app.py", line 1825, in full_dispatch_request
+    rv = self.handle_user_exception(e)
+  File "C:\Users\Sony\AppData\Local\Programs\Python\Python313\Lib\site-packages\flask\app.py", line 1823, in full_dispatch_request
+    rv = self.dispatch_request()
+  File "C:\Users\Sony\AppData\Local\Programs\Python\Python313\Lib\site-packages\flask\app.py", line 1799, in dispatch_request
+    return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+  File "D:\XEPLICH_BVNHIGL\app.py", line 666, in auto_assign_page
+    app.logger.info(f"[AUTO_ASSIGN_VIEW] User '{user_name}' m\u1edf trang phân l\u1ecbch nhanh cho khoa '{selected_department}'")
+                                                ^^^^^^^^^
+NameError: name 'user_name' is not defined
+INFO:werkzeug:127.0.0.1 - - [07/Jul/2025 21:22:30] "[35m[1mGET /auto-assign?department=Khoa+D\u01b0\u1ee3c HTTP/1.1[0m" 500 -
+INFO:werkzeug:127.0.0.1 - - [07/Jul/2025 21:22:39] "GET /view-log HTTP/1.1" 200 -
+INFO:app:[VIEW] User 'None' (admin) xem l\u1ecbch khoa 'None' t\u1eeb 2025-07-07 \u0111\u1ebfn 2025-07-13
+INFO:werkzeug:127.0.0.1 - - [07/Jul/2025 21:22:42] "GET /schedule HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [07/Jul/2025 21:22:44] "GET /assign HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [07/Jul/2025 21:22:44] "GET /auto-assign HTTP/1.1" 200 -
+ERROR:app:Exception on /auto-assign [GET]
+Traceback (most recent call last):
+  File "C:\Users\Sony\AppData\Local\Programs\Python\Python313\Lib\site-packages\flask\app.py", line 2529, in wsgi_app
+    response = self.full_dispatch_request()
+  File "C:\Users\Sony\AppData\Local\Programs\Python\Python313\Lib\site-packages\flask\app.py", line 1825, in full_dispatch_request
+    rv = self.handle_user_exception(e)
+  File "C:\Users\Sony\AppData\Local\Programs\Python\Python313\Lib\site-packages\flask\app.py", line 1823, in full_dispatch_request
+    rv = self.dispatch_request()
+  File "C:\Users\Sony\AppData\Local\Programs\Python\Python313\Lib\site-packages\flask\app.py", line 1799, in dispatch_request
+    return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+  File "D:\XEPLICH_BVNHIGL\app.py", line 666, in auto_assign_page
+    app.logger.info(f"[AUTO_ASSIGN_VIEW] User '{user_name}' m\u1edf trang phân l\u1ecbch nhanh cho khoa '{selected_department}'")
+                                                ^^^^^^^^^
+NameError: name 'user_name' is not defined
+INFO:werkzeug:127.0.0.1 - - [07/Jul/2025 21:22:48] "[35m[1mGET /auto-assign?department=Khoa+D\u01b0\u1ee3c HTTP/1.1[0m" 500 -
+INFO:werkzeug:127.0.0.1 - - [07/Jul/2025 21:23:17] "GET /assign HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [07/Jul/2025 21:23:18] "GET /auto-attendance HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [07/Jul/2025 21:23:21] "GET /auto-attendance?department=Ban%20giám%20\u0111\u1ed1c HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [07/Jul/2025 21:23:23] "GET /assign HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [07/Jul/2025 21:23:25] "GET /assign?department=Ban+giám+\u0111\u1ed1c HTTP/1.1" 200 -
+INFO:werkzeug:[31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://192.168.1.165:5000
+INFO:werkzeug:[33mPress CTRL+C to quit[0m
+INFO:werkzeug:127.0.0.1 - - [07/Jul/2025 21:24:51] "GET /assign?department=Ban+giám+\u0111\u1ed1c HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [07/Jul/2025 21:24:52] "GET /assign?department=Ban+giám+\u0111\u1ed1c HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [07/Jul/2025 21:24:52] "GET /assign?department=Ban+giám+\u0111\u1ed1c HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [07/Jul/2025 21:24:52] "GET /assign?department=Ban+giám+\u0111\u1ed1c HTTP/1.1" 200 -
+INFO:app:[AUTO_ASSIGN_VIEW] User 'None' m\u1edf trang phân l\u1ecbch nhanh cho khoa 'None'
+INFO:werkzeug:127.0.0.1 - - [07/Jul/2025 21:24:53] "GET /auto-assign HTTP/1.1" 200 -
+INFO:app:[AUTO_ASSIGN_VIEW] User 'None' m\u1edf trang phân l\u1ecbch nhanh cho khoa 'Khoa D\u01b0\u1ee3c'
+INFO:werkzeug:127.0.0.1 - - [07/Jul/2025 21:24:55] "GET /auto-assign?department=Khoa+D\u01b0\u1ee3c HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [07/Jul/2025 21:25:13] "GET /view-log HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [07/Jul/2025 21:27:50] "GET /view-log HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [07/Jul/2025 21:27:51] "GET /view-log HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [07/Jul/2025 21:27:51] "GET /view-log HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [07/Jul/2025 21:27:52] "GET /view-log HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [07/Jul/2025 21:27:52] "GET /view-log HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [07/Jul/2025 21:27:52] "GET /view-log HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [07/Jul/2025 21:27:52] "GET /view-log HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [07/Jul/2025 21:30:41] "GET /view-log HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [07/Jul/2025 21:30:41] "GET /view-log HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [07/Jul/2025 21:30:41] "GET /view-log HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [07/Jul/2025 21:30:41] "GET /view-log HTTP/1.1" 200 -
+INFO:werkzeug:[31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://192.168.1.165:5000
+INFO:werkzeug:[33mPress CTRL+C to quit[0m
+INFO:werkzeug:127.0.0.1 - - [08/Jul/2025 11:00:11] "GET / HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [08/Jul/2025 11:00:11] "[36mGET /static/logo.png HTTP/1.1[0m" 304 -
+INFO:werkzeug:127.0.0.1 - - [08/Jul/2025 11:00:17] "GET /assign HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [08/Jul/2025 11:00:25] "GET /assign?department=Khoa+Xét+Nghi\u1ec7m+-+GPB HTTP/1.1" 200 -
+ERROR:app:Exception on /assign [POST]
+Traceback (most recent call last):
+  File "C:\Users\Sony\AppData\Local\Programs\Python\Python313\Lib\site-packages\flask\app.py", line 2529, in wsgi_app
+    response = self.full_dispatch_request()
+  File "C:\Users\Sony\AppData\Local\Programs\Python\Python313\Lib\site-packages\flask\app.py", line 1825, in full_dispatch_request
+    rv = self.handle_user_exception(e)
+  File "C:\Users\Sony\AppData\Local\Programs\Python\Python313\Lib\site-packages\flask\app.py", line 1823, in full_dispatch_request
+    rv = self.dispatch_request()
+  File "C:\Users\Sony\AppData\Local\Programs\Python\Python313\Lib\site-packages\flask\app.py", line 1799, in dispatch_request
+    return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+  File "D:\XEPLICH_BVNHIGL\app.py", line 614, in assign_schedule
+    app.logger.info(f"[ASSIGN] User '{user_name}' b\u1eaft \u0111\u1ea7u phân l\u1ecbch khoa '{selected_department}' t\u1eeb {start_date} \u0111\u1ebfn {end_date}")
+                                      ^^^^^^^^^
+NameError: name 'user_name' is not defined. Did you mean: 'user_role'?
+INFO:werkzeug:127.0.0.1 - - [08/Jul/2025 11:01:09] "[35m[1mPOST /assign?department=Khoa+Xét+Nghi\u1ec7m+-+GPB HTTP/1.1[0m" 500 -
+INFO:werkzeug:[31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://192.168.1.165:5000
+INFO:werkzeug:[33mPress CTRL+C to quit[0m
+INFO:app:[ASSIGN] User 'None' b\u1eaft \u0111\u1ea7u phân l\u1ecbch khoa 'Khoa Xét Nghi\u1ec7m - GPB' t\u1eeb 2025-07-07 \u0111\u1ebfn 2025-07-13
+INFO:werkzeug:127.0.0.1 - - [08/Jul/2025 11:03:26] "[32mPOST /assign?department=Khoa+Xét+Nghi\u1ec7m+-+GPB HTTP/1.1[0m" 302 -
+INFO:werkzeug:127.0.0.1 - - [08/Jul/2025 11:03:26] "GET /assign?department=Khoa%20Xét%20Nghi\u1ec7m%20-%20GPB HTTP/1.1" 200 -
+INFO:app:[VIEW] User 'None' (admin) xem l\u1ecbch khoa 'None' t\u1eeb 2025-07-08 \u0111\u1ebfn 2025-07-14
+INFO:werkzeug:127.0.0.1 - - [08/Jul/2025 11:03:35] "GET /schedule HTTP/1.1" 200 -
+INFO:app:[VIEW] User 'None' (admin) xem l\u1ecbch khoa 'Khoa Xét Nghi\u1ec7m - GPB' t\u1eeb 2025-07-07 \u0111\u1ebfn 2025-07-13
+INFO:werkzeug:127.0.0.1 - - [08/Jul/2025 11:03:44] "GET /schedule?department=Khoa+Xét+Nghi\u1ec7m+-+GPB&start_date=2025-07-07&end_date=2025-07-13 HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [08/Jul/2025 11:04:25] "GET /assign HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [08/Jul/2025 11:04:29] "GET /auto-attendance HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [08/Jul/2025 11:04:38] "GET /auto-attendance?department=Khoa%20Xét%20Nghi\u1ec7m%20-%20GPB HTTP/1.1" 200 -
+INFO:werkzeug:[31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://192.168.1.165:5000
+INFO:werkzeug:[33mPress CTRL+C to quit[0m
+INFO:werkzeug:127.0.0.1 - - [08/Jul/2025 11:55:29] "GET /auto-attendance?department=Khoa%20Xét%20Nghi\u1ec7m%20-%20GPB HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [08/Jul/2025 11:55:30] "GET /auto-attendance?department=Khoa%20Xét%20Nghi\u1ec7m%20-%20GPB HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [08/Jul/2025 11:55:31] "GET /auto-attendance?department=Khoa%20Xét%20Nghi\u1ec7m%20-%20GPB HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [08/Jul/2025 11:55:31] "GET /auto-attendance?department=Khoa%20Xét%20Nghi\u1ec7m%20-%20GPB HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [08/Jul/2025 11:55:31] "GET /auto-attendance?department=Khoa%20Xét%20Nghi\u1ec7m%20-%20GPB HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [08/Jul/2025 11:55:31] "GET /auto-attendance?department=Khoa%20Xét%20Nghi\u1ec7m%20-%20GPB HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [08/Jul/2025 11:55:31] "GET /auto-attendance?department=Khoa%20Xét%20Nghi\u1ec7m%20-%20GPB HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [08/Jul/2025 11:55:32] "GET /auto-attendance?department=Khoa%20Xét%20Nghi\u1ec7m%20-%20GPB HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [08/Jul/2025 11:55:32] "GET /auto-attendance?department=Khoa%20Xét%20Nghi\u1ec7m%20-%20GPB HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [08/Jul/2025 11:55:32] "GET /auto-attendance?department=Khoa%20Xét%20Nghi\u1ec7m%20-%20GPB HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [08/Jul/2025 11:55:41] "GET /auto-attendance?department=Phòng%20V\u1eadt%20t\u01b0%20-%20TBYT HTTP/1.1" 200 -
+ERROR:app:Exception on /auto-attendance [POST]
+Traceback (most recent call last):
+  File "C:\Users\Sony\AppData\Local\Programs\Python\Python313\Lib\site-packages\flask\app.py", line 2529, in wsgi_app
+    response = self.full_dispatch_request()
+  File "C:\Users\Sony\AppData\Local\Programs\Python\Python313\Lib\site-packages\flask\app.py", line 1825, in full_dispatch_request
+    rv = self.handle_user_exception(e)
+  File "C:\Users\Sony\AppData\Local\Programs\Python\Python313\Lib\site-packages\flask\app.py", line 1823, in full_dispatch_request
+    rv = self.dispatch_request()
+  File "C:\Users\Sony\AppData\Local\Programs\Python\Python313\Lib\site-packages\flask\app.py", line 1799, in dispatch_request
+    return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+  File "D:\XEPLICH_BVNHIGL\app.py", line 709, in auto_attendance_page
+    app.logger.info(f"[AUTO_ATTEND_START] User '{user_name}' b\u1eaft \u0111\u1ea7u t\u1ea1o l\u1ecbch tr\u1ef1c {shift_code} cho khoa '{selected_department}' t\u1eeb {start_date_str} \u0111\u1ebfn {end_date_str} cho {len(staff_ids)} nhân viên.")
+                                                 ^^^^^^^^^
+UnboundLocalError: cannot access local variable 'user_name' where it is not associated with a value
+INFO:werkzeug:127.0.0.1 - - [08/Jul/2025 11:55:58] "[35m[1mPOST /auto-attendance?department=Phòng%20V\u1eadt%20t\u01b0%20-%20TBYT HTTP/1.1[0m" 500 -
+INFO:werkzeug:127.0.0.1 - - [08/Jul/2025 11:59:56] "GET /view-log HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [08/Jul/2025 12:00:04] "GET /view-log HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [08/Jul/2025 12:00:08] "GET /assign HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [08/Jul/2025 12:00:09] "GET /auto-attendance HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [08/Jul/2025 12:00:12] "GET /auto-attendance?department=Phòng%20V\u1eadt%20t\u01b0%20-%20TBYT HTTP/1.1" 200 -
+INFO:werkzeug:[31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://192.168.1.165:5000
+INFO:werkzeug:[33mPress CTRL+C to quit[0m
+INFO:werkzeug:127.0.0.1 - - [08/Jul/2025 12:02:04] "GET /auto-attendance?department=Phòng%20V\u1eadt%20t\u01b0%20-%20TBYT HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [08/Jul/2025 12:02:05] "GET /auto-attendance?department=Phòng%20V\u1eadt%20t\u01b0%20-%20TBYT HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [08/Jul/2025 12:02:05] "GET /auto-attendance?department=Phòng%20V\u1eadt%20t\u01b0%20-%20TBYT HTTP/1.1" 200 -
+INFO:app:[AUTO_ATTEND_START] User 'None' b\u1eaft \u0111\u1ea7u t\u1ea1o l\u1ecbch tr\u1ef1c X cho khoa 'Phòng V\u1eadt t\u01b0 - TBYT' t\u1eeb 2025-07-01 \u0111\u1ebfn 2025-07-31 cho 12 nhân viên.
+INFO:app:[AUTO_ATTEND_DONE] \u0110ã t\u1ea1o 276 dòng ch\u1ea5m công t\u1ef1 \u0111\u1ed9ng thành công.
+INFO:werkzeug:127.0.0.1 - - [08/Jul/2025 12:02:19] "[32mPOST /auto-attendance?department=Phòng%20V\u1eadt%20t\u01b0%20-%20TBYT HTTP/1.1[0m" 302 -
+INFO:werkzeug:127.0.0.1 - - [08/Jul/2025 12:02:19] "GET /auto-attendance?department=Phòng+V\u1eadt+t\u01b0+-+TBYT HTTP/1.1" 200 -
+INFO:app:[VIEW] User 'None' (admin) xem l\u1ecbch khoa 'None' t\u1eeb 2025-07-08 \u0111\u1ebfn 2025-07-14
+INFO:werkzeug:127.0.0.1 - - [08/Jul/2025 12:02:22] "GET /schedule HTTP/1.1" 200 -
+INFO:app:[VIEW] User 'None' (admin) xem l\u1ecbch khoa 'Phòng V\u1eadt t\u01b0 - TBYT' t\u1eeb 2025-07-01 \u0111\u1ebfn 2025-07-31
+INFO:werkzeug:127.0.0.1 - - [08/Jul/2025 12:02:31] "GET /schedule?department=Phòng+V\u1eadt+t\u01b0+-+TBYT&start_date=2025-07-01&end_date=2025-07-31 HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [08/Jul/2025 12:02:48] "GET /bang-cham-cong HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [08/Jul/2025 12:02:58] "GET /bang-cham-cong?department=Phòng+V\u1eadt+t\u01b0+-+TBYT&contract_type=&start=2025-07-01&end=2025-07-31 HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [08/Jul/2025 12:03:12] "GET /assign HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [08/Jul/2025 12:03:22] "GET /assign?department=Khoa+D\u01b0\u1ee3c HTTP/1.1" 200 -
+INFO:app:[ASSIGN] User 'None' b\u1eaft \u0111\u1ea7u phân l\u1ecbch khoa 'Khoa D\u01b0\u1ee3c' t\u1eeb 2025-07-07 \u0111\u1ebfn 2025-07-07
+INFO:werkzeug:127.0.0.1 - - [08/Jul/2025 12:03:37] "[32mPOST /assign?department=Khoa+D\u01b0\u1ee3c HTTP/1.1[0m" 302 -
+INFO:werkzeug:127.0.0.1 - - [08/Jul/2025 12:03:37] "GET /assign?department=Khoa%20D\u01b0\u1ee3c HTTP/1.1" 200 -
+INFO:app:[VIEW] User 'None' (admin) xem l\u1ecbch khoa 'None' t\u1eeb 2025-07-08 \u0111\u1ebfn 2025-07-14
+INFO:werkzeug:127.0.0.1 - - [08/Jul/2025 12:03:41] "GET /schedule HTTP/1.1" 200 -
+INFO:app:[VIEW] User 'None' (admin) xem l\u1ecbch khoa 'Khoa D\u01b0\u1ee3c' t\u1eeb 2025-07-07 \u0111\u1ebfn 2025-07-07
+INFO:werkzeug:127.0.0.1 - - [08/Jul/2025 12:03:49] "GET /schedule?department=Khoa+D\u01b0\u1ee3c&start_date=2025-07-07&end_date=2025-07-07 HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [08/Jul/2025 12:03:56] "GET /view-log HTTP/1.1" 200 -
+INFO:werkzeug:[31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://192.168.1.165:5000
+INFO:werkzeug:[33mPress CTRL+C to quit[0m
+INFO:werkzeug:127.0.0.1 - - [08/Jul/2025 12:27:42] "GET /view-log HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [08/Jul/2025 12:27:43] "GET /view-log HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [08/Jul/2025 12:27:44] "GET /view-log HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [08/Jul/2025 12:27:44] "GET /view-log HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [08/Jul/2025 12:27:44] "GET /view-log HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [08/Jul/2025 12:27:44] "GET /view-log HTTP/1.1" 200 -
+INFO:app:[VIEW] User 'None' (admin) xem l\u1ecbch khoa 'None' t\u1eeb 2025-07-08 \u0111\u1ebfn 2025-07-14
+INFO:werkzeug:127.0.0.1 - - [08/Jul/2025 12:27:56] "GET /schedule HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [08/Jul/2025 12:28:01] "[32mPOST /schedule/delete-one HTTP/1.1[0m" 302 -
+INFO:app:[VIEW] User 'None' (admin) xem l\u1ecbch khoa 'None' t\u1eeb 2025-07-08 \u0111\u1ebfn 2025-07-14
+INFO:werkzeug:127.0.0.1 - - [08/Jul/2025 12:28:01] "GET /schedule HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [08/Jul/2025 12:28:03] "[32mPOST /schedule/delete-one HTTP/1.1[0m" 302 -
+INFO:app:[VIEW] User 'None' (admin) xem l\u1ecbch khoa 'None' t\u1eeb 2025-07-08 \u0111\u1ebfn 2025-07-14
+INFO:werkzeug:127.0.0.1 - - [08/Jul/2025 12:28:03] "GET /schedule HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [08/Jul/2025 12:28:04] "GET /view-log HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [08/Jul/2025 12:28:06] "GET /view-log HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [08/Jul/2025 12:28:06] "GET /view-log HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [08/Jul/2025 12:28:07] "GET /view-log HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [08/Jul/2025 12:28:07] "GET /view-log HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [08/Jul/2025 12:28:07] "GET /view-log HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [08/Jul/2025 12:29:28] "GET /shift-payment-view HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [08/Jul/2025 12:29:32] "GET /shift-rate-config HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [08/Jul/2025 12:29:40] "GET / HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [08/Jul/2025 12:29:40] "[36mGET /static/logo.png HTTP/1.1[0m" 304 -
+INFO:werkzeug:127.0.0.1 - - [08/Jul/2025 12:30:56] "GET / HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [08/Jul/2025 12:30:56] "[36mGET /static/logo.png HTTP/1.1[0m" 304 -
+INFO:app:[VIEW] User 'None' (admin) xem l\u1ecbch khoa 'None' t\u1eeb 2025-07-08 \u0111\u1ebfn 2025-07-14
+INFO:werkzeug:127.0.0.1 - - [08/Jul/2025 12:30:57] "GET /schedule HTTP/1.1" 200 -
+INFO:app:[VIEW] User 'None' (admin) xem l\u1ecbch khoa 'Phòng CNTT' t\u1eeb 2025-07-08 \u0111\u1ebfn 2025-07-14
+INFO:werkzeug:127.0.0.1 - - [08/Jul/2025 12:31:01] "GET /schedule?department=Phòng+CNTT&start_date=2025-07-08&end_date=2025-07-14 HTTP/1.1" 200 -
+INFO:werkzeug:[31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://192.168.1.165:5000
+INFO:werkzeug:[33mPress CTRL+C to quit[0m
+INFO:werkzeug:127.0.0.1 - - [08/Jul/2025 13:05:22] "GET / HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [08/Jul/2025 13:05:23] "[36mGET /static/logo.png HTTP/1.1[0m" 304 -
+INFO:werkzeug:127.0.0.1 - - [08/Jul/2025 13:05:27] "GET /assign HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [08/Jul/2025 13:05:29] "GET /auto-attendance HTTP/1.1" 200 -
+INFO:app:[VIEW] User 'None' (admin) xem l\u1ecbch khoa 'None' t\u1eeb 2025-07-08 \u0111\u1ebfn 2025-07-14
+INFO:werkzeug:127.0.0.1 - - [08/Jul/2025 13:05:32] "GET /schedule HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [08/Jul/2025 13:05:37] "[32mGET /logout HTTP/1.1[0m" 302 -
+INFO:werkzeug:127.0.0.1 - - [08/Jul/2025 13:05:37] "GET /login HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [08/Jul/2025 13:05:37] "[36mGET /static/logo.png HTTP/1.1[0m" 304 -
+INFO:app:[USER_VIEW] User 'None' (admin) xem danh sách nhân s\u1ef1 khoa 'None'
+INFO:werkzeug:127.0.0.1 - - [08/Jul/2025 13:05:50] "GET /users-by-department HTTP/1.1" 200 -

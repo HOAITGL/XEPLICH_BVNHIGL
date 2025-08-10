@@ -3,13 +3,6 @@
 {% block title %}Quản lý nhân sự{% endblock %}
 
 {% block content %}
-{% if unit_config %}
-<div class="text-center mb-3">
-  <h3 class="mb-0">{{ unit_config.name }}</h3>
-  <p class="mb-0">{{ unit_config.address }} - {{ unit_config.phone }}</p>
-</div>
-{% endif %}
-
 <div class="container mt-4">
   <h2>Danh sách nhân sự theo khoa/phòng</h2>
 
@@ -24,35 +17,48 @@
     {% endif %}
   {% endwith %}
 
-  {% if current_user_role == 'admin' %}
-  <form method="GET" class="mb-3">
-    <label for="department">Chọn khoa/phòng:</label>
-    <select name="department" id="department" class="form-control w-auto d-inline-block ms-2">
+  {# HIỂN THỊ FORM CHO admin & admin1 #}
+  {% if current_user_role in ['admin','admin1'] %}
+  <form method="GET" class="mb-3 d-flex align-items-center gap-2 flex-wrap">
+    <label for="department" class="mb-0">Chọn khoa/phòng:</label>
+    <select name="department" id="department" class="form-control w-auto" style="max-width:260px">
       <option value="">-- Tất cả --</option>
       {% for dept in departments %}
         <option value="{{ dept }}" {% if dept == selected_department %}selected{% endif %}>{{ dept }}</option>
       {% endfor %}
     </select>
+
+    <label for="q" class="mb-0 ms-3">Tìm kiếm:</label>
+    <input type="text" id="q" name="q" class="form-control" style="max-width:320px"
+           placeholder="Nhập họ tên / đăng nhập / chức danh"
+           value="{{ q or request.args.get('q','') }}">
+
+    <button type="submit" class="btn btn-primary">Lọc</button>
+    {% if (q or request.args.get('q')) or selected_department %}
+      <a href="{{ url_for('users_by_department') }}" class="btn btn-outline-secondary">Xóa lọc</a>
+    {% endif %}
   </form>
   {% endif %}
 
-  {% if current_user_role in ['admin', 'manager'] %}
+  {% if current_user_role in ['admin','admin1','manager'] %}
   <div class="mb-3">
     <a href="{{ url_for('add_user') }}" class="btn btn-success">➕ Thêm nhân viên</a>
     <a href="{{ url_for('import_users') }}" class="btn btn-outline-secondary ms-2">📤 Import từ Excel</a>
 
-    {% if current_user_role == 'admin' %}
-    <form method="POST" action="{{ url_for('delete_all_users') }}" onsubmit="return confirm('Bạn có chắc chắn muốn xóa toàn bộ nhân sự (trừ admin)?');" class="d-inline">
-      <button type="submit" class="btn btn-danger ms-2">🗑️ Xoá toàn bộ nhân sự</button>
-    </form>
-    <a href="/users/inactive" class="btn btn-secondary ms-2">🚫 DS Nhân viên ngừng hoạt động</a>
+    {% if current_user_role in ['admin','admin1'] %}
+      <form method="POST" action="{{ url_for('delete_all_users') }}"
+            onsubmit="return confirm('Bạn có chắc chắn muốn xóa toàn bộ nhân sự (trừ admin)?');" class="d-inline">
+        <button type="submit" class="btn btn-danger ms-2">🗑️ Xoá toàn bộ nhân sự</button>
+      </form>
+      <a href="/users/inactive" class="btn btn-secondary ms-2">🚫 DS Nhân viên ngừng hoạt động</a>
     {% endif %}
   </div>
   {% endif %}
 
-  <table class="table table-bordered table-striped">
+  <table class="table table-bordered">
     <thead class="table-dark">
       <tr>
+        <th class="text-center" style="width:60px">STT</th>
         <th>Họ tên</th>
         <th>Tên đăng nhập</th>
         <th>Vai trò hệ thống</th>
@@ -66,16 +72,18 @@
     <tbody>
       {% for user in users %}
       <tr>
+        <td class="text-center">{{ loop.index }}</td>
         <td>{{ user.name }}</td>
         <td>{{ user.username }}</td>
         <td>{{ user.role or '' }}</td>
         <td>{{ user.department }}</td>
         <td>{{ user.position or '' }}</td>
-        <td>{{ user.contract_type or 'Chưa thiết lập' }}</td>
+        <td>{{ user.contract_type or '' }}</td>
         <td>{{ user.phone or '' }}</td>
         <td>
           <a href="{{ url_for('edit_user', user_id=user.id) }}" class="btn btn-sm btn-primary">Sửa</a>
-          <form action="{{ url_for('delete_user', user_id=user.id) }}" method="POST" class="d-inline" onsubmit="return confirm('Xác nhận xoá nhân viên này?')">
+          <form action="{{ url_for('delete_user', user_id=user.id) }}" method="POST"
+                class="d-inline" onsubmit="return confirm('Xác nhận xoá nhân viên này?')">
             <button type="submit" class="btn btn-sm btn-danger">Xoá</button>
           </form>
           <a href="{{ url_for('deactivate_user', user_id=user.id) }}" class="btn btn-warning btn-sm">Ngừng</a>
@@ -84,11 +92,13 @@
       {% endfor %}
     </tbody>
   </table>
+
+  <p class="mt-2"><strong>Tổng số nhân viên:</strong> {{ users|length }}</p>
 </div>
 
 <script>
   document.getElementById("department")?.addEventListener("change", function () {
-    this.form.submit();
+    this.form.requestSubmit();
   });
 </script>
 {% endblock %}
