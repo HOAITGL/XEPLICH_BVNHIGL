@@ -1,5 +1,6 @@
 {% extends 'layout.html' %}
 {% block title %}Cấu hình ca trực{% endblock %}
+
 {% block content %}
 {% if unit_config %}
 <div class="text-center mb-3">
@@ -12,15 +13,9 @@
 
 <div class="mb-3 d-flex gap-3 align-items-center flex-wrap">
   <a href="{{ url_for('export_shifts') }}" class="btn btn-success">📥 Xuất Excel</a>
-
   <form action="{{ url_for('import_shifts') }}" method="POST" enctype="multipart/form-data" class="d-flex gap-2 align-items-center">
     <input type="file" name="file" accept=".xlsx,.xls" required class="form-control form-control-sm">
     <button type="submit" class="btn btn-primary">📤 Nhập Excel</button>
-  </form>
-
-  <!-- (Tuỳ chọn) Sắp xếp lại thứ tự 1..n -->
-  <form action="{{ url_for('reindex_shifts') }}" method="POST" class="d-inline">
-    <button type="submit" class="btn btn-outline-dark">🔁 Sắp xếp lại</button>
   </form>
 </div>
 
@@ -45,9 +40,10 @@
       <td>{{ "%.1f"|format(shift.duration) }} giờ</td>
       <td>
         <div class="d-flex gap-2 flex-wrap">
-          <!-- Sửa: truyền đúng shift_id theo route /shifts/edit/<int:shift_id> -->
-          <a href="{{ url_for('edit_shift', shift_id=shift.id) }}" class="btn btn-sm btn-warning">✏️ Sửa</a>
+          <!-- Sửa: route /shifts/edit/<int:id> => dùng tham số id -->
+          <a href="{{ url_for('edit_shift', id=shift.id) }}" class="btn btn-sm btn-warning">✏️ Sửa</a>
 
+          <!-- Xoá: route /shifts/delete/<int:shift_id> => dùng shift_id -->
           <a href="{{ url_for('delete_shift', shift_id=shift.id) }}"
              onclick="return confirm('Xoá ca trực này?')"
              class="btn btn-sm btn-danger">🗑 Xoá</a>
