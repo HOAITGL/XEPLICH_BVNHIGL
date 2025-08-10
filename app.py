@@ -1940,15 +1940,23 @@ def export_excel():
     stream.seek(0)
     return send_file(stream, as_attachment=True, download_name="lichtruc.xlsx")
 
+from sqlalchemy import asc, desc, func
+
+def normalize_shift_order():
+    ORDER_COL = Shift.__table__.c.order
+    # Lấy tất cả theo id để đánh lại chỉ mục 1..n
+    all_ids = [row[0] for row in db.session.query(Shift.id).order_by(Shift.id.asc()).all()]
+    for i, sid in enumerate(all_ids, start=1):
+        db.session.query(Shift).filter(Shift.id == sid).update({ORDER_COL: i})
+    db.session.commit()
+
 @app.route('/shifts')
 def list_shifts():
-    ORDER_COL = Shift.__table__.c.order  # đảm bảo escape "order" khi query
-
+    ORDER_COL = Shift.__table__.c.order
     try:
-        shifts = Shift.query.order_by(ORDER_COL.asc()).all()
+        shifts = Shift.query.order_by(ORDER_COL.asc(), Shift.id.asc()).all()
     except Exception:
-        shifts = Shift.query.order_by(Shift.id).all()
-
+        shifts = Shift.query.order_by(Shift.id.asc()).all()
     return render_template('shifts.html', shifts=shifts)
 
 from flask import render_template, request, redirect, flash
@@ -2000,9 +2008,11 @@ from sqlalchemy import asc, desc
 
 @app.route('/shifts/move_up/<int:shift_id>', methods=['GET', 'POST'])
 def move_shift_up(shift_id):
-    ORDER_COL = Shift.__table__.c.order  # cột "order" đã quote cho Postgres
-    shift = Shift.query.get_or_404(shift_id)
+    ORDER_COL = Shift.__table__.c.order
+    # đảm bảo có thứ tự liên tục 1..n
+    normalize_shift_order()
 
+    shift = Shift.query.get_or_404(shift_id)
     above_shift = (Shift.query
                    .filter(ORDER_COL < shift.order)
                    .order_by(desc(ORDER_COL))
@@ -2019,8 +2029,9 @@ def move_shift_up(shift_id):
 @app.route('/shifts/move_down/<int:shift_id>', methods=['GET', 'POST'])
 def move_shift_down(shift_id):
     ORDER_COL = Shift.__table__.c.order
-    shift = Shift.query.get_or_404(shift_id)
+    normalize_shift_order()
 
+    shift = Shift.query.get_or_404(shift_id)
     below_shift = (Shift.query
                    .filter(ORDER_COL > shift.order)
                    .order_by(asc(ORDER_COL))

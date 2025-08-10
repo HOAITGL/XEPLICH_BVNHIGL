@@ -10,11 +10,17 @@
 
 <h2>🛠️ Danh sách cấu hình ca trực</h2>
 
-<div class="mb-3 d-flex gap-3">
+<div class="mb-3 d-flex gap-3 align-items-center flex-wrap">
   <a href="{{ url_for('export_shifts') }}" class="btn btn-success">📥 Xuất Excel</a>
+
   <form action="{{ url_for('import_shifts') }}" method="POST" enctype="multipart/form-data" class="d-flex gap-2 align-items-center">
     <input type="file" name="file" accept=".xlsx,.xls" required class="form-control form-control-sm">
     <button type="submit" class="btn btn-primary">📤 Nhập Excel</button>
+  </form>
+
+  <!-- (Tuỳ chọn) Sắp xếp lại thứ tự 1..n -->
+  <form action="{{ url_for('reindex_shifts') }}" method="POST" class="d-inline">
+    <button type="submit" class="btn btn-outline-dark">🔁 Sắp xếp lại</button>
   </form>
 </div>
 
@@ -26,7 +32,7 @@
       <th>Giờ bắt đầu</th>
       <th>Giờ kết thúc</th>
       <th>Thời lượng</th>
-      <th style="width: 290px">Thao tác</th>
+      <th style="width: 320px">Thao tác</th>
     </tr>
   </thead>
   <tbody>
@@ -39,19 +45,20 @@
       <td>{{ "%.1f"|format(shift.duration) }} giờ</td>
       <td>
         <div class="d-flex gap-2 flex-wrap">
-          <a href="{{ url_for('edit_shift', id=shift.id) }}" class="btn btn-sm btn-warning">✏️ Sửa</a>
+          <!-- Sửa: truyền đúng shift_id theo route /shifts/edit/<int:shift_id> -->
+          <a href="{{ url_for('edit_shift', shift_id=shift.id) }}" class="btn btn-sm btn-warning">✏️ Sửa</a>
 
           <a href="{{ url_for('delete_shift', shift_id=shift.id) }}"
              onclick="return confirm('Xoá ca trực này?')"
              class="btn btn-sm btn-danger">🗑 Xoá</a>
 
-          <!-- ⬆ Lên -->
-          <form action="{{ url_for('move_shift_up', shift_id=shift.id) }}" method="post" style="display:inline;">
+          <!-- ⬆ Lên (POST) -->
+          <form action="{{ url_for('move_shift_up', shift_id=shift.id) }}" method="post" class="d-inline">
             <button type="submit" class="btn btn-sm btn-primary" {% if loop.first %}disabled{% endif %}>⬆ Lên</button>
           </form>
 
-          <!-- ⬇ Xuống -->
-          <form action="{{ url_for('move_shift_down', shift_id=shift.id) }}" method="post" style="display:inline;">
+          <!-- ⬇ Xuống (POST) -->
+          <form action="{{ url_for('move_shift_down', shift_id=shift.id) }}" method="post" class="d-inline">
             <button type="submit" class="btn btn-sm btn-secondary" {% if loop.last %}disabled{% endif %}>⬇ Xuống</button>
           </form>
         </div>
