@@ -9,55 +9,53 @@
       font-size: 14px;
       margin: 2cm 2cm 2cm 2.5cm;
       position: relative;
+      line-height: 1.6;
     }
-    .print-button {
+    .print-button, .home-button {
       position: absolute;
       top: 10px;
-      right: 20px;
+      padding: 5px 10px;
+      background: #ddd;
+      color: black;
+      text-decoration: none;
+      border-radius: 4px;
       z-index: 1000;
+      font-size: 13px;
+    }
+    .print-button:hover, .home-button:hover {
+      background: #bbb;
+    }
+    .print-button {
+      right: 20px;
+    }
+    .home-button {
+      right: 120px; /* đặt trước nút in */
     }
     .font13 { font-size: 13px; }
     .font14 { font-size: 14px; }
     .row { display: flex; justify-content: space-between; }
-    .col-left, .col-right {
-      width: 50%;
-      text-align: center;
-    }
+    .col-left, .col-right { width: 50%; text-align: center; }
     .bold { font-weight: bold; }
     .italic { font-style: italic; }
     .underline { text-decoration: underline; }
     .bordered { border-bottom: 1px solid black; display: inline-block; padding-bottom: 2px; }
     .center-title {
-      text-align: center;
-      font-weight: bold;
-      margin: 30px 0 20px;
-      font-size: 14px;
-      text-transform: uppercase;
+      text-align: center; font-weight: bold; margin: 30px 0 20px;
+      font-size: 14px; text-transform: uppercase;
     }
-    .section { margin-top: 20px; line-height: 1.8; }
-    .signature {
-      display: flex;
-      justify-content: space-between;
-      margin-top: 40px;
-      font-size: 14px;
-    }
-    .signature div {
-      width: 45%;
-      text-align: center;
-    }
+    .section { margin-top: 20px; }
     .footer-align {
-      display: flex;
-      justify-content: space-between;
-      margin-top: 40px;
-      font-size: 14px;
+      display: flex; justify-content: space-between;
+      margin-top: 40px; font-size: 14px;
     }
     @media print {
-      .print-button { display: none; }
+      .print-button, .home-button { display: none; }
     }
   </style>
 </head>
 <body>
 
+<a href="/" class="home-button">🏠 Quay lại trang chủ</a>
 <button class="print-button" onclick="window.print()">🖨 In đơn</button>
 
 <div class="row">
@@ -91,7 +89,17 @@
      Năm vào công tác: <strong>{{ user.start_year }}</strong></p>
   <p>Đơn vị công tác: {{ user.department }} - Bệnh viện Nhi tỉnh Gia Lai</p>
   <p>Nay tôi làm đơn này trình Ban Giám đốc, Phòng Tổ chức - Hành chính quản trị xem xét và sắp xếp cho tôi được nghỉ phép.</p>
-  <p>Thời gian nghỉ: từ ngày {{ leave.start_date.strftime('%d/%m/%Y') }} đến ngày {{ leave.end_date.strftime('%d/%m/%Y') }}</p>
+
+  <!-- Thời gian nghỉ -->
+  <p>Thời gian nghỉ: từ ngày {{ leave.start_date.strftime('%d/%m/%Y') }}
+     đến ngày {{ leave.end_date.strftime('%d/%m/%Y') }}</p>
+
+  <!-- Tổng số ngày phép -->
+  <p><strong>Tổng số ngày nghỉ phép:</strong> {{ total_days }} ngày <em>(không tính Thứ Bảy & Chủ nhật)</em></p>
+
+  <!-- Chỉ tiêu phép năm -->
+  <p><strong>Số ngày phép năm theo thâm niên:</strong> {{ quota_days }} ngày.</p>
+
   <p>Lý do: {{ leave.reason }}</p>
   <p>Nơi nghỉ phép: {{ leave.location }}</p>
   <p>Tôi xin cam đoan sẽ bàn giao công việc đầy đủ và trở lại làm việc đúng thời gian quy định.</p>

@@ -363,7 +363,29 @@ def view_leaves():
         current_department=user_dept,
         current_role=role
     )
- 
+
+@app.route('/admin/fix-weekend-leaves')
+@login_required
+def fix_weekend_leaves():
+    # chỉ cho admin
+    if session.get('role') not in ['admin', 'admin1']:
+        flash("Bạn không có quyền.", "danger")
+        return redirect('/')
+
+    from models.schedule import Schedule
+    leave_shift = get_or_create_leave_shift()
+
+    # Lấy toàn bộ bản ghi 'Nghỉ phép'
+    rows = Schedule.query.filter(Schedule.shift_id == leave_shift.id).all()
+    removed = 0
+    for r in rows:
+        if r.work_date.weekday() >= 5:
+            db.session.delete(r)
+            removed += 1
+    db.session.commit()
+    flash(f"✅ Đã xoá {removed} bản ghi 'Nghỉ phép' rơi vào Thứ 7/CN.", "success")
+    return redirect('/schedule')
+
 @app.route('/leaves/add', methods=['GET', 'POST'])
 @login_required
 def add_leave():
@@ -433,6 +455,7 @@ def add_leave():
             except Exception:
                 birth_date = None
 
+        # Cập nhật năm bắt đầu công tác (nếu người dùng nhập)
         if request.form.get('start_work_year'):
             try:
                 start_work_year = int(request.form.get('start_work_year'))
@@ -466,12 +489,17 @@ def add_leave():
         )
         db.session.add(leave)
 
-        # 2) Tự động chấm nghỉ -> gán ca "Nghỉ phép"
+        # 2) Tự động chấm nghỉ -> gán ca "Nghỉ phép" (BỎ Thứ 7 & Chủ nhật)
         leave_shift = get_or_create_leave_shift()
         cur = start_date
         overwritten = 0
         created = 0
         while cur <= end_date:
+            # 0..4 = Thứ 2..Thứ 6 ; 5 = Thứ 7 ; 6 = Chủ nhật
+            if cur.weekday() >= 5:
+                cur += timedelta(days=1)
+                continue
+
             sched = Schedule.query.filter_by(user_id=user_id, work_date=cur).first()
             if sched:
                 sched.shift_id = leave_shift.id
@@ -481,10 +509,26 @@ def add_leave():
                 created += 1
             cur += timedelta(days=1)
 
+        # 2b) DỌN mọi lịch (bất kể ca nào) rơi vào T7/CN trong khoảng đơn -> để trống cuối tuần
+        weekend_records = (Schedule.query
+            .filter(
+                Schedule.user_id == user_id,
+                Schedule.work_date >= start_date,
+                Schedule.work_date <= end_date
+            ).all())
+        removed_weekend = 0
+        for s in weekend_records:
+            if s.work_date.weekday() >= 5:  # 5=Thứ 7, 6=CN
+                db.session.delete(s)
+                removed_weekend += 1
+
         # 3) Commit
         try:
             db.session.commit()
-            flash(f"✅ Đã tạo đơn nghỉ phép. Đã chấm nghỉ {created} ngày, cập nhật {overwritten} ngày.", "success")
+            msg = f"✅ Đã tạo đơn nghỉ phép. Đã chấm {created} ngày (T2–T6), cập nhật {overwritten} ngày."
+            if removed_weekend:
+                msg += f" Đã xoá {removed_weekend} lịch rơi vào T7/CN."
+            flash(msg, "success")
         except Exception as e:
             db.session.rollback()
             app.logger.error(f"[LEAVE_ADD_ERROR] {e}", exc_info=True)
@@ -743,19 +787,68 @@ from datetime import datetime
 from models.leave_request import LeaveRequest
 import os
 
+from datetime import timedelta
+
+def working_days_inclusive(start_date, end_date):
+    """Đếm số ngày làm việc (Thứ 2–Thứ 6), tính cả đầu & cuối."""
+    d = start_date
+    count = 0
+    while d <= end_date:
+        if d.weekday() < 5:  # 0..4 = Mon..Fri
+            count += 1
+        d += timedelta(days=1)
+    return count
+
+def end_date_from_workdays(start_date, days):
+    """Lấy ngày kết thúc sau N ngày làm việc (T2–T6), coi start là ngày 1)."""
+    d = start_date
+    done = 0
+    while True:
+        if d.weekday() < 5:
+            done += 1
+            if done == days:
+                return d
+        d += timedelta(days=1)
+
+def annual_leave_quota(user, as_of_date):
+    """
+    Chỉ tiêu phép năm = 12 + floor(thâm niên/5).
+    Ở DB hiện tại chỉ có start_year (số), nên thâm niên = năm đang nghỉ - start_year.
+    """
+    base = 12
+    if not getattr(user, "start_year", None):
+        return base
+    years = as_of_date.year - int(user.start_year)
+    extra = max(0, years // 5)
+    return base + extra
+
 @app.route('/leaves/print/<int:id>')
 @login_required
 def print_leave(id):
     from models.leave_request import LeaveRequest
     from utils.unit_config import get_unit_config
+
     leave = LeaveRequest.query.get_or_404(id)
     user = leave.user
-    unit = get_unit_config()  # ✅ bắt buộc phải có
+    unit = get_unit_config()
+
+    # Số ngày NGHỈ THỰC TẾ của đơn (bỏ T7 & CN)
+    total_days = working_days_inclusive(leave.start_date, leave.end_date)
+
+    # Chỉ tiêu phép năm theo thâm niên (12 + 1 ngày mỗi đủ 5 năm)
+    quota_days = annual_leave_quota(user, leave.start_date)
+
+    # Nếu nghỉ trọn quota bắt đầu từ ngày start, kết thúc là ngày:
+    quota_end = end_date_from_workdays(leave.start_date, quota_days)
 
     return render_template(
         'leave_print.html',
         leave=leave,
         user=user,
+        unit=unit,
+        total_days=total_days,   # Số ngày công của đơn
+        quota_days=quota_days,   # Chỉ tiêu năm theo thâm niên
+        quota_end=quota_end,     # Ví dụ: nếu nghỉ đủ quota
         now=datetime.now()
     )
 
