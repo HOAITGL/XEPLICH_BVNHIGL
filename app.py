@@ -788,6 +788,7 @@ from models.leave_request import LeaveRequest
 import os
 
 from datetime import timedelta
+from datetime import datetime, timedelta
 
 def working_days_inclusive(start_date, end_date):
     """Đếm số ngày làm việc (Thứ 2–Thứ 6), tính cả đầu & cuối."""
@@ -813,7 +814,7 @@ def end_date_from_workdays(start_date, days):
 def annual_leave_quota(user, as_of_date):
     """
     Chỉ tiêu phép năm = 12 + floor(thâm niên/5).
-    Ở DB hiện tại chỉ có start_year (số), nên thâm niên = năm đang nghỉ - start_year.
+    Thâm niên = năm đang nghỉ - start_year (nếu có).
     """
     base = 12
     if not getattr(user, "start_year", None):
@@ -821,6 +822,27 @@ def annual_leave_quota(user, as_of_date):
     years = as_of_date.year - int(user.start_year)
     extra = max(0, years // 5)
     return base + extra
+
+# Map chức vụ viết tắt -> đầy đủ
+POSITION_MAP = {
+    "NV": "Nhân viên",
+    "GĐ": "Giám đốc",
+    "PGĐ": "Phó Giám đốc",
+    "TP": "Trưởng phòng",
+    "TK": "Trưởng Khoa",
+    "PTK": "Phó Trưởng khoa",
+    "PTP": "Phó Trưởng phòng",
+    "ĐD": "Điều dưỡng",
+    "ĐDT": "Điều dưỡng trưởng",
+    "BS": "Bác sĩ",
+    "KTV": "Kỹ thuật viên",
+    "KTVT": "Kỹ thuật viên trưởng",
+    "BV": "Bảo vệ",
+    "HL": "Hộ lý",
+    "LX": "Lái xe",
+    "CV": "Chuyên viên",
+    "CVC": "Chuyên viên chính"
+}
 
 @app.route('/leaves/print/<int:id>')
 @login_required
@@ -841,6 +863,9 @@ def print_leave(id):
     # Nếu nghỉ trọn quota bắt đầu từ ngày start, kết thúc là ngày:
     quota_end = end_date_from_workdays(leave.start_date, quota_days)
 
+    # Chuẩn hoá chức vụ
+    full_position = POSITION_MAP.get((user.position or '').strip(), user.position)
+
     return render_template(
         'leave_print.html',
         leave=leave,
@@ -849,6 +874,7 @@ def print_leave(id):
         total_days=total_days,   # Số ngày công của đơn
         quota_days=quota_days,   # Chỉ tiêu năm theo thâm niên
         quota_end=quota_end,     # Ví dụ: nếu nghỉ đủ quota
+        full_position=full_position,
         now=datetime.now()
     )
 
