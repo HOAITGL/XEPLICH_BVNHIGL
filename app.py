@@ -1974,16 +1974,45 @@ def normalize_shift_order():
         db.session.query(Shift).filter(Shift.id == sid).update({ORDER_COL: i})
     db.session.commit()
 
-from sqlalchemy import asc, desc
-from flask import redirect, url_for, flash
+import os
+from urllib.parse import urlparse
+from sqlalchemy import asc, desc, func, and_, or_
 
 def normalize_shift_order():
-    """Đánh lại thứ tự 1..n để tránh NULL/trùng 'order' khi mới deploy."""
+    """Đưa thứ tự order về 1..n, loại NULL/trùng; dùng (order,id) để ổn định."""
     ORDER_COL = Shift.__table__.c.order
-    ids = [row[0] for row in db.session.query(Shift.id).order_by(Shift.id.asc()).all()]
-    for i, sid in enumerate(ids, start=1):
-        db.session.query(Shift).filter(Shift.id == sid).update({ORDER_COL: i})
+    rows = (db.session.query(Shift)
+            .order_by(asc(func.coalesce(ORDER_COL, 10**9)), Shift.id.asc())
+            .with_for_update()  # khoá tạm thời để tránh race
+            .all())
+    for i, r in enumerate(rows, start=1):
+        r.order = i
     db.session.commit()
+
+
+# --- DB URI: hỗ trợ Render Postgres & local SQLite ---
+uri = os.getenv('DATABASE_URL', 'sqlite:///database.db')
+
+# Render thường trả "postgres://", cần đổi sang "postgresql+psycopg2://"
+if uri.startswith('postgres://'):
+    uri = uri.replace('postgres://', 'postgresql+psycopg2://', 1)
+
+# Bắt buộc SSL khi là Postgres
+if uri.startswith('postgresql') and 'sslmode=' not in uri:
+    sep = '&' if '?' in uri else '?'
+    uri = f'{uri}{sep}sslmode=require'
+
+app.config['SQLALCHEMY_DATABASE_URI'] = uri
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+# Tránh kết nối stale / rớt SSL
+app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+    "pool_pre_ping": True,
+    "pool_recycle": 300,
+    "pool_size": 5,
+    "max_overflow": 5,
+    "connect_args": {"sslmode": "require"} if uri.startswith('postgresql') else {}
+}
 
 @app.route('/shifts/reindex', methods=['POST'])
 def reindex_shifts():
@@ -1999,6 +2028,7 @@ def list_shifts():
     except Exception:
         shifts = Shift.query.order_by(Shift.id.asc()).all()
     return render_template('shifts.html', shifts=shifts)
+
 
 from flask import render_template, request, redirect, flash
 from datetime import datetime
@@ -2050,13 +2080,20 @@ from sqlalchemy import asc, desc
 @app.route('/shifts/move_up/<int:shift_id>', methods=['GET', 'POST'])
 def move_shift_up(shift_id):
     ORDER_COL = Shift.__table__.c.order
-    # đảm bảo có thứ tự liên tục 1..n
     normalize_shift_order()
 
-    shift = Shift.query.get_or_404(shift_id)
+    shift = (Shift.query.filter_by(id=shift_id)
+             .with_for_update()
+             .first_or_404())
+
+    # Hàng ở ngay phía trên theo (order, id)
     above_shift = (Shift.query
-                   .filter(ORDER_COL < shift.order)
-                   .order_by(desc(ORDER_COL))
+                   .filter(or_(
+                       ORDER_COL < shift.order,
+                       and_(ORDER_COL == shift.order, Shift.id < shift.id)
+                   ))
+                   .order_by(ORDER_COL.desc(), Shift.id.desc())
+                   .with_for_update()
                    .first())
 
     if above_shift:
@@ -2067,15 +2104,24 @@ def move_shift_up(shift_id):
     return redirect('/shifts')
 
 
+
 @app.route('/shifts/move_down/<int:shift_id>', methods=['GET', 'POST'])
 def move_shift_down(shift_id):
     ORDER_COL = Shift.__table__.c.order
     normalize_shift_order()
 
-    shift = Shift.query.get_or_404(shift_id)
+    shift = (Shift.query.filter_by(id=shift_id)
+             .with_for_update()
+             .first_or_404())
+
+    # Hàng ở ngay phía dưới theo (order, id)
     below_shift = (Shift.query
-                   .filter(ORDER_COL > shift.order)
-                   .order_by(asc(ORDER_COL))
+                   .filter(or_(
+                       ORDER_COL > shift.order,
+                       and_(ORDER_COL == shift.order, Shift.id > shift.id)
+                   ))
+                   .order_by(ORDER_COL.asc(), Shift.id.asc())
+                   .with_for_update()
                    .first())
 
     if below_shift:
@@ -2084,6 +2130,7 @@ def move_shift_down(shift_id):
     else:
         flash("Đã ở vị trí cuối cùng, không thể di chuyển xuống.", "info")
     return redirect('/shifts')
+
 
 
 from flask import request, redirect, flash
