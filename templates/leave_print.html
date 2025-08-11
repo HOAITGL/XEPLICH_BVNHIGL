@@ -7,7 +7,7 @@
     body {
       font-family: "Times New Roman", serif;
       font-size: 14px;
-      margin: 2cm 2cm 2cm 2.5cm;
+      margin: 1.5cm 2cm 2cm 2.5cm; /* Căn lề trên 1.5cm */
       position: relative;
       line-height: 1.6;
     }
@@ -106,25 +106,26 @@
   <p>Vậy kính mong các cấp giải quyết, tôi xin chân thành cảm ơn./.</p>
 </div>
 
-<table style="width: 100%; margin-top: 40px;">
+<table style="width: 100%; margin-top: 22px;">
   <tr>
     <!-- BÊN TRÁI -->
     <td style="width: 50%; text-align: left; vertical-align: top;">
-      <div style="margin-top: 20px;" class="bold">{{ leave.user.department|upper }}</div>
+      <div style="margin-top: 14px;" class="bold">{{ leave.user.department|upper }}</div>
     </td>
 
     <!-- BÊN PHẢI - CANH GIỮA -->
     <td style="width: 50%; text-align: center;">
       Gia Lai, ngày {{ leave.start_date.strftime('%d') }} tháng {{ leave.start_date.strftime('%m') }} năm {{ leave.start_date.strftime('%Y') }}<br>
       <span class="bold">Người làm đơn</span><br>
-      <em>(Ký và ghi rõ họ tên)</em><br><br><br>
-      <div style="height: 1.5cm;"></div>
+      <em>(Ký và ghi rõ họ tên)</em><br>
+      <!-- Chừa khoảng trống ký tên -->
+      <div style="height: 2.0cm;"></div>
       <span class="bold">{{ user.name|upper }}</span>
     </td>
   </tr>
 </table>
 
-<div class="footer-align">
+<div class="footer-align" style="margin-top: 0.7cm;">
   <div class="bold">GIÁM ĐỐC</div>
   <div class="bold">PHÒNG TỔ CHỨC – HC QT</div>
 </div>
