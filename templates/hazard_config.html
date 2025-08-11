@@ -64,6 +64,21 @@
       <input type="number" step="0.5" min="0" name="duration_hours" class="form-control" required />
     </div>
 
+    <!-- Áp dụng riêng cho T7/CN -->
+    <div class="col-md-3">
+      <label class="form-label">Tùy chọn Thứ 7/CN</label>
+      <div class="form-check">
+        <input class="form-check-input" type="checkbox" name="weekend_only" id="weekend_only">
+        <label class="form-check-label" for="weekend_only">Áp dụng riêng cho Thứ 7/CN</label>
+      </div>
+      <div id="weekend_part_wrap" style="display:none; margin-top:8px;">
+        <select name="weekend_part" id="weekend_part" class="form-select">
+          <option value="full">Cả ngày (17h)</option>
+          <option value="half">Nửa ngày (7h)</option>
+        </select>
+      </div>
+    </div>
+
     <!-- Ngày áp dụng -->
     <div class="col-md-3">
       <label class="form-label">Từ ngày</label>
@@ -132,9 +147,27 @@
           machineTypeSelect.value = "";
         }
       }
-
       deptSelect.addEventListener('change', toggleMachineType);
       toggleMachineType();
+
+      // Xử lý hiển thị phần tùy chọn T7/CN
+      const weekendOnly = document.getElementById('weekend_only');
+      const weekendPartWrap = document.getElementById('weekend_part_wrap');
+      const weekendPart = document.getElementById('weekend_part');
+      const unitSelect = document.querySelector('[name="unit"]');
+      const hoursInput = document.querySelector('[name="duration_hours"]');
+
+      function syncWeekendUI() {
+        if (weekendOnly.checked) {
+          weekendPartWrap.style.display = 'block';
+          if (unitSelect) unitSelect.value = 'gio';
+          if (hoursInput) hoursInput.value = (weekendPart.value === 'full') ? '17' : '7';
+        } else {
+          weekendPartWrap.style.display = 'none';
+        }
+      }
+      weekendOnly?.addEventListener('change', syncWeekendUI);
+      weekendPart?.addEventListener('change', syncWeekendUI);
     });
   </script>
 </body>

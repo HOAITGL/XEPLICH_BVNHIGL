@@ -1711,7 +1711,7 @@ def users_by_department():
     if selected_department:
         query = query.filter(User.department == selected_department)
     elif user_role not in ('admin', 'admin1'):
-        # Phòng trường hợp selected_department rỗng nhưng không phải admin
+        # selected_department rỗng nhưng không phải admin
         query = query.filter(User.department == user_dept)
 
     # Tìm kiếm theo tên / username / chức danh
@@ -1722,13 +1722,37 @@ def users_by_department():
             User.position.ilike(f"%{q}%")
         ))
 
-    # Sắp xếp
+    # (giữ nguyên order_by DB để ổn định, sẽ sắp xếp ưu tiên ở Python)
     if user_role in ('admin', 'admin1') and not selected_department:
         query = query.order_by(User.department, User.name)
     else:
         query = query.order_by(User.name)
 
     users = query.all()
+
+    # --- SẮP XẾP ƯU TIÊN CHỨC DANH ---
+    priority_order = ['GĐ', 'PGĐ', 'TK', 'TP', 'PTP', 'PP', 'PTK', 'PK', 'BS', 'ĐDT', 'ĐD', 'KTV', 'NV','HL', 'BV', 'LX']
+
+    def priority_index(position: str) -> int:
+        pos = (position or '').upper().strip()
+        for i, pre in enumerate(priority_order):
+            if pos.startswith(pre):
+                return i
+        return len(priority_order)  # không khớp → cuối
+
+    if user_role in ('admin', 'admin1') and not selected_department:
+        # Xem tất cả khoa: Khoa → Ưu tiên → Tên
+        users = sorted(users, key=lambda u: (
+            (u.department or '').lower().strip(),
+            priority_index(u.position),
+            (u.name or '').lower().strip()
+        ))
+    else:
+        # Một khoa (hoặc không phải admin): Ưu tiên → Tên
+        users = sorted(users, key=lambda u: (
+            priority_index(u.position),
+            (u.name or '').lower().strip()
+        ))
 
     return render_template(
         'users_by_department.html',
@@ -4670,6 +4694,7 @@ def _unit_normalize(unit_raw: str) -> str:
 
 import unicodedata
 
+# ---- ROUTE GIỮ NGUYÊN, CHỈ BỔ SUNG THEO YÊU CẦU ----
 @app.route('/hazard-config', methods=['GET', 'POST'])
 def hazard_config():
     if session.get('role') != 'admin':
@@ -4697,7 +4722,51 @@ def hazard_config():
             if start_date > end_date:
                 return "Khoảng thời gian không hợp lệ.", 400
 
-            # KHÔNG GỘP: luôn tạo bản ghi mới cho từng khoa
+            # ★ NEW: cờ áp dụng riêng cho T7/CN và chọn nửa ngày/cả ngày
+            weekend_only = (request.form.get('weekend_only') == 'on')          # checkbox
+            weekend_part = request.form.get('weekend_part')  # 'full' | 'half' | None
+
+            # ★ NEW: Nếu chọn T7/CN → chỉ sinh bản ghi cho các ngày T7/CN
+            # ★ NEW: và CHỈ áp dụng cho khoa đã có cấu hình độc hại (HazardConfig) trước đó
+            if weekend_only:
+                # Ép đơn vị về giờ để thống nhất (dù user nhập gì)
+                if unit != 'gio':
+                    unit = 'gio'
+
+                # Cả ngày = 17h, Nửa ngày = 7h
+                weekend_hours = 17.0 if weekend_part == 'full' else 7.0
+
+                for department in departments:
+                    # ★ NEW: kiểm tra khoa đã từng có cấu hình độc hại nào chưa
+                    has_hazard = db.session.query(HazardConfig.id).filter(
+                        HazardConfig.department == department
+                    ).first()
+
+                    if not has_hazard:
+                        # Chưa có cấu hình độc hại → bỏ qua khoa này
+                        continue
+
+                    # ★ NEW: thêm bản ghi cho từng ngày T7/CN trong khoảng
+                    cur = start_date
+                    while cur <= end_date:
+                        # weekday(): Mon=0 ... Sun=6 → T7=5, CN=6
+                        if cur.weekday() in (5, 6):
+                            db.session.add(HazardConfig(
+                                department=department,
+                                position=position,
+                                hazard_level=hazard_level,
+                                unit=unit,
+                                duration_hours=weekend_hours,
+                                start_date=cur,   # chỉ áp dụng trong ngày
+                                end_date=cur,
+                                machine_type=machine_type
+                            ))
+                        cur += timedelta(days=1)
+
+                db.session.commit()
+                return redirect('/hazard-config')
+
+            # --- KHÔNG GỘP: luôn tạo bản ghi mới cho từng khoa (luồng chuẩn cũ) ---
             for department in departments:
                 db.session.add(HazardConfig(
                     department=department,
@@ -4785,6 +4854,13 @@ def edit_hazard_config(config_id):
             if start_date > end_date:
                 return "Khoảng thời gian không hợp lệ.", 400
 
+            # ★ NEW: cho phép ép logic T7/CN khi chỉnh sửa
+            weekend_only = (request.form.get('weekend_only') == 'on')
+            weekend_part = request.form.get('weekend_part')  # 'full' | 'half' | None
+            if weekend_only:
+                unit = 'gio'  # ép đơn vị giờ
+                duration_hours = 17.0 if weekend_part == 'full' else 7.0
+
             # KHÔNG GỘP: chỉ cập nhật bản hiện tại
             config.department = department
             config.position = position
@@ -4850,7 +4926,6 @@ def _normalize(s: str) -> str:
     s = unicodedata.normalize('NFD', s or '')
     s = ''.join(ch for ch in s if unicodedata.category(ch) != 'Mn')
     return s.lower().strip()
-
 
 @app.route('/bang-doc-hai', methods=['GET', 'POST'])
 def bang_doc_hai():
@@ -4937,28 +5012,51 @@ def bang_doc_hai():
     EPS = 0.01  # so sánh float
 
     def match_configs_for_day(cfgs, d, want_hours, dept_is_lab, sched_machine, selected_machine):
-        """Chỉ nhận cấu hình nếu:
-           - trong khoảng ngày
-           - (XN) nếu biết loại máy (từ schedule hoặc dropdown) thì lọc theo máy
-           - duration_hours == giờ ca (±EPS)
         """
+        Chỉ áp dụng ưu tiên cho khoa ĐÃ có cấu hình:
+         1) Nếu là T7/CN: ưu tiên 7h (nửa ngày) nếu tồn tại; nếu không thì 17h (cả ngày)
+         2) Nếu không có cấu hình cuối tuần → ưu tiên cấu hình trùng giờ ca (±EPS)
+         3) Nếu vẫn không có → trả về cấu hình bất kỳ trong ngày (để hiển thị đúng giờ cấu hình)
+        Khoa KHÔNG có cấu hình → chỉ cố gắng khớp giờ ca (giữ bình thường).
+        """
+        # Khoa không có cấu hình → giữ bình thường
+        if not cfgs:
+            return [c for c in cfgs if abs(float(c.duration_hours) - float(want_hours)) < EPS]
+
         base = [c for c in cfgs if c.start_date <= d <= c.end_date]
 
         if dept_is_lab:
             nm_sched = _normalize(sched_machine)
             nm_selected = _normalize(selected_machine)
             if nm_sched:
-                # Lịch có tên máy → match máy đúng hoặc cấu hình để trống
                 base = [c for c in base if not c.machine_type or _normalize(c.machine_type) == nm_sched]
             elif nm_selected:
-                # Dropdown chọn máy → match máy đúng hoặc cấu hình để trống
                 base = [c for c in base if not c.machine_type or _normalize(c.machine_type) == nm_selected]
             else:
-                # Không có tên máy → chỉ giữ cấu hình để trống
                 base = [c for c in base if not c.machine_type]
 
+        # 1) Ưu tiên cuối tuần (T7=5, CN=6)
+        if d.weekday() in (5, 6):
+            wk = [c for c in base if c.unit == 'gio' and float(c.duration_hours) in (7.0, 17.0)]
+            if wk:
+                # Nếu có 7h thì chọn 7h (đặc biệt khi ca ≤ 8h), nếu không có thì chọn 17h
+                has7 = any(abs(float(c.duration_hours) - 7.0) < EPS for c in wk)
+                has17 = any(abs(float(c.duration_hours) - 17.0) < EPS for c in wk)
+                if has7 and float(want_hours) <= 8.0:
+                    return [c for c in wk if abs(float(c.duration_hours) - 7.0) < EPS]
+                if has17:
+                    return [c for c in wk if abs(float(c.duration_hours) - 17.0) < EPS]
+                # fallback: nếu có 7h nhưng ca > 8h thì vẫn lấy 7h
+                if has7:
+                    return [c for c in wk if abs(float(c.duration_hours) - 7.0) < EPS]
+
+        # 2) Trùng giờ ca
         exact = [c for c in base if abs(float(c.duration_hours) - float(want_hours)) < EPS]
-        return exact
+        if exact:
+            return exact
+
+        # 3) Trả về mọi cấu hình trong ngày (để vẫn lấy giờ từ cấu hình)
+        return base
 
     # --- Build table ---
     days = [start_date + timedelta(days=i) for i in range((end_date - start_date).days + 1)]
@@ -5005,7 +5103,9 @@ def bang_doc_hai():
             pool = match_pos if match_pos else [c for c in cfgs_in_day if not c.position or c.position.strip() == '']
 
             if pool:
-                row['daily_hours'].append(f"{int(ca_hours)}h")
+                # Nếu cấu hình theo giờ → hiển thị đúng giờ trong cấu hình (7h/17h); ngược lại hiển thị giờ ca
+                show_hours = int(pool[0].duration_hours) if (pool[0].unit == 'gio') else int(ca_hours)
+                row['daily_hours'].append(f"{show_hours}h")
                 row['total_days'] += 1
                 row['hazard_level'] = max(row['hazard_level'], max(c.hazard_level for c in pool))
             else:
@@ -5026,7 +5126,6 @@ def bang_doc_hai():
         selected_user_ids=selected_user_ids,
         selected_machine=selected_machine
     )
-
 
 def _normalize_no_accent(s: str) -> str:
     """Dùng để khử trùng lặp theo kiểu 'Huyết học' vs 'Huyet hoc'."""
@@ -5136,7 +5235,7 @@ from datetime import datetime, timedelta, date
 import calendar
 from models import User, Schedule, Shift, HazardConfig
 
-@app.route('/bang-doc-hai/print', methods=['POST'])
+@app.route('/bang-doc-hai/print', methods=['POST']) 
 def bang_doc_hai_print():
     # Cho phép admin, admin1 và manager
     if session.get('role') not in ['admin', 'admin1', 'manager']:
@@ -5181,7 +5280,12 @@ def bang_doc_hai_print():
         HazardConfig.end_date >= start_date
     ).all()
 
+    # ★ NEW: tập khoa có cấu hình để quyết định áp dụng 7h/17h
+    depts_with_config = set(cfg.department for cfg in hazard_configs)
+
     days_range = [start_date + timedelta(days=i) for i in range((end_date - start_date).days + 1)]
+
+    EPS = 0.01  # ★ NEW: so sánh float an toàn
 
     # Tạo dữ liệu bảng
     table_data = []
@@ -5205,12 +5309,16 @@ def bang_doc_hai_print():
                 row['daily_hours'].append("–")
                 continue
 
+            ca_hours = float(getattr(ca, 'duration', 0) or 0)  # ★ NEW: giờ ca thực
+
+            # Các cấu hình áp dụng trong ngày cho khoa của user
             applicable_cfgs = [
                 cfg for cfg in hazard_configs
                 if cfg.department == user.department and
                    cfg.start_date <= d <= cfg.end_date
             ]
 
+            # Ưu tiên theo chức vụ, nếu không có thì nhận cấu hình trống chức vụ
             match_chucvu = [
                 cfg for cfg in applicable_cfgs
                 if cfg.position and cfg.position.strip().upper() == (user.position or '').strip().upper()
@@ -5219,22 +5327,46 @@ def bang_doc_hai_print():
                 cfg for cfg in applicable_cfgs
                 if not cfg.position or cfg.position.strip() == ''
             ]
-
             search_pool = match_chucvu if match_chucvu else match_all
 
-            exact = [cfg for cfg in search_pool if cfg.duration_hours == ca.duration]
-            if exact:
-                best_match = exact[0]
-            else:
-                closest = sorted(search_pool, key=lambda cfg: abs(cfg.duration_hours - ca.duration))
-                best_match = closest[0] if closest else None
+            best_match = None
 
+            if search_pool:
+                # ★ NEW: chỉ áp dụng ưu tiên 7h/17h cho khoa đã có cấu hình
+                if user.department in depts_with_config:
+                    # Nếu là T7/CN → ưu tiên 7h (nửa ngày), nếu không có thì 17h (cả ngày)
+                    if d.weekday() in (5, 6):  # Thứ 7=5, CN=6
+                        weekend = [c for c in search_pool if c.unit == 'gio' and float(c.duration_hours) in (7.0, 17.0)]
+                        if weekend:
+                            has7 = any(abs(float(c.duration_hours) - 7.0) < EPS for c in weekend)
+                            has17 = any(abs(float(c.duration_hours) - 17.0) < EPS for c in weekend)
+                            if has7 and ca_hours <= 8.0:
+                                best_match = next(c for c in weekend if abs(float(c.duration_hours) - 7.0) < EPS)
+                            elif has17:
+                                best_match = next(c for c in weekend if abs(float(c.duration_hours) - 17.0) < EPS)
+                            elif has7:
+                                best_match = next(c for c in weekend if abs(float(c.duration_hours) - 7.0) < EPS)
+
+                # ★ CHG: nếu chưa có best_match (không phải cuối tuần hoặc không có 7/17) → khớp giờ ca
+                if not best_match:
+                    exact = [cfg for cfg in search_pool if abs(float(cfg.duration_hours) - ca_hours) < EPS]
+                    if exact:
+                        best_match = exact[0]
+                    else:
+                        # gần nhất (giữ nguyên tinh thần code chuẩn)
+                        closest = sorted(search_pool, key=lambda cfg: abs(float(cfg.duration_hours) - ca_hours))
+                        best_match = closest[0] if closest else None
+
+            # Xuất ra bảng
             if best_match:
-                row['daily_hours'].append(f"{int(best_match.duration_hours)}h")
+                # ★ NEW: nếu cấu hình theo giờ → hiển thị đúng giờ cấu hình (7/17/…); ngược lại dùng giờ ca
+                show_hours = int(best_match.duration_hours) if (best_match.unit == 'gio') else int(ca_hours)
+                row['daily_hours'].append(f"{show_hours}h")
                 row['total_days'] += 1
                 row['hazard_level'] = best_match.hazard_level
             else:
-                row['daily_hours'].append("–")
+                # ★ NEW: khoa không có cấu hình hoặc ngày không match → hiển thị giờ ca bình thường
+                row['daily_hours'].append(f"{int(ca_hours)}h" if ca_hours > 0 else "–")
 
         table_data.append(row)
 
