@@ -150,7 +150,7 @@
             {% for ca in cas %}
               <div>
                 {{ ca.shift_name }}
-                {% if user.role in ['admin', 'manager'] and not is_signed %}
+                {% if user.role in ['admin', 'admin1', 'manager'] and not is_signed %}
                 <form method="POST" action="/schedule/delete-one"
                       onsubmit="return confirm('Xoá ca {{ ca.shift_name }} ngày {{ d.strftime('%d/%m') }}?')"
                       style="display:inline;">
@@ -166,7 +166,7 @@
         </td>
       {% endfor %}
       <td class="print-hide">
-        {% if user.role in ['admin', 'manager'] and not is_signed %}
+        {% if user.role in ['admin', 'admin1', 'manager'] and not is_signed %}
           <a href="/schedule/edit/{{ u.id }}" class="btn btn-sm btn-primary px-2 py-0" style="font-size: 0.75rem;">Sửa</a>
         {% else %}
           <span class="text-muted">✔</span>

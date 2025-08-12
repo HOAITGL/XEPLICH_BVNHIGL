@@ -1357,25 +1357,23 @@ from models.schedule import Schedule
 
 from utils.unit_config import get_unit_config
 
-@app.route('/schedule', methods=['GET', 'POST'])
+@app.route('/schedule', methods=['GET'])  # GET là đủ vì không xử lý POST
 def view_schedule():
     user_role = session.get('role')
     user_dept = session.get('department')
 
-    # Quyết định khoa được chọn
-    if user_role == 'admin':
-        selected_department = request.args.get('department')
-    else:
-        selected_department = user_dept
+    # Quyền: admin & admin1 được chọn khoa tùy ý, còn lại cố định theo khoa của user
+    is_super = user_role in ('admin', 'admin1')
+    selected_department = request.args.get('department') if is_super else user_dept
 
-    # Danh sách khoa
-    if user_role == 'admin':
+    # Danh sách khoa hiển thị trong combobox
+    if is_super:
         departments = [d[0] for d in db.session.query(User.department)
                        .filter(User.department.isnot(None)).distinct().all()]
     else:
         departments = [user_dept] if user_dept else []
 
-    # Ngày bắt đầu và kết thúc
+    # Ngày bắt đầu/kết thúc (mặc định 7 ngày)
     start_date_str = request.args.get('start_date')
     end_date_str = request.args.get('end_date')
     if start_date_str and end_date_str:
@@ -1385,21 +1383,25 @@ def view_schedule():
         start_date = datetime.today().date()
         end_date = start_date + timedelta(days=6)
 
-    # Lấy lịch trực
-    query = Schedule.query.join(User).join(Shift) \
-        .filter(Schedule.work_date.between(start_date, end_date))
+    # Lấy lịch trực theo khoảng ngày & khoa
+    query = (Schedule.query
+             .join(User)
+             .join(Shift)
+             .filter(Schedule.work_date.between(start_date, end_date)))
     if selected_department:
         query = query.filter(User.department == selected_department)
 
     schedules = query.order_by(Schedule.work_date).all()
-    date_range = [start_date + timedelta(days=i) for i in range((end_date - start_date).days + 1)]
+    date_range = [start_date + timedelta(days=i)
+                  for i in range((end_date - start_date).days + 1)]
 
-    # Chuẩn bị dữ liệu lịch trực
+    # Chuẩn bị dữ liệu hiển thị
     schedule_data = {}
     for s in schedules:
         u = s.user
+        if not u:
+            continue
         contract_type = getattr(u, 'contract_type', None)
-
         if u.id not in schedule_data:
             schedule_data[u.id] = {
                 'id': u.id,
@@ -1410,121 +1412,86 @@ def view_schedule():
                 'shifts': {},
                 'shifts_full': {}
             }
-
-        # Cho phép nhiều ca/ngày
-        if s.work_date not in schedule_data[u.id]['shifts_full']:
-            schedule_data[u.id]['shifts_full'][s.work_date] = []
-
-        # Thêm thông tin ca trực kèm machine_type và work_hours
-        schedule_data[u.id]['shifts_full'][s.work_date].append({
-            'shift_id': s.shift.id,
-            'shift_name': s.shift.name,
-            'machine_type': getattr(s, 'machine_type', None),  # fallback nếu DB chưa có
-            'work_hours': getattr(s, 'work_hours', None)       # fallback nếu DB chưa có
+        schedule_data[u.id]['shifts_full'].setdefault(s.work_date, []).append({
+            'shift_id': s.shift.id if s.shift else None,
+            'shift_name': s.shift.name if s.shift else '',
+            'machine_type': getattr(s, 'machine_type', None),
+            'work_hours': getattr(s, 'work_hours', None)
         })
 
-    # Dữ liệu lọc riêng cho in
-    filtered_for_print = {}
+    # Dữ liệu cho phần in (lọc chỉ ca trực, loại nghỉ)
+    print_data = {}
     for uid, data in schedule_data.items():
-        filtered_shifts = {}
-        for work_date, shifts in data['shifts_full'].items():
-            ca_truc = [
-                ca for ca in shifts
-                if 'trực' in ca['shift_name'].lower() and 'nghỉ' not in ca['shift_name'].lower()
-            ]
+        filtered = {}
+        for d, items in data['shifts_full'].items():
+            ca_truc = [ca for ca in items
+                       if 'trực' in (ca.get('shift_name') or '').lower()
+                       and 'nghỉ' not in (ca.get('shift_name') or '').lower()]
             if ca_truc:
-                filtered_shifts[work_date] = ca_truc
+                filtered[d] = ca_truc
+        if filtered:
+            print_data[uid] = {**{k: data[k] for k in
+                                  ('id','name','position','department','contract_type')},
+                               'shifts_full': filtered}
 
-        if filtered_shifts:
-            filtered_for_print[uid] = {
-                'id': data['id'],
-                'name': data['name'],
-                'position': data['position'],
-                'department': data['department'],
-                'contract_type': data['contract_type'],
-                'shifts_full': filtered_shifts
-            }
-
-    # Thứ tự chức danh
-    priority_order = [
-        'GĐ', 'PGĐ', 'TK', 'TP', 'PTK', 'PTP', 'PK', 'PP',
-        'BS', 'ĐDT', 'KTVT', 'KTV', 'ĐD', 'NV', 'HL', 'BV', 'LX'
-    ]
-
+    # Thứ tự sắp xếp
+    priority_order = ['GĐ','PGĐ','TK','TP','PTK','PTP','PK','PP',
+                      'BS','ĐDT','KTVT','KTV','ĐD','NV','HL','BV','LX']
     def get_priority(pos):
-        pos = pos.upper() if pos else ''
+        pos = (pos or '').upper()
         return priority_order.index(pos) if pos in priority_order else 999
+    def get_contract_priority(ct):
+        return 0 if ct and 'biên' in ct.lower() else 1
 
-    def get_contract_priority(contract_type):
-        if contract_type and 'biên' in contract_type.lower():
-            return 0  # Ưu tiên biên chế
-        return 1  # Hợp đồng sau
+    schedule_data = dict(sorted(schedule_data.items(),
+                         key=lambda kv: (get_priority(kv[1]['position']),
+                                         get_contract_priority(kv[1]['contract_type']),
+                                         kv[1]['name'])))
+    print_data = dict(sorted(print_data.items(),
+                      key=lambda kv: (get_priority(kv[1]['position']),
+                                      get_contract_priority(kv[1]['contract_type']),
+                                      kv[1]['name'])))
 
-    # Sắp xếp
-    schedule_data = dict(sorted(
-        schedule_data.items(),
-        key=lambda item: (
-            get_priority(item[1]['position']),
-            get_contract_priority(item[1]['contract_type']),
-            item[1]['name']
-        )
-    ))
+    # Chữ ký & khóa (nếu có model; nếu không có thì bỏ qua nhẹ nhàng)
+    signature = None
+    is_signed = False
+    signed_at = None
+    try:
+        signature = ScheduleSignature.query.filter_by(
+            department=selected_department, from_date=start_date, to_date=end_date
+        ).first()
+        is_signed = bool(signature)
+        signed_at = signature.signed_at if signature else None
+    except Exception:
+        pass
 
-    filtered_for_print = dict(sorted(
-        filtered_for_print.items(),
-        key=lambda item: (
-            get_priority(item[1]['position']),
-            get_contract_priority(item[1]['contract_type']),
-            item[1]['name']
-        )
-    ))
+    locked = False
+    try:
+        lock = ScheduleLock.query.filter_by(
+            department=selected_department, start_date=start_date, end_date=end_date
+        ).first()
+        locked = bool(lock)
+    except Exception:
+        pass
 
-    # Kiểm tra chữ ký
-    signature = ScheduleSignature.query.filter_by(
-        department=selected_department,
-        from_date=start_date,
-        to_date=end_date
-    ).first()
-    is_signed = bool(signature)
-    signed_at = signature.signed_at if signature else None
-
-    # Kiểm tra khóa
-    lock = ScheduleLock.query.filter_by(
-        department=selected_department,
-        start_date=start_date,
-        end_date=end_date
-    ).first()
-    locked = bool(lock)
-
-    # unit_config
     unit_config = {
         'name': 'BỆNH VIỆN NHI TỈNH GIA LAI',
         'address': '123 Đường ABC, Gia Lai',
         'phone': '0269 123456'
     }
 
-    # Danh sách ngày lễ (tùy chỉnh)
-    HOLIDAYS = [
-        date(2025, 1, 1),
-        date(2025, 4, 30),
-        date(2025, 5, 1),
-        date(2025, 9, 2),
-    ]
-
-    # Đánh dấu ngày cuối tuần và ngày lễ
-    highlight_days = {}
-    for d in date_range:
-        if d.weekday() in [5, 6]:  # Thứ 7, CN
-            highlight_days[d] = 'weekend'
-        elif d in HOLIDAYS:
-            highlight_days[d] = 'holiday'
+    # Ngày lễ & đánh dấu
+    from datetime import date
+    HOLIDAYS = [date(2025,1,1), date(2025,4,30), date(2025,5,1), date(2025,9,2)]
+    highlight_days = {d: ('holiday' if d in HOLIDAYS else 'weekend')
+                      for d in date_range if d.weekday() in (5,6) or d in HOLIDAYS}
 
     return render_template(
         'schedule.html',
         departments=departments,
         selected_department=selected_department,
         schedule_data=schedule_data,
-        print_data=filtered_for_print,
+        print_data=print_data,
         date_range=date_range,
         start_date=start_date,
         end_date=end_date,
@@ -1532,11 +1499,7 @@ def view_schedule():
         is_signed=is_signed,
         signed_at=signed_at,
         locked=locked,
-        user={
-            'role': user_role,
-            'department': user_dept,
-            'name': session.get('name')
-        },
+        user={'role': user_role, 'department': user_dept, 'name': session.get('name')},
         unit_config=unit_config,
         highlight_days=highlight_days
     )
@@ -1614,34 +1577,25 @@ def edit_user_schedule(user_id):
                            end=end.strftime('%Y-%m-%d'))
 
 @app.route('/schedule/delete-one', methods=['POST'])
-def delete_one_schedule():
+def schedule_delete_one():
     role = session.get('role')
-    if role not in ['admin', 'manager']:
-        return "Bạn không có quyền xoá ca trực.", 403
+    if role not in ('admin', 'admin1', 'manager'):
+        return "Bạn không có quyền thực hiện thao tác này.", 403
 
-    user_id = request.form.get('user_id')
-    shift_id = request.form.get('shift_id')
-    work_date = request.form.get('work_date')
-    department = session.get('department') if role == 'manager' else request.form.get('department')
+    user_id = int(request.form['user_id'])
+    shift_id = int(request.form['shift_id'])
+    work_date = datetime.strptime(request.form['work_date'], '%Y-%m-%d').date()
 
-    work_date_obj = datetime.strptime(work_date, '%Y-%m-%d').date()
-
-    lock = ScheduleLock.query.filter_by(department=department)\
-        .filter(ScheduleLock.start_date <= work_date_obj, ScheduleLock.end_date >= work_date_obj).first()
-    if lock and role == 'manager':
-        return "Bảng lịch đã ký xác nhận. Vui lòng liên hệ Admin để sửa.", 403
-
-    schedule = Schedule.query.filter_by(
-        user_id=user_id,
-        shift_id=shift_id,
-        work_date=work_date
+    s = Schedule.query.filter_by(
+        user_id=user_id, shift_id=shift_id, work_date=work_date
     ).first()
+    if not s:
+        return "Không tìm thấy ca trực để xóa.", 404
 
-    if schedule:
-        db.session.delete(schedule)
-        db.session.commit()
+    db.session.delete(s)
+    db.session.commit()
+    return redirect(request.referrer or url_for('view_schedule'))
 
-    return redirect(request.referrer or '/schedule')
 
 @app.route('/schedule/sign', methods=['POST'])
 @login_required
