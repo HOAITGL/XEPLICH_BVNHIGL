@@ -299,8 +299,11 @@ def logout():
     return redirect(url_for('login'))
 
 # --- Helper: tìm / tạo đúng ca "Nghỉ phép" mã "P" ---
-from datetime import time
+from datetime import date, datetime, timedelta, time
+from sqlalchemy import func
 from models.shift import Shift
+from models.user import User
+from models.schedule import Schedule
 
 def get_or_create_leave_shift():
     # ƯU TIÊN: đúng mã "P"
@@ -318,50 +321,122 @@ def get_or_create_leave_shift():
         db.session.flush()  # để có leave.id ngay
     return leave
 
+# Tuỳ chỉnh ngày lễ của bệnh viện
+HOLIDAYS = {date(2025,1,1), date(2025,4,30), date(2025,5,1), date(2025,9,2)}
+
+def count_workdays(start, end, holidays=None):
+    """Đếm ngày làm việc (T2–T6), bỏ T7/CN và ngày lễ."""
+    holidays = holidays or set()
+    d, days = start, 0
+    while d <= end:
+        if d.weekday() not in (5, 6) and d not in holidays:  # bỏ T7,CN & lễ
+            days += 1
+        d += timedelta(days=1)
+    return days
+
+# thay cho leave_balance_by_schedule hiện tại
+def leave_balance_by_schedule(user_id: int, year: int):
+    u = User.query.get(user_id)
+
+    # 👉 Ưu tiên lấy từ DB; nếu trống/0 thì mặc định 13 ngày
+    total = int((getattr(u, "annual_leave", None) or 0))
+    if total <= 0:
+        total = 13  # mặc định theo thâm niên/chính sách hiện tại
+
+    leave_shift = get_or_create_leave_shift()
+
+    used = db.session.query(func.count(Schedule.id)).filter(
+        Schedule.user_id == user_id,
+        Schedule.shift_id == leave_shift.id,
+        func.strftime("%Y", Schedule.work_date) == str(year),
+        func.strftime("%w", Schedule.work_date).in_(["1", "2", "3", "4", "5"])  # T2..T6
+    ).scalar() or 0
+
+    remaining = max(total - used, 0)
+    return total, used, remaining
+
+
+
+# ====== đặt ở đầu file app.py (nếu chưa có) ======
+from datetime import date
+from flask import render_template, request, session, flash
+from sqlalchemy import desc
+# leave_balance_by_schedule phải được định nghĩa sẵn (helper đã gửi trước đó)
+# ==================================================
+
 
 @app.route('/leaves')
-@login_required
-def view_leaves():
+def leaves_list():
     from models.leave_request import LeaveRequest
     from models.user import User
-    from sqlalchemy import desc
 
-    role = session.get('role')
-    user_dept = session.get('department')
+    role    = session.get('role')
+    my_dept = session.get('department')
+    my_id   = session.get('user_id')
 
-    # Admin/admin1 có thể lọc theo khoa (query ?department=...)
-    selected_department = request.args.get('department')
+    # Danh sách khoa (cho admin/admin1)
+    if role in ('admin', 'admin1'):
+        departments = [d[0] for d in db.session.query(User.department)
+                       .filter(User.department.isnot(None))
+                       .distinct()
+                       .order_by(User.department).all()]
+    else:
+        departments = []
 
-    if role in ['admin', 'admin1']:
+    # Khoa được chọn
+    if role in ('admin', 'admin1'):
+        selected_department = request.args.get('department')
+        if not selected_department and departments:
+            selected_department = departments[0]  # mặc định khoa đầu tiên
+    else:
+        selected_department = my_dept
+
+    # Lấy danh sách đơn theo quyền/khoa
+    if role in ('admin', 'admin1'):
         q = LeaveRequest.query.join(User)
         if selected_department:
             q = q.filter(User.department == selected_department)
         leaves = q.order_by(desc(LeaveRequest.start_date)).all()
-
-        # Danh sách khoa để admin chọn lọc
-        departments = [d[0] for d in db.session.query(User.department)
-                       .filter(User.department.isnot(None))
-                       .distinct().order_by(User.department).all()]
     else:
-        # Nhân sự thường chỉ xem đơn của KHOA MÌNH
-        if not user_dept:
+        if not my_dept:
             flash("Tài khoản chưa có thông tin khoa.", "warning")
-            return render_template('leaves.html', leaves=[], departments=[])
-
-        leaves = (LeaveRequest.query
-                  .join(User)
-                  .filter(User.department == user_dept)
+            return render_template(
+                'leaves.html',
+                leaves=[], departments=[],
+                selected_department=None,
+                current_department=my_dept,
+                current_role=role,
+                user=None,
+                leave_info=None,
+                balances={}  # ⚠️ luôn truyền để template không lỗi
+            )
+        leaves = (LeaveRequest.query.join(User)
+                  .filter(User.department == my_dept)
                   .order_by(desc(LeaveRequest.start_date))
                   .all())
-        departments = []  # non-admin không cần combobox khoa
+
+    # Tính phép năm cho từng nhân viên trong danh sách (cột 'Còn lại')
+    year = date.today().year
+    balances = {}
+    user_ids = {lv.user_id for lv in leaves}
+    for uid in user_ids:
+        t, u, r = leave_balance_by_schedule(uid, year)  # helper đã có
+        balances[uid] = {"total": t, "used": u, "remaining": r}
+
+    # Banner tóm tắt cho người đang đăng nhập
+    t0, u0, r0 = leave_balance_by_schedule(my_id, year)
+    leave_info = {"year": year, "total": t0, "used": u0, "remaining": r0}
 
     return render_template(
         'leaves.html',
         leaves=leaves,
         departments=departments,
         selected_department=selected_department,
-        current_department=user_dept,
-        current_role=role
+        current_department=my_dept,
+        current_role=role,
+        user=User.query.get(my_id),
+        leave_info=leave_info,
+        balances=balances  # ✅ quan trọng
     )
 
 @app.route('/admin/fix-weekend-leaves')
@@ -372,7 +447,6 @@ def fix_weekend_leaves():
         flash("Bạn không có quyền.", "danger")
         return redirect('/')
 
-    from models.schedule import Schedule
     leave_shift = get_or_create_leave_shift()
 
     # Lấy toàn bộ bản ghi 'Nghỉ phép'
@@ -385,6 +459,7 @@ def fix_weekend_leaves():
     db.session.commit()
     flash(f"✅ Đã xoá {removed} bản ghi 'Nghỉ phép' rơi vào Thứ 7/CN.", "success")
     return redirect('/schedule')
+
 
 @app.route('/leaves/add', methods=['GET', 'POST'])
 @login_required
@@ -431,7 +506,7 @@ def add_leave():
         user_id = int(user_id_str)
         try:
             start_date = datetime.strptime(request.form['start_date'], '%Y-%m-%d').date()
-            end_date = datetime.strptime(request.form['end_date'], '%Y-%m-%d').date()
+            end_date   = datetime.strptime(request.form['end_date'],   '%Y-%m-%d').date()
         except Exception:
             flash("❌ Ngày bắt đầu/kết thúc không hợp lệ.", "danger")
             return redirect('/leaves/add')
@@ -440,16 +515,16 @@ def add_leave():
             flash("❌ Khoảng thời gian nghỉ không hợp lệ.", "danger")
             return redirect('/leaves/add')
 
-        reason = request.form.get('reason')
+        reason   = request.form.get('reason')
         location = request.form.get('location')
 
         # Thông tin bổ sung (nếu có)
-        birth_day = request.form.get('birth_day')
+        birth_day   = request.form.get('birth_day')
         birth_month = request.form.get('birth_month')
-        birth_year = request.form.get('birth_year')
-        birth_date = None
+        birth_year  = request.form.get('birth_year')
+        birth_date  = None
         if birth_day and birth_month and birth_year:
-            birth_date_str = f"{birth_year}-{birth_month.zfill(2)}-{birth_day.zfill(2)}"
+            birth_date_str = f"{birth_year}-{str(birth_month).zfill(2)}-{str(birth_day).zfill(2)}"
             try:
                 birth_date = datetime.strptime(birth_date_str, '%Y-%m-%d').date()
             except Exception:
@@ -478,6 +553,28 @@ def add_leave():
                 flash("❌ Bạn không thể tạo đơn cho nhân viên khác khoa.", "danger")
                 return redirect('/leaves/add')
 
+        # ====== GIỚI HẠN THEO SỐ NGÀY PHÉP CÒN LẠI ======
+        req_days = count_workdays(start_date, end_date, HOLIDAYS)  # số ngày xin (T2–T6, trừ lễ)
+        year     = start_date.year
+        total, used, remaining = leave_balance_by_schedule(user_id, year)
+
+        # ==== CHÈN ĐOẠN NÀY VÀO ĐÂY ====
+        year = start_date.year
+        total, used, remaining = leave_balance_by_schedule(user_id, year)
+
+        if remaining <= 0:
+            flash(f"❌ Bạn đã dùng hết ngày phép năm {year} (đã dùng {used}/{total}).", "danger")
+            return redirect(request.referrer or url_for('add_leave'))
+
+        if req_days > remaining:
+            flash(
+                f"❌ Số ngày nghỉ phép còn lại của bạn là {remaining} ngày. "
+                f"Bạn không thể thêm đơn nghỉ phép {req_days} ngày được "
+                f"(đã dùng {used}/{total} ngày năm {year}).",
+                "warning"
+            )
+            return redirect(request.referrer or url_for('add_leave'))
+
         # 1) Lưu đơn nghỉ
         leave = LeaveRequest(
             user_id=user_id,
@@ -487,6 +584,7 @@ def add_leave():
             location=location,
             birth_date=birth_date
         )
+        # (Nếu LeaveRequest có cột days_off, có thể set: leave.days_off = req_days)
         db.session.add(leave)
 
         # 2) Tự động chấm nghỉ -> gán ca "Nghỉ phép" (BỎ Thứ 7 & Chủ nhật)
@@ -525,7 +623,11 @@ def add_leave():
         # 3) Commit
         try:
             db.session.commit()
-            msg = f"✅ Đã tạo đơn nghỉ phép. Đã chấm {created} ngày (T2–T6), cập nhật {overwritten} ngày."
+            left_after = remaining - req_days
+            msg = (f"✅ Đã tạo đơn nghỉ phép {req_days} ngày (T2–T6). "
+                   f"Còn lại {left_after} ngày phép năm {year}. "
+                   f"Cập nhật {overwritten} ngày, thêm mới {created} ngày."
+                   )
             if removed_weekend:
                 msg += f" Đã xoá {removed_weekend} lịch rơi vào T7/CN."
             flash(msg, "success")
@@ -572,13 +674,23 @@ def start_work_year(self):
 def leave_days(self):
     return (self.end_date - self.start_date).days + 1
 
-@app.route('/leaves/delete/<int:leave_id>')
-def delete_leave(leave_id):
+@app.route('/leaves/delete/<int:leave_id>', methods=['POST'])
+def leaves_delete(leave_id):
+    from models.leave_request import LeaveRequest
+
+    role = session.get('role')
+    my_id = session.get('user_id')
+
     leave = LeaveRequest.query.get_or_404(leave_id)
+
+    # Quyền: admin/admin1 hoặc chính chủ đơn
+    if role not in ('admin', 'admin1') and leave.user_id != my_id:
+        return "Bạn không có quyền xoá đơn này.", 403
+
     db.session.delete(leave)
     db.session.commit()
-    flash('Đã xoá đơn nghỉ phép thành công.', 'success')
-    return redirect(url_for('view_leaves'))
+    flash("🗑 Đã xoá đơn nghỉ.", "success")
+    return redirect(request.referrer or url_for('leaves_list'))
 
 from flask import request, render_template, redirect, session
 from collections import defaultdict

@@ -3,6 +3,29 @@
 
 <h2 class="mb-3">Danh sách đơn nghỉ phép</h2>
 
+{# FLASH: hiện thông báo cụ thể từ route (còn bao nhiêu ngày, đã dùng bao nhiêu, ...) #}
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+    <div class="mb-3">
+      {% for category, msg in messages %}
+        <div class="alert alert-{{ 'danger' if category=='error' else category }} py-2 mb-2">
+          {{ msg }}
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+{% endwith %}
+
+{# Tóm tắt phép năm cho user hiện tại (nếu backend truyền leave_info) #}
+{% if leave_info %}
+  <div class="alert alert-info d-flex flex-wrap gap-3 align-items-center">
+    <div><strong>Năm {{ leave_info.year }}</strong></div>
+    <div>Được cấp: <strong>{{ leave_info.total }}</strong> ngày</div>
+    <div>Đã dùng: <strong>{{ leave_info.used }}</strong> ngày</div>
+    <div>Còn lại: <strong>{{ leave_info.remaining }}</strong> ngày</div>
+  </div>
+{% endif %}
+
 {# Hiển thị bộ lọc khoa cho admin/admin1 #}
 {% if current_role in ['admin', 'admin1'] %}
 <form method="get" class="mb-3 d-flex gap-2 align-items-center">
@@ -18,7 +41,15 @@
 <p class="text-muted">Khoa của bạn: <strong>{{ current_department }}</strong></p>
 {% endif %}
 
-<a href="/leaves/add" class="btn btn-primary mb-3">Thêm đơn nghỉ phép</a>
+{# Nút thêm đơn (khóa nếu hết phép) #}
+{% set can_create = (not leave_info) or (leave_info.remaining|int > 0) %}
+{% if can_create %}
+  <a href="/leaves/add" class="btn btn-primary mb-3">Thêm đơn nghỉ phép</a>
+{% else %}
+  <button class="btn btn-secondary mb-3" disabled title="Bạn đã dùng hết ngày phép năm {{ leave_info.year }}.">
+    Thêm đơn nghỉ phép
+  </button>
+{% endif %}
 
 <table class="table table-bordered align-middle">
   <thead class="table-light">
@@ -26,47 +57,51 @@
       <th>Họ tên</th>
       <th>Từ ngày</th>
       <th>Đến ngày</th>
+      <th>Số ngày</th>
+      <th>Tổng phép năm</th>  {# ✅ Cột mới #}
       <th>Lý do</th>
-      <th style="width: 260px">Hành động</th>
+      <th style="width: 320px">Hành động</th>
+      <th style="width: 160px">Còn lại (năm {{ leave_info.year if leave_info else '' }})</th>
     </tr>
   </thead>
   <tbody>
     {% if leaves and leaves|length > 0 %}
       {% for leave in leaves %}
+      {% set b = balances.get(leave.user_id) %}
       <tr>
         <td>{{ leave.user.name }}</td>
+        <td>{{ leave.start_date.strftime('%d/%m/%Y') if leave.start_date else '—' }}</td>
+        <td>{{ leave.end_date.strftime('%d/%m/%Y') if leave.end_date else '—' }}</td>
+
+        {# Số ngày của đơn (nếu model đã có days_off thì dùng trực tiếp, không thì có thể thay bằng công thức trong Jinja) #}
         <td>
-          {% if leave.start_date %}
-            {{ leave.start_date.strftime('%d/%m/%Y') }}
-          {% else %}
-            —
-          {% endif %}
+          {{ leave.days_off if leave.days_off is not none else ((leave.end_date - leave.start_date).days + 1) if (leave.start_date and leave.end_date) else '—' }}
         </td>
-        <td>
-          {% if leave.end_date %}
-            {{ leave.end_date.strftime('%d/%m/%Y') }}
-          {% else %}
-            —
-          {% endif %}
-        </td>
+
+        {# ✅ Tổng số ngày phép/năm của nhân viên #}
+        <td>{{ (b.total ~ ' ngày') if b and b.total is not none else '—' }}</td>
+
         <td>{{ leave.reason }}</td>
+
         <td class="d-flex gap-2 flex-wrap">
-          {# Chỉ admin/admin1 hoặc CHÍNH CHỦ đơn mới thấy các nút tác vụ #}
           {% if current_role in ['admin', 'admin1'] or (user and leave.user_id == user.id) %}
             <a href="/leaves/print/{{ leave.id }}" class="btn btn-sm btn-primary">In đơn</a>
             <a href="{{ url_for('export_leave_word', leave_id=leave.id) }}" class="btn btn-sm btn-secondary">Xuất Word</a>
-            <a href="/leaves/delete/{{ leave.id }}"
-               onclick="return confirm('Xoá đơn nghỉ này?')"
-               class="btn btn-sm btn-danger">🗑 Xoá</a>
+            <form method="POST" action="/leaves/delete/{{ leave.id }}"
+                  onsubmit="return confirm('Xoá đơn nghỉ này?')" style="display:inline;">
+              <button type="submit" class="btn btn-sm btn-danger">🗑 Xoá</button>
+            </form>
           {% else %}
             <span class="text-muted">—</span>
           {% endif %}
         </td>
+
+        <td>{{ (b.remaining ~ ' ngày') if b and b.remaining is not none else '—' }}</td>
       </tr>
       {% endfor %}
     {% else %}
       <tr>
-        <td colspan="5" class="text-center text-muted">Chưa có đơn nghỉ phép nào.</td>
+        <td colspan="8" class="text-center text-muted">Chưa có đơn nghỉ phép nào.</td> {# ✅ cập nhật colspan #}
       </tr>
     {% endif %}
   </tbody>
