@@ -298,34 +298,51 @@ def logout():
     flash("Bạn đã đăng xuất.", "info")
     return redirect(url_for('login'))
 
-# --- Helper: tìm / tạo đúng ca "Nghỉ phép" mã "P" ---
+# ================== Helpers Nghỉ phép / Phép năm ==================
 from datetime import date, datetime, timedelta, time
-import unicodedata
-from sqlalchemy import func, desc
+import unicodedata  # (nếu cần cho chỗ khác)
 from models import db
 from models.shift import Shift
 from models.user import User
-from models.schedule import Schedule
 
-# === Ca Nghỉ phép "P" ===
+# === Ca "Nghỉ phép" mã P ===
 def get_or_create_leave_shift():
+    """
+    Trả về ca 'Nghỉ phép' (code='P'). Nếu chưa có thì tạo mới.
+    """
     leave = Shift.query.filter_by(code="P").first()
     if not leave:
-        leave = Shift(name="Nghỉ phép", code="P",
-                      start_time=time(7,0), end_time=time(7,0), duration=24.0)
+        leave = Shift(
+            name="Nghỉ phép",
+            code="P",
+            start_time=time(7, 0),
+            end_time=time(7, 0),
+            duration=24.0,
+        )
         db.session.add(leave)
-        db.session.flush()
+        db.session.flush()  # có leave.id ngay trong phiên
     return leave
 
-# === Lễ tết (có thể thay bằng nạp từ DB) ===
-HOLIDAYS = {date(2025,1,1), date(2025,4,30), date(2025,5,1), date(2025,9,2)}
+# === Ngày lễ (có thể thay bằng nạp từ DB) ===
+HOLIDAYS = {
+    date(2025, 1, 1),
+    date(2025, 4, 30),
+    date(2025, 5, 1),
+    date(2025, 9, 2),
+}
 
-WORKDAYS = {0,1,2,3,4}
-def count_workdays(start_date, end_date, holidays=None, workdays=WORKDAYS) -> int:
+WORKDAYS = {0, 1, 2, 3, 4}  # Thứ 2..Thứ 6
+
+def count_workdays(start_date: date, end_date: date, holidays=None, workdays=WORKDAYS) -> int:
+    """
+    Đếm số ngày làm việc từ start_date..end_date (bao gồm 2 đầu),
+    loại trừ T7/CN và các ngày trong 'holidays'.
+    """
     if not start_date or not end_date:
         return 0
     if start_date > end_date:
         start_date, end_date = end_date, start_date
+
     hs = set(holidays or [])
     d, total = start_date, 0
     while d <= end_date:
@@ -335,22 +352,98 @@ def count_workdays(start_date, end_date, holidays=None, workdays=WORKDAYS) -> in
     return total
 
 # === Tổng phép theo thâm niên ===
-def _guess_join_year(user, fallback_year):
-    for attr in ("start_year","join_year","year_joined","start_work_year"):
+def _guess_join_year(user, fallback_year: int) -> int:
+    """
+    Suy đoán năm vào làm từ các field thường gặp trên user.
+    Nếu không có, trả về fallback_year để không làm hỏng phép tính.
+    """
+    for attr in ("start_year", "join_year", "year_joined", "start_work_year"):
         y = getattr(user, attr, None)
         if isinstance(y, int) and 1900 <= y <= 2100:
             return y
-    for attr in ("start_date","join_date","hire_date"):
+    for attr in ("start_date", "join_date", "hire_date"):
         d = getattr(user, attr, None)
         if d:
-            try: return d.year
-            except: pass
+            try:
+                return d.year
+            except Exception:
+                pass
     return fallback_year
 
-def calc_total_leave_days(user, year, base=12):
+def calc_total_leave_days(user: User, year: int, base: int = 12) -> int:
+    """
+    Quy tắc: 12 ngày cơ bản + mỗi 5 năm thâm niên +1 ngày.
+    Ví dụ vào làm 2018, năm 2025: thâm niên 7 năm -> 12 + 1 = 13.
+    """
     join_year = _guess_join_year(user, year)
     years_worked = max(year - join_year, 0)
     return base + (years_worked // 5)
+
+def leave_balance_by_requests(user_id: int, year: int):
+    """
+    Tính (total, used, remaining) THEO ĐƠN NGHỈ:
+      - total: theo thâm niên (calc_total_leave_days)
+      - used : cộng 'Số ngày' (days_off) của từng đơn; nếu thiếu days_off hoặc đơn bắc qua năm -> tính ngày làm việc T2–T6 trong phần giao với năm.
+      - remaining = max(total - used, 0)
+    Tương thích mọi CSDL (không dùng strftime/extract trong SQL).
+    """
+    from models.leave_request import LeaveRequest
+
+    user = User.query.get(user_id)
+    if not user:
+        return 0, 0, 0
+
+    total = calc_total_leave_days(user, year)
+    y_start = date(year, 1, 1)
+    y_end = date(year + 1, 1, 1) - timedelta(days=1)  # inclusive
+
+    def _business_days_between(d1: date, d2: date, workdays=(0, 1, 2, 3, 4)) -> int:
+        cur, n = d1, 0
+        while cur <= d2:
+            if cur.weekday() in workdays:
+                n += 1
+            cur += timedelta(days=1)
+        return n
+
+    used = 0
+    reqs = (
+        LeaveRequest.query
+        .filter(
+            LeaveRequest.user_id == user_id,
+            LeaveRequest.start_date <= y_end,
+            LeaveRequest.end_date >= y_start,
+        )
+        .all()
+    )
+
+    for lv in reqs:
+        if not lv.start_date or not lv.end_date:
+            continue
+        s = max(lv.start_date, y_start)
+        e = min(lv.end_date, y_end)
+        if s > e:
+            continue
+
+        # Ưu tiên dùng số ngày đã nhập (nếu đơn nằm trọn trong năm)
+        if getattr(lv, "days_off", None) is not None and (lv.start_date >= y_start and lv.end_date <= y_end):
+            try:
+                used += int(lv.days_off)
+            except Exception:
+                used += _business_days_between(s, e)
+        else:
+            used += _business_days_between(s, e)
+
+    remaining = max(total - used, 0)
+    return total, used, remaining
+
+# === Shim giữ tương thích tên cũ (nếu nơi khác còn gọi) ===
+def leave_balance_by_schedule(user_id: int, year: int):
+    """
+    Giữ tương thích ngược: hiện dùng chung logic theo ĐƠN NGHỈ.
+    """
+    return leave_balance_by_requests(user_id, year)
+# ===========================================================
+
 
 def leave_balance_by_requests(user_id, year):
     from models.leave_request import LeaveRequest
