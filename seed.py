@@ -1,7 +1,7 @@
 # seed.py
 from datetime import date, timedelta, time
 from extensions import db
-from app import app
+from models import db
 from models.user import User
 from models.shift import Shift
 from models.schedule import Schedule

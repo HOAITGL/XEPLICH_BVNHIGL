@@ -1,0 +1,188 @@
+{% extends "layout.html" %}
+{% block title %}In bảng chấm công{% endblock %}
+{% block content %}
+
+{% set holiday_keys = holiday_keys or [] %}
+
+<style>
+  .col-sat{ background:#d9eaf7 !important; }
+  .col-sun{ background:#ffd6cc !important; }
+  .col-holiday{ background:#fff2cc !important; }
+
+  .head{ display:flex; justify-content:space-between; margin:6px 0 8px 0; }
+  .head-left, .head-right{ width:42%; text-align:center; }
+  .head-left .dept{ display:inline-block; margin-top:4px; border-bottom:1px solid #000; font-weight:600; }
+  .head-right .motto{ display:inline-block; margin-top:4px; border-bottom:1px solid #000; }
+  .head-right .date-italic{ margin-top:4px; font-style:italic; }
+
+  .print-page{ width:100%; }
+
+  @media print {
+    .d-print-block { display:block !important; }
+    .d-print-none, .btn, .sidebar, form, nav, .print-hide, .user-greeting { display:none !important; }
+
+    html, body {
+      margin:0 !important; padding:0 !important; width:100%; height:100%;
+      -webkit-print-color-adjust:exact; print-color-adjust:exact;
+      font-family: Arial, Helvetica, sans-serif;
+    }
+    .container, .row, .main, .wrapper, .content {
+      width:100% !important; margin:0 !important; padding:0 !important;
+      max-width:none !important;
+    }
+
+    table {
+      width:100% !important;
+      border-collapse:collapse;
+      font-size:9.5px;
+    }
+    th, td {
+      padding:4px 6px;
+      border:1px solid #444;
+      text-align:center;
+      vertical-align:middle;
+      line-height:1.2;
+      word-break:break-word;
+    }
+
+    th.stt, td.stt { min-width:0.9cm; max-width:1.2cm; text-align:center; }
+    th.hoten, td.hoten { min-width:2.8cm; max-width:3.8cm; white-space:nowrap; }
+    th.chucvu, td.chucvu {
+      min-width:1.2cm; max-width:1.8cm;
+      white-space:pre-line; line-height:1.2;
+      font-size:9.3px; padding:4px 2px;
+    }
+    td.code-cell {
+      white-space:pre-line !important;
+      font-size:9.5px; line-height:1.1; padding:4px 2px;
+      word-break:break-word;
+    }
+    th.so-cong-kl, td.so-cong-kl,
+    th.so-cong-tg, td.so-cong-tg,
+    th.so-cong-100, td.so-cong-100,
+    th.so-cong-bhxh, td.so-cong-bhxh {
+      min-width:1.1cm !important; max-width:1.3cm !important;
+      text-align:center; white-space:normal;
+    }
+
+    thead { display: table-header-group; }
+    tr { page-break-inside: avoid; }
+  }
+
+  /* Chân ký */
+  .footer-sign {
+    margin-top:0.5cm;
+    display:flex;
+    justify-content:space-around;
+    font-size:11px;
+    text-align:center;
+    page-break-inside: avoid;
+    page-break-before: avoid;
+    page-break-after: avoid;
+  }
+
+  @page {
+    size: A4 landscape;
+    margin: 1cm 0.7cm 0.5cm 0.7cm;
+  }
+</style>
+
+<div class="print-page">
+  <div class="head">
+    <div class="head-left">
+      <div><strong>BỆNH VIỆN NHI TỈNH GIA LAI</strong></div>
+      <div class="dept">{{ sheet.department or 'Khoa/Phòng' }}</div>
+    </div>
+    <div class="head-right">
+      <div><strong>CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</strong></div>
+      <div class="motto">Độc lập - Tự do - Hạnh phúc</div>
+      {% if today %}
+      <div class="date-italic"><em>Gia Lai, ngày {{ today.day }} tháng {{ today.month }} năm {{ today.year }}</em></div>
+      {% endif %}
+    </div>
+  </div>
+
+  <h5 class="text-center fw-bold" style="margin:6px 0 10px 0;">
+    BẢNG CHẤM CÔNG THÁNG {{ sheet.start_date.month }} NĂM {{ sheet.start_date.year }}
+  </h5>
+
+  <table class="table text-center">
+    <thead>
+      <tr style="background:#f6e8a9;">
+        <th colspan="3">{{ contract_label }}</th>
+        <th colspan="{{ days|length }}">NGÀY TRONG THÁNG</th>
+        <th rowspan="3" class="so-cong-kl">Số công<br>không<br>hưởng<br>lương</th>
+        <th rowspan="3" class="so-cong-tg">Số công<br>hưởng<br>lương TG</th>
+        <th rowspan="3" class="so-cong-100">Số công<br>nghỉ việc<br>100%</th>
+        <th rowspan="3" class="so-cong-bhxh">Số<br>công<br>BHXH</th>
+      </tr>
+      <tr style="background:#eef3fa;">
+        <th class="stt">STT</th>
+        <th class="hoten">Họ và tên</th>
+        <th class="chucvu">Cấp bậc/<br>chức vụ</th>
+        {% for d in days %}
+          {% set dkey = d.strftime('%Y-%m-%d') %}
+          {% set cls = 'col-holiday' if dkey in holiday_keys
+                       else ('col-sun' if d.weekday()==6 else ('col-sat' if d.weekday()==5 else '')) %}
+          <th class="{{ cls }}">{{ d.strftime('%d') }}</th>
+        {% endfor %}
+      </tr>
+      <tr style="background:#eef3fa;">
+        {% set thu = ['T2','T3','T4','T5','T6','T7','CN'] %}
+        <th></th><th></th><th></th>
+        {% for d in days %}
+          {% set dkey = d.strftime('%Y-%m-%d') %}
+          {% set cls = 'col-holiday' if dkey in holiday_keys
+                       else ('col-sun' if d.weekday()==6 else ('col-sat' if d.weekday()==5 else '')) %}
+          <th class="{{ cls }}">{{ thu[d.weekday()] }}</th>
+        {% endfor %}
+      </tr>
+    </thead>
+    <tbody>
+      {% for u in users %}
+      <tr>
+        <td class="stt">{{ loop.index }}</td>
+        <td class="hoten">{{ u.name }}</td>
+        <td class="chucvu">{{ u.position or '' }}</td>
+        {% for d in days %}
+          {% set items = cell.get((u.id, d), []) %}
+          {% set dkey = d.strftime('%Y-%m-%d') %}
+          {% set cls = 'col-holiday' if dkey in holiday_keys
+                       else ('col-sun' if d.weekday()==6 else ('col-sat' if d.weekday()==5 else '')) %}
+          <td class="code-cell {{ cls }}">
+            {%- for e in items -%}
+              {{- e.code -}}{% if not loop.last %}\n{% endif %}
+            {%- endfor -%}
+          </td>
+        {% endfor %}
+        {% set s = summary_by_user.get(u.id, (0,0,0,0)) %}
+        <td>{{ s[0] }}</td>
+        <td>{{ s[1] }}</td>
+        <td>{{ s[2] }}</td>
+        <td>{{ s[3] }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <div class="footer-sign">
+    <div>NGƯỜI LẬP BẢNG<br>(Ký, ghi rõ họ tên)</div>
+    <div>{{ manager_label }}<br>(Ký, ghi rõ họ tên)</div>
+    <div>PHÒNG TỔ CHỨC - HCQT<br>(Ký, ghi rõ họ tên)</div>
+    <div>GIÁM ĐỐC<br>(Ký, ghi rõ họ tên)</div>
+  </div>
+</div>
+
+<script>
+  window.addEventListener('load', () => setTimeout(() => window.print(), 0));
+  window.addEventListener('afterprint', () => {
+    const params = new URLSearchParams(location.search);
+    if (params.get('autoclose') === '1') {
+      try { window.close(); } catch (e) {}
+    } else {
+      history.back();
+    }
+  });
+</script>
+
+{% endblock %}

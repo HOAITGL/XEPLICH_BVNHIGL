@@ -45,7 +45,16 @@
   <div class="col-md-3 d-flex align-items-end gap-2">
     <button type="submit" formaction="{{ url_for('tong_hop_cong_truc_print') }}" formtarget="_blank" class="btn btn-primary">📄 In bảng</button>
     <button type="submit" class="btn btn-secondary">👁️ Xem bảng</button>
-    <a href="{{ url_for('export_report_all', start_date=default_start, end_date=default_end, department=request.args.get('department', 'Tất cả')) }}" class="btn btn-success">⬇️ Xuất Excel</a>
+
+    {# ✅ Xuất Excel đúng route & tham số đang xem #}
+    <a class="btn btn-success" target="_blank"
+       href="{{ url_for('tong_hop_cong_truc_export_excel',
+                        department=request.args.get('department','Tất cả'),
+                        mode=mode,
+                        start_date=(request.args.get('start_date') or default_start),
+                        end_date=(request.args.get('end_date') or default_end)) }}">
+      ⬇️ Xuất Excel
+    </a>
   </div>
 </form>
 

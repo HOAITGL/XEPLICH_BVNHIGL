@@ -1,6 +1,7 @@
 from sqlalchemy import inspect, text
 from extensions import db
-from app import app
+from models import db
+
 
 with app.app_context():
     inspector = inspect(db.engine)

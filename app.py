@@ -197,40 +197,54 @@ from models.ca import Ca
 # Import logic
 from scheduler.logic import generate_schedule
 
+# app.py
 @app.context_processor
 def inject_permissions():
-    from models import Permission  # Đảm bảo đã import model Permission
-    if 'user_id' in session:
-        user_id = session['user_id']
-        permissions = Permission.query.filter_by(user_id=user_id, can_access=True).all()
+    if 'user_id' not in session:
+        return dict(user=None, allowed_modules=[])
 
-        if permissions:
-            allowed_modules = [p.module_name for p in permissions]
-        else:
-            # Nếu không có phân quyền riêng → fallback theo role
-            role = session.get('role')
-            default_modules = {
-                'admin': [
-                    'trang_chu', 'xem_lich_truc', 'xep_lich_truc', 'phan_quyen',
-                    'tong_hop_khth', 'cau_hinh_ca_truc', 'cau_hinh_tien_truc',
-                    'nhan_su_theo_khoa', 'don_nghi_phep', 'bang_cong_gop',
-                    'bang_tinh_tien_truc', 'yeu_cau_cv_ngoai_gio', 'xem_log',
-                    'thiet_lap_phong_kham', 'thiet_lap_khoa_hscc', 'cham_cong', 'doi_mat_khau', 'danh_sach_cong_viec',
-                    'cau_hinh_doc_hai', 'unit_config'
-                ],
-                'manager': [
-                    'trang_chu', 'xem_lich_truc', 'xep_lich_truc', 'yeu_cau_cv_ngoai_gio',
-                    'don_nghi_phep', 'bang_cong_gop', 'nhan_su_theo_khoa', 'doi_mat_khau'
-                ],
-                'user': [
-                    'trang_chu', 'xem_lich_truc', 'don_nghi_phep', 'doi_mat_khau'
-                ]
-            }
-            allowed_modules = default_modules.get(role, [])
+    role = (session.get('role') or '').lower()
+    user = {
+        'name': session.get('name', 'Người dùng'),
+        'role': session.get('role'),
+        'department': session.get('department'),
+    }
 
-        return dict(allowed_modules=allowed_modules)
+    FULL_ADMIN = [
+        'trang_chu','xem_lich_truc','yeu_cau_cv_ngoai_gio','don_nghi_phep',
+        'xep_lich_truc','tong_hop_khth','cham_cong','bang_cham_cong_2',
+        'bang_cong_gop','bang_tinh_tien_truc','cau_hinh_ca_truc','thiet_lap_phong_kham',
+        'nhan_su_theo_khoa','cau_hinh_tien_truc','cau_hinh_doc_hai','thiet_lap_khoa_hscc',
+        'phan_quyen','danh_sach_cong_viec','unit_config','xem_log','doi_mat_khau'
+    ]
 
-    return dict(allowed_modules=[])
+    BASELINE = {
+        'admin1': [
+            'trang_chu','xem_lich_truc','yeu_cau_cv_ngoai_gio','don_nghi_phep',
+            'xep_lich_truc','tong_hop_khth','cham_cong','bang_cham_cong_2',
+            'bang_cong_gop','bang_tinh_tien_truc','cau_hinh_ca_truc','thiet_lap_phong_kham',
+            'nhan_su_theo_khoa','cau_hinh_tien_truc','danh_sach_cong_viec','doi_mat_khau'
+        ],
+        'manager': [
+            'trang_chu','xem_lich_truc','don_nghi_phep','xep_lich_truc','tong_hop_khth',
+            'cham_cong','bang_cham_cong_2','bang_cong_gop','bang_tinh_tien_truc','doi_mat_khau'
+        ],
+        'user': ['trang_chu','xem_lich_truc','don_nghi_phep','doi_mat_khau']
+    }
+
+    # 1) Admin: luôn full
+    if role == 'admin':
+        return dict(user=user, allowed_modules=FULL_ADMIN)
+
+    # 2) Vai trò khác: ưu tiên DB, nếu không có thì baseline
+    rows = Permission.query.filter_by(user_id=session['user_id']).all()
+    if rows:
+        allowed = sorted({r.module_name for r in rows if getattr(r, 'can_access', True)})
+    else:
+        allowed = BASELINE.get(role, BASELINE['user'])
+
+    return dict(user=user, allowed_modules=allowed)
+
 
 @app.route('/module-config', methods=['GET', 'POST'])
 def edit_module_config():
@@ -493,61 +507,63 @@ def leaves_list():
     from datetime import date
     from sqlalchemy import desc
 
-    role    = session.get('role')
-    my_dept = session.get('department')
+    role    = (session.get('role') or '').strip()
+    my_dept = (session.get('department') or '').strip()
     my_id   = session.get('user_id')
 
-    # Danh sách khoa (cho admin/admin1)
+    # --- Danh sách khoa cho dropdown ---
     if role in ('admin', 'admin1'):
-        departments = [d[0] for d in db.session.query(User.department)
-                       .filter(User.department.isnot(None))
-                       .distinct()
-                       .order_by(User.department).all()]
+        dept_rows = (db.session.query(User.department)
+                     .filter(User.department.isnot(None))
+                     .distinct()
+                     .order_by(User.department)
+                     .all())
+        # Admin có thêm "Tất cả"
+        departments = ['Tất cả'] + [r[0] for r in dept_rows]
     else:
-        departments = []
+        departments = [my_dept] if my_dept else []
 
-    # Khoa được chọn
+    # --- Khoa được chọn ---
     if role in ('admin', 'admin1'):
         selected_department = request.args.get('department')
-        if not selected_department and departments:
-            selected_department = departments[0]  # mặc định khoa đầu tiên
+        if not selected_department:
+            selected_department = 'Tất cả'  # mặc định xem toàn bệnh viện
     else:
         selected_department = my_dept
 
-    # Lấy danh sách đơn theo quyền/khoa
+    # --- Lấy danh sách đơn theo quyền/khoa ---
+    q = LeaveRequest.query.join(User, LeaveRequest.user_id == User.id)
+
     if role in ('admin', 'admin1'):
-        q = LeaveRequest.query.join(User)
-        if selected_department:
+        # Chỉ lọc khi chọn 1 khoa cụ thể
+        if selected_department and selected_department != 'Tất cả':
             q = q.filter(User.department == selected_department)
-        leaves = q.order_by(desc(LeaveRequest.start_date)).all()
     else:
         if not my_dept:
             flash("Tài khoản chưa có thông tin khoa.", "warning")
             return render_template(
                 'leaves.html',
-                leaves=[], departments=[],
+                leaves=[], departments=departments,
                 selected_department=None,
                 current_department=my_dept,
                 current_role=role,
                 user=None,
                 leave_info=None,
-                balances={}  # ⚠️ luôn truyền để template không lỗi
+                balances={}
             )
-        leaves = (LeaveRequest.query.join(User)
-                  .filter(User.department == my_dept)
-                  .order_by(desc(LeaveRequest.start_date))
-                  .all())
+        q = q.filter(User.department == my_dept)
 
-    # Tính phép năm cho từng nhân viên trong danh sách (cột 'Còn lại')
+    leaves = q.order_by(desc(LeaveRequest.start_date), desc(LeaveRequest.id)).all()
+
+    # --- Tính cân bằng phép theo user trong danh sách ---
     year = date.today().year
     balances = {}
     user_ids = {lv.user_id for lv in leaves}
     for uid in user_ids:
-        # 🔁 đổi sang tính theo ĐƠN NGHỈ để khớp cột "Số ngày"
         t, u, r = leave_balance_by_requests(uid, year)
         balances[uid] = {"total": t, "used": u, "remaining": r}
 
-    # Banner tóm tắt cho người đang đăng nhập
+    # --- Banner tóm tắt cho người đang đăng nhập ---
     if my_id:
         t0, u0, r0 = leave_balance_by_requests(my_id, year)
         leave_info = {"year": year, "total": t0, "used": u0, "remaining": r0}
@@ -565,7 +581,7 @@ def leaves_list():
         current_role=role,
         user=current_user,
         leave_info=leave_info,
-        balances=balances  # ✅ quan trọng
+        balances=balances
     )
 
 @app.route('/admin/fix-weekend-leaves')
@@ -2451,7 +2467,7 @@ from flask import request, redirect, flash
 import openpyxl
 from datetime import datetime
 from models.shift import Shift
-from app import db
+from models import db
 
 def parse_time_string(time_str):
     return datetime.strptime(time_str.strip(), '%H:%M').time()
@@ -2767,7 +2783,7 @@ def manage_roles():
 
     modules = [
         'trang_chu', 'xem_lich_truc', 'yeu_cau_cv_ngoai_gio', 'don_nghi_phep',
-        'xep_lich_truc', 'tong_hop_khth', 'cham_cong', 'bang_cong_gop', 'bang_tinh_tien_truc',
+        'xep_lich_truc', 'tong_hop_khth', 'cham_cong', 'bang_cham_cong_2', 'bang_cong_gop', 'bang_tinh_tien_truc',
         'cau_hinh_ca_truc', 'cau_hinh_muc_doc_hai','thiet_lap_phong_kham', 'nhan_su_theo_khoa',
         'cau_hinh_tien_truc', 'thiet_lap_khoa_hscc', 'cau_hinh_don_vi', 'phan_quyen',
         'danh_sach_cong_viec', 'xem_log', 'doi_mat_khau', 'module_config'
@@ -2781,6 +2797,7 @@ def manage_roles():
         'xep_lich_truc': 'Xếp lịch trực',
         'tong_hop_khth': 'Tổng hợp KHTH',
         'cham_cong': 'Chấm công',
+        'bang_cham_cong_cong_2': 'Bảng chấm công BHYT',
         'bang_cong_gop': 'Bảng công gộp',
         'bang_tinh_tien_truc': 'Bảng thanh toán tiền trực',
         'cau_hinh_ca_truc': 'Cấu hình ca trực',
@@ -3276,6 +3293,657 @@ def export_cham_cong():
     wb.save(output)
     output.seek(0)
     return send_file(output, as_attachment=True, download_name="bang_cham_cong.xlsx")
+
+# ====================== TIMESHEET 2 - HELPERS & ROUTES ======================
+from models import db
+from models.user import User
+from models.shift import Shift
+from models.schedule import Schedule
+from models.timesheet2 import Timesheet2, Timesheet2Entry
+# ====================== TIMESHEET 2 - HELPERS & ROUTES ======================
+import re
+from io import BytesIO
+from datetime import datetime, timedelta, date
+import openpyxl
+from flask import request, session, redirect, render_template, send_file
+
+# ---------- Chuẩn hoá & map tên ca -> mã ----------
+SHIFT_NAME_TO_CODES = {
+    'làm ngày': ['X'],
+    'trực 24h': ['XĐ24'],
+    'trực 16h': ['XĐ16'],
+    'trực đêm': ['XĐ'],
+    'trực thường trú': ['XĐT'],
+    'nghỉ trực': ['NT'],
+    'nghỉ bù': ['NB'],
+}
+
+# ví dụ: X, XĐ, XĐ16, /X, P100, BHXH ...
+_CODE_RE = re.compile(r'^/?[A-ZĐƠƯ]{1,4}[0-9]{0,3}%?$')
+
+def _normalize_code(s: str) -> str:
+    """Viết hoa, đổi XD → XĐ, bỏ khoảng trắng thừa."""
+    s = (s or '').strip().upper()
+    if not s:
+        return ''
+    if s.startswith('/'):
+        body = s[1:]
+        body = re.sub(r'^XD(\d*)$', r'XĐ\1', body)
+        return '/' + body
+    return re.sub(r'^XD(\d*)$', r'XĐ\1', s)
+
+def _codes_from_shift_name(name: str):
+    s = (name or '').strip().lower()
+    s = re.sub(r'\s+', ' ', s)
+    for k, v in SHIFT_NAME_TO_CODES.items():
+        if k in s:
+            return v[:]
+    if 'trực' in s and '24' in s: return ['XĐ24']
+    if 'trực' in s and '16' in s: return ['XĐ16']
+    if 'đêm'  in s:               return ['XĐ']
+    if 'thường trú' in s:         return ['XĐT']
+    if 'làm ngày' in s or s == 'ngày': return ['X']
+    if 'nghỉ trực' in s:          return ['NT']
+    if 'nghỉ bù' in s:            return ['NB']
+    return []
+
+def ts2_codes_from_shift(shift):
+    """Trả về danh sách MÃ ca từ Shift (lọc bỏ tên, xử lý '\n', '/n')."""
+    code_field = getattr(shift, 'code', None)
+    if not code_field:
+        return _codes_from_shift_name(getattr(shift, 'name', ''))
+
+    raw = str(code_field).strip()
+    raw = re.sub(r'(\\n|/n|\r\n|\r)', '\n', raw)   # chuẩn hoá xuống dòng
+    parts = re.split(r'[\n,;]+', raw)              # tách theo dòng, ',', ';'
+
+    codes = []
+    for p in parts:
+        p = p.strip()
+        if not p:
+            continue
+        token = p.split()[0]           # "XĐ24 Trực 24h" -> "XĐ24"
+        c = _normalize_code(token)
+        if _CODE_RE.match(c):
+            codes.append(c)
+        else:
+            codes += _codes_from_shift_name(p)
+
+    # bỏ trùng, giữ thứ tự
+    seen, uniq = set(), []
+    for c in codes:
+        if c not in seen:
+            seen.add(c); uniq.append(c)
+    return uniq
+
+# ---------- Ưu tiên X (nếu có) & gom 1 ô ----------
+def _resolve_codes_in_cell(codes):
+    """Bỏ trùng, chuẩn hoá; nếu đã có X thì loại toàn bộ mã bắt đầu bằng 'XĐ'."""
+    seen, ordered = set(), []
+    for c in codes:
+        c = _normalize_code(c)
+        if c and c not in seen:
+            seen.add(c); ordered.append(c)
+    if 'X' in ordered:
+        ordered = [c for c in ordered if not c.startswith('XĐ')]
+    return ordered
+
+# ---------- Quy tắc đếm 4 cột tổng hợp ----------
+PRIORITY_ORDER = ['GĐ', 'PGĐ', 'TK', 'TP', 'PTK', 'PTP', 'BS', 'BSCK1', 'BSCK2', 'ĐDT', 'KTVT', 'KTV', 'ĐD', 'NV', 'HL', 'BV']
+
+MAP_KL    = {'KL'}                                             # Không hưởng lương
+MAP_100   = {'NB','P','H','CT','L','NT','PC','NBL','PT','NBS','NBC','P100'}  # Công 100%
+MAP_BHXH  = {'Ô','CÔ','DS','TS','TN','ỐM','OM'}               # BHXH
+HALF_PAIR = {'/X','/NT'}                                       # 0.5 TG + 0.5 100%
+
+def _is_tg(c: str) -> bool:
+    c = _normalize_code(c)
+    return (c == 'X') or c.startswith('XĐ') or c.startswith('XĐL') or c in {'XD','XĐ'}
+
+def _sort_by_position(user):
+    pos = (user.position or '').upper().strip()
+    for i, p in enumerate(PRIORITY_ORDER):
+        if pos.startswith(p):
+            return i
+    return len(PRIORITY_ORDER)
+
+def _resolve_cell_to_counts(code_list):
+    """
+    Nhận danh sách code (chips) của 1 ô (một nhân sự trong 1 ngày),
+    trả về dict {'kl': x, 'tg': y, '100': z, 'bhxh': t}
+    """
+    # chuẩn hoá, loại trùng, giữ thứ tự
+    seen, codes = set(), []
+    for raw in code_list:
+        c = _normalize_code(raw)
+        if c and c not in seen:
+            seen.add(c); codes.append(c)
+
+    # nửa công trước
+    if any(c in HALF_PAIR for c in codes):
+        return {'kl': 0, 'tg': 0.5, '100': 0.5, 'bhxh': 0}
+
+    # KL
+    if any(c in MAP_KL for c in codes):
+        return {'kl': 1, 'tg': 0, '100': 0, 'bhxh': 0}
+
+    # 100%
+    if any(c in MAP_100 for c in codes):
+        return {'kl': 0, 'tg': 0, '100': 1, 'bhxh': 0}
+
+    # BHXH
+    if any(c in MAP_BHXH for c in codes):
+        return {'kl': 0, 'tg': 0, '100': 0, 'bhxh': 1}
+
+    # TG
+    if 'X' in codes:
+        return {'kl': 0, 'tg': 1, '100': 0, 'bhxh': 0}
+    if any(_is_tg(c) for c in codes):
+        return {'kl': 0, 'tg': 1, '100': 0, 'bhxh': 0}
+
+    return {'kl': 0, 'tg': 0, '100': 0, 'bhxh': 0}
+
+# ========================= INDEX =========================
+@app.route('/timesheet2', methods=['GET', 'POST'])
+def ts2_index():
+    # Phải đăng nhập
+    if 'user_id' not in session:
+        return redirect('/login')
+
+    role    = (session.get('role') or '').strip()
+    my_dept = (session.get('department') or '').strip()
+    is_admin = role in ('admin', 'admin1')  # manager KHÔNG phải admin
+
+    # --- Danh sách khoa cho dropdown ---
+    if is_admin:
+        departments = [d[0] for d in db.session.query(User.department)
+                       .filter(User.department.isnot(None))
+                       .distinct().order_by(User.department).all()]
+    else:
+        # Manager/role khác: chỉ khoa của chính mình
+        departments = [my_dept] if my_dept else []
+
+    if request.method == 'POST':
+        name = (request.form.get('name') or 'Bảng chấm công BHYT').strip()
+
+        # Admin được chọn khoa; Manager bị ép theo khoa của mình (bỏ qua giá trị gửi lên)
+        if is_admin:
+            department = (request.form.get('department') or my_dept).strip()
+        else:
+            department = my_dept
+
+        if not department:
+            return "Chưa cấu hình khoa/phòng cho tài khoản.", 400
+
+        start_date = datetime.strptime(request.form['start_date'], '%Y-%m-%d').date()
+        end_date   = datetime.strptime(request.form['end_date'],   '%Y-%m-%d').date()
+
+        sheet = Timesheet2(
+            name=name,
+            department=department,
+            start_date=start_date,
+            end_date=end_date,
+            created_by=session.get('user_id')  # nếu model có cột này
+        )
+        db.session.add(sheet)
+        db.session.commit()
+        return redirect(f'/timesheet2/{sheet.id}')
+
+    # --- Lọc danh sách theo quyền ---
+    q = Timesheet2.query.order_by(Timesheet2.created_at.desc())
+    if not is_admin:
+        q = q.filter(Timesheet2.department == my_dept)
+    sheets = q.all()
+
+    return render_template(
+        'timesheet2/index.html',
+        sheets=sheets,
+        departments=departments,
+        role=role,
+        user_dept=my_dept
+    )
+
+# ========== SAO CHÉP TỪ SCHEDULE (ưu tiên X) ==========
+@app.route('/timesheet2/create-from-schedule', methods=['POST'])
+def ts2_create_from_schedule():
+    role = session.get('role')
+    my_dept = session.get('department')
+
+    department = request.form['department']
+    if role not in ('admin', 'admin1','manager') and department != my_dept:
+        return "Bạn không có quyền tạo bảng cho khoa này.", 403
+
+    start_date = datetime.strptime(request.form['start_date'], '%Y-%m-%d').date()
+    end_date   = datetime.strptime(request.form['end_date'],   '%Y-%m-%d').date()
+    name = (request.form.get('name') or 'Bảng chấm công BHYT (sao chép)').strip()
+
+    sheet = Timesheet2(name=name, department=department,
+                       start_date=start_date, end_date=end_date)
+    db.session.add(sheet)
+    db.session.flush()
+
+    q = (db.session.query(Schedule, User, Shift)
+         .join(User, Schedule.user_id == User.id)
+         .join(Shift, Schedule.shift_id == Shift.id)
+         .filter(User.department == department)
+         .filter(Schedule.work_date >= start_date, Schedule.work_date <= end_date))
+
+    from collections import defaultdict
+    bucket = defaultdict(list)   # (uid, date) -> list codes
+
+    for s, u, sh in q:
+        if not (u and sh):
+            continue
+        codes = ts2_codes_from_shift(sh)
+        if not codes:
+            continue
+        for c in codes:
+            bucket[(u.id, s.work_date)].append(c)
+
+    entries = []
+    for (uid, wdate), codes in bucket.items():
+        ordered = _resolve_codes_in_cell(codes)  # Ưu tiên X, loại XĐ*
+        for c in ordered:
+            entries.append(Timesheet2Entry(
+                sheet_id=sheet.id, user_id=uid, work_date=wdate,
+                code=c, deleted=False
+            ))
+
+    if entries:
+        db.session.add_all(entries)
+    db.session.commit()
+    return redirect(f'/timesheet2/{sheet.id}')
+
+from flask import send_from_directory
+import os
+@app.route('/favicon.ico')
+def favicon():
+    return send_from_directory(os.path.join(app.root_path, 'static'),
+                               'favicon.ico', mimetype='image/vnd.microsoft.icon')
+
+# ========================= VIEW =========================
+from datetime import date
+
+def _norm_contract_type(s: str) -> str:
+    s = (s or '').strip().lower()
+    if s in ('bc','biên chế','bien che','bienché','biênchế'):
+        return 'bienche'
+    if s.startswith('hđ') or 'hợp' in s or 'hop dong' in s or 'hđlđ' in s:
+        return 'hopdong'
+    return 'khac'
+
+@app.route('/timesheet2/<int:sheet_id>')
+def ts2_view(sheet_id):
+    sheet = Timesheet2.query.get_or_404(sheet_id)
+    if session.get('role') not in ('admin','admin1', 'manager') and sheet.department != session.get('department'):
+        return "Bạn không có quyền truy cập bảng này.", 403
+
+    # --- Lọc loại hợp đồng (giống bảng chính) ---
+    contract_type = (request.args.get('contract_type') or 'all').strip().lower()
+    label_map = {'all':'LOẠI HỢP ĐỒNG','bienche':'BIÊN CHẾ','hopdong':'HỢP ĐỒNG'}
+    contract_header_text = label_map.get(contract_type, 'LOẠI HỢP ĐỒNG')
+
+    all_users = User.query.filter_by(department=sheet.department)\
+                          .filter(User.role != 'admin').all()
+    if contract_type in ('bienche','hopdong'):
+        users = [u for u in all_users if _norm_contract_type(getattr(u, 'contract_type', '')) == contract_type]
+    else:
+        users = list(all_users)
+    users = sorted(users, key=_sort_by_position)
+
+    # --- Dải ngày ---
+    days = []
+    cur = sheet.start_date
+    while cur <= sheet.end_date:
+        days.append(cur)
+        cur += timedelta(days=1)
+
+    # --- Ngày Lễ để bôi màu (01/01, 30/04, 01/05, 02/09) ---
+    def _year_holidays(y: int):
+        return {date(y,1,1), date(y,4,30), date(y,5,1), date(y,9,2)}
+    holiday_set = set()
+    y = sheet.start_date.year
+    while y <= sheet.end_date.year:
+        holiday_set |= _year_holidays(y)
+        y += 1
+    holiday_keys = {d.strftime('%Y-%m-%d') for d in days if d in holiday_set}
+
+    # --- Gom entries & tính tổng 4 cột ---
+    from collections import defaultdict
+    cell = defaultdict(list)
+    for e in Timesheet2Entry.query.filter_by(sheet_id=sheet.id, deleted=False).all():
+        cell[(e.user_id, e.work_date)].append(e)
+
+    summary_by_user = {}
+    for u in users:
+        totals = {'kl':0, 'tg':0, '100':0, 'bhxh':0}
+        for d in days:
+            items = cell.get((u.id, d), [])
+            raw = []
+            for it in items:
+                txt = re.sub(r'(\\n|/n|\r\n|\r)', '\n', (it.code or '').strip())
+                raw += [p.strip() for p in txt.split('\n') if p.strip()]
+            cnt = _resolve_cell_to_counts(raw)
+            totals['kl']   += cnt['kl']
+            totals['tg']   += cnt['tg']
+            totals['100']  += cnt['100']
+            totals['bhxh'] += cnt['bhxh']
+        summary_by_user[u.id] = (float(totals['kl']), float(totals['tg']),
+                                 float(totals['100']), float(totals['bhxh']))
+
+    contract_options = [('all','Tất cả'), ('bienche','Biên chế'), ('hopdong','Hợp đồng')]
+
+    return render_template('timesheet2/view.html',
+                           sheet=sheet, users=users, days=days,
+                           cell=cell, summary_by_user=summary_by_user,
+                           holiday_keys=holiday_keys,
+                           contract_type=contract_type,
+                           contract_options=contract_options,
+                           contract_header_text=contract_header_text)
+
+# --- Chuẩn hóa loại HĐ dùng để lọc (giống bảng chính) ---
+def _norm_contract_type(s: str) -> str:
+    s = (s or '').strip().lower()
+    if s in ('bc','biên chế','bien che','bienché','biênchế'):
+        return 'bienche'
+    if s.startswith('hđ') or 'hợp' in s or 'hop dong' in s or 'hđlđ' in s:
+        return 'hopdong'
+    return 'khac'
+
+# --- IN BẢNG CHẤM CÔNG (A4 ngang) ---
+@app.route('/timesheet2/<int:sheet_id>/print')
+def ts2_print(sheet_id):
+    sheet = Timesheet2.query.get_or_404(sheet_id)
+    if session.get('role') not in ('admin','admin1', 'manager') and sheet.department != session.get('department'):
+        return "Không có quyền.", 403
+
+    # Dải ngày
+    days = []
+    cur = sheet.start_date
+    while cur <= sheet.end_date:
+        days.append(cur)
+        cur += timedelta(days=1)
+
+    # Nhận tham số lọc
+    ct = (request.args.get('contract_type') or '').strip().lower()   # 'hopdong' | 'bienche' | ''
+    ct_col = getattr(User, 'contract_type', None)  # tên cột của bạn, vd 'contract_type'
+
+    # Lấy user theo khoa + lọc loại hợp đồng (nếu có)
+    users_q = User.query.filter_by(department=sheet.department).filter(User.role != 'admin')
+    if ct_col is not None and ct in ('hopdong', 'bienche'):
+        # chuẩn hoá về lowercase để so khớp “hợp đồng/biên chế”
+        if ct == 'hopdong':
+            users_q = users_q.filter(db.func.lower(ct_col).contains('hợp'))
+        else:  # bienche
+            users_q = users_q.filter(db.func.lower(ct_col).contains('biên'))
+    users = sorted(users_q.all(), key=_sort_by_position)
+
+    # Gom entries theo (user_id, date)
+    entries = Timesheet2Entry.query.filter_by(sheet_id=sheet.id, deleted=False).all()
+    from collections import defaultdict
+    cell = defaultdict(list)
+    for e in entries:
+        cell[(e.user_id, e.work_date)].append(e)
+
+    # Tính tổng 4 cột
+    summary_by_user = {}
+    for u in users:
+        totals = {'kl':0, 'tg':0, '100':0, 'bhxh':0}
+        for d in days:
+            items = cell.get((u.id, d), [])
+            raw_codes = []
+            for it in items:
+                txt = re.sub(r'(\\n|/n|\r\n|\r)', '\n', (it.code or '').strip())
+                raw_codes += [p.strip() for p in txt.split('\n') if p.strip()]
+            cnt = _resolve_cell_to_counts(raw_codes)
+            totals['kl']   += cnt['kl']
+            totals['tg']   += cnt['tg']
+            totals['100']  += cnt['100']
+            totals['bhxh'] += cnt['bhxh']
+        summary_by_user[u.id] = (float(totals['kl']), float(totals['tg']),
+                                 float(totals['100']), float(totals['bhxh']))
+
+    # Nhãn “BIÊN CHẾ/HỢP ĐỒNG” đặt trong ô phần tiêu đề bên trái của bảng
+    contract_label = ('HỢP ĐỒNG' if ct == 'hopdong'
+                      else 'BIÊN CHẾ' if ct == 'bienche'
+                      else 'LOẠI HỢP ĐỒNG')
+
+    # Chân ký: phòng/khoa
+    manager_label = 'TRƯỞNG KHOA' if (sheet.department and 'khoa' in sheet.department.lower()) else 'TRƯỞNG PHÒNG'
+
+    today = datetime.today().date()
+    return render_template('timesheet2/print.html',
+                           sheet=sheet, users=users, days=days,
+                           cell=cell, summary_by_user=summary_by_user,
+                           contract_label=contract_label, manager_label=manager_label,
+                           today=today)
+
+# ========== CẬP NHẬT 1 Ô (dán nhiều dòng) ==========
+import json  # thêm nếu chưa có
+
+@app.route('/timesheet2/<int:sheet_id>/cell', methods=['POST'])
+def timesheet2_update_cell(sheet_id):
+    sheet = Timesheet2.query.get_or_404(sheet_id)
+    if session.get('role') not in ('admin', 'admin1', 'manager') and sheet.department != session.get('department'):
+        return {"ok": False, "msg": "Không có quyền"}, 403
+
+    # Parse body an toàn: ưu tiên JSON, fallback form/raw, body rỗng thì coi như xoá ô
+    data = request.get_json(silent=True)
+    if data is None:
+        if request.form:
+            data = request.form.to_dict()
+        else:
+            raw = (request.data or b'').decode('utf-8').strip()
+            if raw:
+                try:
+                    data = json.loads(raw)
+                except Exception:
+                    return {"ok": False, "msg": "Payload không phải JSON hợp lệ"}, 400
+            else:
+                data = {}
+
+    try:
+        user_id   = int(data.get('user_id'))
+        work_date = data.get('work_date')
+        code      = (data.get('code') or '').strip()
+    except Exception:
+        return {"ok": False, "msg": "Thiếu hoặc sai tham số"}, 400
+    if not user_id or not work_date:
+        return {"ok": False, "msg": "Thiếu user_id hoặc work_date"}, 400
+
+    work_date = datetime.strptime(work_date, '%Y-%m-%d').date()
+
+    # Xoá mềm toàn bộ entry cũ của ô
+    Timesheet2Entry.query.filter_by(
+        sheet_id=sheet.id, user_id=user_id, work_date=work_date
+    ).update({"deleted": True})
+    db.session.flush()
+
+    # Nếu rỗng thì chỉ xoá
+    if not code:
+        db.session.commit()
+        return {"ok": True}
+
+    # Chuẩn hoá & thêm lại các chip
+    code = re.sub(r'(\\n|/n|\r\n|\r)', '\n', code)
+    parts = [p.strip() for p in code.split('\n') if p.strip()]
+    resolved = _resolve_codes_in_cell(parts)
+
+    for p in resolved:
+        db.session.add(Timesheet2Entry(
+            sheet_id=sheet.id, user_id=user_id,
+            work_date=work_date, code=_normalize_code(p), deleted=False
+        ))
+
+    db.session.commit()
+    return {"ok": True}
+
+# ========== Thêm / Sửa / Xoá 1 CHIP ==========
+@app.route('/timesheet2/<int:sheet_id>/item/add', methods=['POST'])
+def ts2_add_item(sheet_id):
+    sheet = Timesheet2.query.get_or_404(sheet_id)
+    if session.get('role') not in ('admin', 'admin1', 'manager') and sheet.department != session.get('department'):
+        return {"ok": False, "msg": "Không có quyền"}, 403
+
+    data = request.get_json(force=True)
+    user_id   = int(data['user_id'])
+    work_date = datetime.strptime(data['work_date'], '%Y-%m-%d').date()
+    raw = (data.get('code') or '').strip()
+    code = _normalize_code(raw)
+    if not code:
+        return {"ok": False, "msg": "Ký hiệu trống!"}, 400
+
+    exists = Timesheet2Entry.query.filter_by(sheet_id=sheet.id, user_id=user_id,
+                                             work_date=work_date, code=code, deleted=False).first()
+    if exists:
+        return {"ok": True, "id": exists.id, "code": exists.code}
+
+    if code.startswith('XĐ'):
+        has_x = Timesheet2Entry.query.filter_by(sheet_id=sheet.id, user_id=user_id,
+                                                work_date=work_date, code='X', deleted=False).first()
+        if has_x:
+            return {"ok": True, "skipped": True}
+
+    e = Timesheet2Entry(sheet_id=sheet.id, user_id=user_id, work_date=work_date, code=code, deleted=False)
+    db.session.add(e)
+    db.session.commit()
+    return {"ok": True, "id": e.id, "code": e.code}
+
+@app.route('/timesheet2/<int:sheet_id>/item/<int:item_id>/update', methods=['POST'])
+def ts2_update_item(sheet_id, item_id):
+    sheet = Timesheet2.query.get_or_404(sheet_id)
+    if session.get('role') not in ('admin', 'admin1', 'manager') and sheet.department != session.get('department'):
+        return {"ok": False, "msg": "Không có quyền"}, 403
+
+    e = Timesheet2Entry.query.get_or_404(item_id)
+    if e.sheet_id != sheet.id:
+        return {"ok": False, "msg": "Sai sheet"}, 400
+
+    data = request.get_json(force=True)
+    raw = (data.get('code') or '').strip()
+    code = _normalize_code(raw)
+    if not code:
+        return {"ok": False, "msg": "Ký hiệu trống!"}, 400
+    e.code = code
+    db.session.commit()
+    return {"ok": True, "id": e.id, "code": e.code}
+
+@app.route('/timesheet2/<int:sheet_id>/item/<int:item_id>/delete', methods=['POST'])
+def ts2_delete_item(sheet_id, item_id):
+    sheet = Timesheet2.query.get_or_404(sheet_id)
+    if session.get('role') not in ('admin', 'admin1', 'manager') and sheet.department != session.get('department'):
+        return {"ok": False, "msg": "Không có quyền"}, 403
+
+    e = Timesheet2Entry.query.get_or_404(item_id)
+    if e.sheet_id != sheet.id:
+        return {"ok": False, "msg": "Sai sheet"}, 400
+
+    e.deleted = True
+    db.session.commit()
+    return {"ok": True}
+
+# ========== XÓA TOÀN DÒNG CỦA 1 NHÂN SỰ ==========
+@app.route('/timesheet2/<int:sheet_id>/row/delete', methods=['POST'])
+def ts2_delete_row(sheet_id):
+    sheet = Timesheet2.query.get_or_404(sheet_id)
+    if session.get('role') not in ('admin', 'admin1', 'manager') and sheet.department != session.get('department'):
+        return {"ok": False, "msg": "Không có quyền"}, 403
+
+    data = request.get_json(force=True)
+    user_id = int(data['user_id'])
+    Timesheet2Entry.query.filter_by(sheet_id=sheet.id, user_id=user_id)\
+                         .update({"deleted": True, "code": ''})
+    db.session.commit()
+    return {"ok": True}
+
+# ========== XOÁ CẢ BẢNG (duy nhất) ==========
+@app.route('/timesheet2/<int:sheet_id>/delete', methods=['POST'])
+def ts2_delete_sheet(sheet_id):
+    sheet = Timesheet2.query.get_or_404(sheet_id)
+    if session.get('role') not in ('admin','admin1', 'manager') and sheet.department != session.get('department'):
+        return {"ok": False, "msg": "Không có quyền"}, 403
+    Timesheet2Entry.query.filter_by(sheet_id=sheet.id).delete()
+    db.session.delete(sheet)
+    db.session.commit()
+    return {"ok": True}
+
+# ========== DỌN/CHUẨN HOÁ SHEET ==========
+@app.route('/timesheet2/<int:sheet_id>/normalize', methods=['POST'])
+def ts2_normalize_sheet(sheet_id):
+    sheet = Timesheet2.query.get_or_404(sheet_id)
+    if session.get('role') not in ('admin', 'admin1', 'manager') and sheet.department != session.get('department'):
+        return {"ok": False, "msg": "Không có quyền"}, 403
+
+    from collections import defaultdict
+    cell = defaultdict(list)
+    entries = Timesheet2Entry.query.filter_by(sheet_id=sheet.id, deleted=False).all()
+    for e in entries:
+        cell[(e.user_id, e.work_date)].append(e)
+
+    changed = 0
+    for key, items in cell.items():
+        raw_codes = []
+        for it in items:
+            txt = re.sub(r'(\\n|/n|\r\n|\r)', '\n', (it.code or '').strip())
+            raw_codes += [p.strip() for p in txt.split('\n') if p.strip()]
+            it.deleted = True
+
+        resolved = _resolve_codes_in_cell(raw_codes)
+        for c in resolved:
+            db.session.add(Timesheet2Entry(
+                sheet_id=sheet.id, user_id=key[0], work_date=key[1],
+                code=_normalize_code(c), deleted=False
+            ))
+            changed += 1
+
+    db.session.commit()
+    return {"ok": True, "changed": changed}
+
+# ========== EXPORT EXCEL ==========
+@app.route('/timesheet2/<int:sheet_id>/export')
+def ts2_export(sheet_id):
+    sheet = Timesheet2.query.get_or_404(sheet_id)
+    if session.get('role') not in ('admin', 'admin1', 'manager') and sheet.department != session.get('department'):
+        return "Không có quyền.", 403
+
+    # Dải ngày
+    days = []
+    cur = sheet.start_date
+    while cur <= sheet.end_date:
+        days.append(cur)
+        cur += timedelta(days=1)
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = 'Bang cham cong BHYT'
+    header = ['STT', 'Họ và tên', 'Chức vụ'] + [d.strftime('%d') for d in days]
+    ws.append(header)
+
+    users_q = User.query.filter_by(department=sheet.department).filter(User.role != 'admin')
+    users = sorted(users_q.all(), key=_sort_by_position)
+    entries = Timesheet2Entry.query.filter_by(sheet_id=sheet.id, deleted=False).all()
+
+    from collections import defaultdict
+    m = defaultdict(list)
+    for e in entries:
+        if e.code and e.code.strip():
+            txt = re.sub(r'(\\n|/n|\r\n|\r)', '\n', e.code.strip())
+            for part in [p.strip() for p in txt.split('\n') if p.strip()]:
+                m[(e.user_id, e.work_date)].append(_normalize_code(part))
+
+    for idx, u in enumerate(users, start=1):
+        row = [idx, u.name, (u.position or '')]
+        for d in days:
+            cell_codes = '\n'.join(m.get((u.id, d), []))
+            row.append(cell_codes)
+        ws.append(row)
+
+    stream = BytesIO()
+    wb.save(stream)
+    stream.seek(0)
+    return send_file(stream, as_attachment=True,
+                     download_name=f"bang-cham-cong-bhyt-{sheet.id}.xlsx")
+# ==================== HẾT PHẦN TIMESHEET 2 ====================
 
 from flask import render_template, request, send_file
 from datetime import datetime, timedelta
@@ -4578,131 +5246,284 @@ def tong_hop_cong_truc_print():
         unit_config=UnitConfig.query.first()  # thêm để hiển thị tên bệnh viện
     )
 
-@app.route('/export-shift-payment-all')
-def export_shift_payment_all():
-    from calendar import month_name
+@app.route('/tong-hop-cong-truc-view/export-excel')
+@login_required
+def tong_hop_cong_truc_export_excel():
+    from io import BytesIO
+    from collections import defaultdict
+    from openpyxl import Workbook
     from openpyxl.styles import Font, Alignment, Border, Side
 
-    def classify_day(date):
-        # Danh sách ngày lễ cố định (thêm nếu cần)
-        ngay_le = {'01-01', '04-30', '05-01', '09-02'}
-        mmdd = date.strftime('%m-%d')
-        weekday = date.weekday()
-        if mmdd in ngay_le:
-            return 'ngày_lễ'
-        elif weekday >= 5:
-            return 'ngày_nghỉ'
-        else:
-            return 'ngày_thường'
-        
-    # 📥 Tham số lọc
-    ca_chon = request.args.get('mode', '16h')
-    selected_department = request.args.get('department', 'all')
-    start_date = request.args.get('start_date', '2025-06-01')
-    end_date = request.args.get('end_date', '2025-06-30')
+    # ==== Tham số giống VIEW ====
+    user_role = session.get('role')
+    user_dept = session.get('department')
 
-    start_date_dt = datetime.strptime(start_date, '%Y-%m-%d').date()
-    end_date_dt = datetime.strptime(end_date, '%Y-%m-%d').date()
-    thang = start_date_dt.month
-    nam = start_date_dt.year
+    selected_department = request.args.get('department')
+    start_date_str = request.args.get('start_date')
+    end_date_str   = request.args.get('end_date')
+    mode = request.args.get('mode', '16h')
 
-    # 🔧 Dữ liệu
-    hscc_depts = [d.department_name for d in HSCCDepartment.query.all()]
-    rates = {(r.ca_loai, r.truc_loai, r.ngay_loai): r.don_gia for r in ShiftRateConfig.query.all()}
+    start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+    end_date   = datetime.strptime(end_date_str,   '%Y-%m-%d').date()
 
-    query = (
-        Schedule.query
-        .join(User).join(Shift)
-        .filter(Schedule.work_date >= start_date_dt, Schedule.work_date <= end_date_dt)
-        .filter(Shift.duration == (16 if ca_chon == '16h' else 24))
+    # ==== Query lịch trực y như VIEW ====
+    query = Schedule.query.join(User).join(Shift).filter(
+        Schedule.work_date.between(start_date, end_date)
     )
-    if selected_department != 'all':
-        query = query.filter(User.department == selected_department)
+    if user_role in ['admin','admin1']:
+        if selected_department not in (None, '', 'Tất cả', 'all'):
+            query = query.filter(User.department == selected_department)
+    else:
+        query = query.filter(User.department == user_dept)
 
     schedules = query.all()
 
-    # 📊 Gom dữ liệu
-    data = defaultdict(lambda: defaultdict(int))
-    for s in schedules:
-        user = s.user
-        ngay_loai = classify_day(s.work_date)
-        truc_loai = "HSCC" if user.department in hscc_depts else "thường"
-        key = (truc_loai, ngay_loai)
-        data[user][key] += 1
+    # ==== HSCC depts ====
+    try:
+        hscc_depts = [d.department_name for d in HSCCDepartment.query.all()]
+    except Exception:
+        hscc_depts = []
 
-    # 📄 Tạo Excel
+    # ==== Logic LỌC & ĐẾM GIỐNG HỆT VIEW ====
+    result_by_user = defaultdict(lambda: defaultdict(lambda: {'so_ngay': 0}))
+    summary = defaultdict(int)
+
+    valid_shifts = [
+        "trực 16h", "trực 16h t7cn",
+        "trực 24h", "trực 24h t7cn",
+        "trực lễ16h", "trực lễ 24h"
+    ]
+    for s in schedules:
+        if not s.shift or not s.user:
+            continue
+
+        shift_name = (s.shift.name or '').strip().lower()
+
+        # chỉ tính ca hợp lệ
+        if shift_name not in valid_shifts:
+            continue
+
+        # bỏ ca thường trú
+        if 'thường trú' in shift_name:
+            continue
+
+        # bỏ các từ khóa nghỉ/làm ngày/phòng khám
+        skip_keywords = ['nghỉ trực', 'nghỉ phép', 'làm ngày', 'làm 1/2 ngày', 'làm 1/2 ngày c', 'phòng khám']
+        if any(x in shift_name for x in skip_keywords):
+            continue
+
+        # lọc theo mode
+        if mode == '24h' and '24h' not in shift_name:
+            continue
+        if mode == '16h' and '24h' in shift_name:
+            continue
+
+        loai_ca = 'HSCC' if s.user.department in hscc_depts else 'thường'
+
+        mmdd = s.work_date.strftime('%m-%d')
+        weekday = s.work_date.weekday()
+
+        # phân loại ngày (y như VIEW)
+        if mmdd in ['01-01', '04-30', '05-01', '09-02']:
+            loai_ngay = 'ngày_lễ'
+        elif weekday >= 5:
+            loai_ngay = 'ngày_nghỉ'
+        else:
+            loai_ngay = 'ngày_thường'
+
+        result_by_user[s.user_id][(loai_ca, loai_ngay)]['so_ngay'] += 1
+        summary[(loai_ca, loai_ngay)] += 1
+
+    user_ids = list(result_by_user.keys())
+    users = User.query.filter(User.id.in_(user_ids), User.role != 'admin').all() if user_ids else []
+
+    # sắp xếp theo chức danh như VIEW
+    priority_order = ['GĐ', 'PGĐ', 'TK', 'PTK', 'PK', 'BS', 'ĐDT', 'ĐD', 'KTV', 'NV', 'HL', 'BV']
+    def get_priority(pos):
+        pos = (pos or '').upper()
+        for i, p in enumerate(priority_order):
+            if p in pos:
+                return i
+        return len(priority_order)
+    users.sort(key=lambda u: (get_priority(u.position), (u.name or '').lower()))
+
+    # ==== Tạo Excel ====
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Tổng hợp công trực"
+
+    bold = Font(bold=True)
+    center = Alignment(horizontal="center", vertical="center", wrap_text=True)
+    thin = Side(style='thin')
+    border = Border(left=thin, right=thin, top=thin, bottom=thin)
+
+    # tiêu đề
+    ws.append(["STT","HỌ TÊN",
+               "Trực thường - Ngày thường","Trực HSCC - Ngày thường",
+               "Trực thường - Ngày nghỉ","Trực HSCC - Ngày nghỉ",
+               "Trực thường - Ngày lễ","Trực HSCC - Ngày lễ",
+               "Tổng số ngày trực","Ghi chú"])
+    for c in ws[1]:
+        c.font = bold; c.alignment = center; c.border = border
+
+    def get_cnt(detail, key):
+        return detail.get(key, {}).get('so_ngay', 0)
+
+    for i, u in enumerate(users, 1):
+        d = result_by_user[u.id]
+        row = [
+            i, u.name,
+            get_cnt(d, ('thường','ngày_thường')),
+            get_cnt(d, ('HSCC','ngày_thường')),
+            get_cnt(d, ('thường','ngày_nghỉ')),
+            get_cnt(d, ('HSCC','ngày_nghỉ')),
+            get_cnt(d, ('thường','ngày_lễ')),
+            get_cnt(d, ('HSCC','ngày_lễ')),
+        ]
+        row.append(sum(row[2:8]))  # tổng số ngày trực
+        row.append("")             # ghi chú
+        ws.append(row)
+        for c in ws[ws.max_row]:
+            c.alignment = center; c.border = border
+
+    # có thể thêm dòng tổng cuối (nếu muốn giống view phần tổng)
+    # s = summary
+    # ws.append([])
+    # ws.append(["TỔNG","","",
+    #            s.get(('HSCC','ngày_thường'),0),
+    #            s.get(('thường','ngày_nghỉ'),0),
+    #            ...])
+
+    bio = BytesIO()
+    wb.save(bio); bio.seek(0)
+    fname = f"tong_hop_cong_truc_{start_date:%Y%m%d}_{end_date:%Y%m%d}_{mode}.xlsx"
+    return send_file(bio, as_attachment=True, download_name=fname,
+                     mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
+@app.route('/export-shift-payment-all')
+def export_shift_payment_all():
+    from io import BytesIO
+    from collections import defaultdict
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, Alignment, Border, Side
+
+    # --- Phân loại ngày theo lịch (giống bản in) ---
+    def classify_day(d):
+        ngay_le = {'01-01', '04-30', '05-01', '09-02'}  # có thể bổ sung nếu cần
+        mmdd = d.strftime('%m-%d')
+        if mmdd in ngay_le:
+            return 'ngày_lễ'
+        return 'ngày_nghỉ' if d.weekday() >= 5 else 'ngày_thường'
+
+    # --- Tham số ---
+    ca_chon = request.args.get('mode', '16h')                 # '16h' hoặc '24h'
+    selected_department = request.args.get('department', 'all')
+    start_date = request.args.get('start_date', '2025-06-01')
+    end_date   = request.args.get('end_date',   '2025-06-30')
+
+    start_date_dt = datetime.strptime(start_date, '%Y-%m-%d').date()
+    end_date_dt   = datetime.strptime(end_date,   '%Y-%m-%d').date()
+    thang, nam = start_date_dt.month, start_date_dt.year
+
+    # --- Dữ liệu cấu hình ---
+    hscc_depts = {d.department_name for d in HSCCDepartment.query.all()}
+    rates = {(r.ca_loai, r.truc_loai, r.ngay_loai): r.don_gia for r in ShiftRateConfig.query.all()}
+
+    # --- Lấy lịch theo khoảng & theo duration (chỉ 16h/24h như yêu cầu) ---
+    wanted_duration = 16 if ca_chon == '16h' else 24
+    q = (
+        Schedule.query
+        .join(User).join(Shift)
+        .filter(Schedule.work_date >= start_date_dt,
+                Schedule.work_date <= end_date_dt)
+        .filter(Shift.duration == wanted_duration)
+    )
+    if selected_department != 'all':
+        q = q.filter(User.department == selected_department)
+
+    schedules = q.all()
+
+    # --- Khử trùng lặp theo ngày: mỗi (user, date) chỉ tính 1 lần ---
+    picked_per_day = {}  # key: (user_id, date) -> user_obj
+    for s in schedules:
+        if not s.user:
+            continue
+        key = (s.user_id, s.work_date)
+        if key not in picked_per_day:
+            picked_per_day[key] = s.user
+
+    # --- Gom dữ liệu: user -> {(trực_loại, ngày_loại): count} ---
+    data = defaultdict(lambda: defaultdict(int))
+    for (uid, d), user in picked_per_day.items():
+        ngay_loai = classify_day(d)
+        truc_loai = "HSCC" if (user.department in hscc_depts) else "thường"
+        data[user][(truc_loai, ngay_loai)] += 1
+
+    # --- Tạo Excel ---
     wb = Workbook()
     ws = wb.active
     ws.title = f"BẢNG TRỰC {ca_chon}"
 
-    # 🎨 Định dạng chung
     bold = Font(bold=True)
     center = Alignment(horizontal="center", vertical="center", wrap_text=True)
-    thin_border = Border(left=Side(style='thin'), right=Side(style='thin'),
-                         top=Side(style='thin'), bottom=Side(style='thin'))
+    thin = Side(style='thin')
+    border = Border(left=thin, right=thin, top=thin, bottom=thin)
 
-    # 📝 Tiêu đề đầu trang
-    ws.merge_cells("A1:M1")
-    ws["A1"] = "SỞ Y TẾ TỈNH GIA LAI"
-    ws["A1"].font = bold
+    # Tiêu đề đầu trang
+    ws.merge_cells("A1:M1"); ws["A1"] = "SỞ Y TẾ TỈNH GIA LAI"; ws["A1"].font = bold
+    ws.merge_cells("A2:M2"); ws["A2"] = "BỆNH VIỆN NHI"; ws["A2"].font = bold
+    ws.merge_cells("A4:M4"); ws["A4"] = f"BẢNG THANH TOÁN TIỀN TRỰC THÁNG {thang:02d} NĂM {nam}"
+    ws["A4"].alignment = center; ws["A4"].font = Font(bold=True, size=13)
 
-    ws.merge_cells("A2:M2")
-    ws["A2"] = "BỆNH VIỆN NHI"
-    ws["A2"].font = bold
-
-    ws.merge_cells("A4:M4")
-    ws["A4"] = f"BẢNG THANH TOÁN TIỀN TRỰC THÁNG {thang:02d} NĂM {nam}"
-    ws["A4"].alignment = center
-    ws["A4"].font = Font(bold=True, size=13)
-
-    # 🧾 Tiêu đề bảng (gồm 2 dòng)
+    # Header bảng
     ws.append([
         "STT", "HỌ TÊN",
         "Trực thường\n(Ngày thường)", "Trực HSCC\n(Ngày thường)",
-        "Trực thường\n(Ngày nghỉ)", "Trực HSCC\n(Ngày nghỉ)",
-        "Trực thường\n(Ngày lễ)", "Trực HSCC\n(Ngày lễ)",
+        "Trực thường\n(Ngày nghỉ)",   "Trực HSCC\n(Ngày nghỉ)",
+        "Trực thường\n(Ngày lễ)",     "Trực HSCC\n(Ngày lễ)",
         "Tổng số\nngày trực", "Tiền ca\n(QĐ 73)",
         "Tiền ăn\n(15k/ngày)", "Tổng cộng", "Ghi chú"
     ])
-    for cell in ws[6]:
-        cell.font = bold
-        cell.alignment = center
-        cell.border = thin_border
+    for c in ws[ws.max_row]:
+        c.font = bold; c.alignment = center; c.border = border
 
-    # 📥 Ghi dữ liệu từng nhân viên
-    for i, (user, info) in enumerate(data.items(), start=1):
+    # Ghi dữ liệu: sắp theo khoa rồi theo tên để in đẹp
+    def cnt(info, key): return info.get(key, 0)
+
+    sorted_users = sorted(
+        data.items(),
+        key=lambda kv: ((kv[0].department or ''), (kv[0].name or ''))
+    )
+
+    for i, (user, info) in enumerate(sorted_users, start=1):
         total_day = sum(info.values())
         tien_ca = 0
 
-        row_data = [i, user.name]
-
+        row = [i, user.name]
         for key in [
             ("thường", "ngày_thường"), ("HSCC", "ngày_thường"),
             ("thường", "ngày_nghỉ"),   ("HSCC", "ngày_nghỉ"),
             ("thường", "ngày_lễ"),     ("HSCC", "ngày_lễ")
         ]:
-            so_ngay = info.get(key, 0)
+            so_ngay = cnt(info, key)
+            row.append(so_ngay)
             don_gia = rates.get((ca_chon, *key), 0)
-            row_data.append(so_ngay)
             tien_ca += so_ngay * don_gia
 
         tien_an = total_day * 15000
-        tong_cong = tien_ca + tien_an
+        tong = tien_ca + tien_an
+        ghi_chu = "HD" if getattr(user, "contract_type", "") == "Hợp đồng" else ""
 
-        row_data += [total_day, tien_ca, tien_an, tong_cong]
-        row_data.append("HD" if user.contract_type == "Hợp đồng" else "")
+        row += [total_day, tien_ca, tien_an, tong, ghi_chu]
+        ws.append(row)
+        for c in ws[ws.max_row]:
+            c.alignment = center; c.border = border
 
-        ws.append(row_data)
-        for cell in ws[ws.max_row]:
-            cell.alignment = center
-            cell.border = thin_border
-
-    # 📤 Xuất file
-    stream = BytesIO()
-    wb.save(stream)
-    stream.seek(0)
+    # Xuất file
+    stream = BytesIO(); wb.save(stream); stream.seek(0)
     filename = f"BANG_THANH_TOAN_{thang:02d}_{nam}_{ca_chon}.xlsx"
-    return send_file(stream, as_attachment=True, download_name=filename)
+    return send_file(stream, as_attachment=True, download_name=filename,
+                     mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
 @app.route('/print-shift-payment')
 def print_shift_payment():
@@ -5282,6 +6103,9 @@ from models.user_machine_hazard import UserMachineHazard
 from flask import jsonify
 import unicodedata
 from sqlalchemy import or_
+from datetime import date, datetime, timedelta
+import calendar, unicodedata
+from collections import defaultdict
 
 def _normalize(s: str) -> str:
     s = unicodedata.normalize('NFD', s or '')
@@ -5290,24 +6114,32 @@ def _normalize(s: str) -> str:
 
 @app.route('/bang-doc-hai', methods=['GET', 'POST'])
 def bang_doc_hai():
-    if session.get('role') not in ['admin', 'manager']:
+    from datetime import date, datetime, timedelta
+    import calendar, unicodedata
+    from collections import defaultdict
+    from sqlalchemy import or_
+
+    if session.get('role') not in ['admin', 'admin1', 'manager']:
         return "Bạn không có quyền truy cập."
 
     # --- Inputs ---
     selected_department = request.values.get('department')
     selected_machine = request.values.get('machine_type')  # '' hoặc None
-    start_date = request.values.get('start')
-    end_date = request.values.get('end')
+    start_date_str = request.values.get('start')
+    end_date_str = request.values.get('end')
     selected_user_ids = request.values.getlist('hazard_user_ids')
 
     # --- Time range ---
-    if not start_date or not end_date:
+    if not start_date_str or not end_date_str:
         today = date.today()
         start_date = date(today.year, today.month, 1)
         end_date = date(today.year, today.month, calendar.monthrange(today.year, today.month)[1])
     else:
-        start_date = datetime.strptime(start_date, '%Y-%m-%d').date()
-        end_date = datetime.strptime(end_date, '%Y-%m-%d').date()
+        start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+        end_date   = datetime.strptime(end_date_str,   '%Y-%m-%d').date()
+
+    # Lấy thêm 1 ngày trước để bắt "đêm trực hôm trước"
+    query_start = start_date - timedelta(days=1)
 
     # --- Departments for select ---
     user_role = session.get('role')
@@ -5335,11 +6167,11 @@ def bang_doc_hai():
             if pos.startswith(p):
                 return i
         return len(priority_order)
-    users = sorted(users, key=lambda u: (sort_by_position(u), u.name.lower()))
+    users = sorted(users, key=lambda u: (sort_by_position(u), (u.name or '').lower()))
 
-    # --- Schedules in range ---
+    # --- Schedules in range (từ query_start) ---
     schedules_q = Schedule.query.filter(
-        Schedule.work_date >= start_date,
+        Schedule.work_date >= query_start,
         Schedule.work_date <= end_date
     )
     if user_role == 'admin' and selected_department and selected_department != 'Tất cả':
@@ -5353,71 +6185,86 @@ def bang_doc_hai():
         )
     schedules = schedules_q.all()
 
-    # Map (user_id, date) -> Schedule
+    # --- Shifts ---
+    shift_by_id = {s.id: s for s in Shift.query.all()}
+
+    # --- Gom lịch theo (user, date) -> list[Schedule]
+    scheds_by_key = defaultdict(list)
     def as_date(v):
         return v if isinstance(v, date) and not isinstance(v, datetime) else v.date()
-    schedule_map = {(s.user_id, as_date(s.work_date)): s for s in schedules}
-
-    # --- Shifts & Hazard configs ---
-    shift_by_id = {s.id: s for s in Shift.query.all()}
-    hazard_configs = HazardConfig.query.filter(
-        HazardConfig.start_date <= end_date,
-        HazardConfig.end_date >= start_date
-    ).all()
+    for s in schedules:
+        scheds_by_key[(s.user_id, as_date(s.work_date))].append(s)
 
     # --- Helpers ---
-    def _normalize(s):
-        s = unicodedata.normalize('NFD', s or '')
-        return ''.join(ch for ch in s if unicodedata.category(ch) != 'Mn').lower().strip()
+    def _norm_noaccent(s: str) -> str:
+        s = (s or '')
+        s = unicodedata.normalize('NFD', s)
+        return ''.join(ch for ch in s if unicodedata.category(ch) != 'Mn').casefold().strip()
 
-    EPS = 0.01  # so sánh float
+    def _is_oncall_shift(shift_obj, sched_obj=None) -> bool:
+        """Trực 24h: tên chứa 'truc' hoặc giờ >= 16.5."""
+        dur = 0.0
+        if sched_obj and sched_obj.work_hours not in (None, 0):
+            try: dur = float(sched_obj.work_hours)
+            except: dur = 0.0
+        elif shift_obj:
+            try: dur = float(getattr(shift_obj, 'duration', 0) or 0)
+            except: dur = 0.0
+        name = (getattr(shift_obj, 'name', '') if shift_obj else '')
+        name_norm = _norm_noaccent(name)
+        return (dur >= 16.5) or ('truc' in name_norm)
 
-    def match_configs_for_day(cfgs, d, want_hours, dept_is_lab, sched_machine, selected_machine):
-        """
-        Chỉ áp dụng ưu tiên cho khoa ĐÃ có cấu hình:
-         1) Nếu là T7/CN: ưu tiên 7h (nửa ngày) nếu tồn tại; nếu không thì 17h (cả ngày)
-         2) Nếu không có cấu hình cuối tuần → ưu tiên cấu hình trùng giờ ca (±EPS)
-         3) Nếu vẫn không có → trả về cấu hình bất kỳ trong ngày (để hiển thị đúng giờ cấu hình)
-        Khoa KHÔNG có cấu hình → chỉ cố gắng khớp giờ ca (giữ bình thường).
-        """
-        # Khoa không có cấu hình → giữ bình thường
-        if not cfgs:
-            return [c for c in cfgs if abs(float(c.duration_hours) - float(want_hours)) < EPS]
+    def _is_halfday_shift(shift_obj, sched_obj=None) -> bool:
+        """Nửa ngày: work_hours/ duration <= 4.5 **hoặc** tên ca có '1/2', 'nua', 'half'."""
+        # Theo giờ
+        h = None
+        if sched_obj and sched_obj.work_hours not in (None, 0):
+            try: h = float(sched_obj.work_hours)
+            except: h = None
+        if h is None and shift_obj:
+            try: h = float(getattr(shift_obj, 'duration', 0) or 0)
+            except: h = None
+        if h is not None and 0 < h <= 4.5:
+            return True
+        # Theo tên
+        name = (getattr(shift_obj, 'name', '') if shift_obj else '')
+        nm = _norm_noaccent(name)
+        return ('1/2' in nm) or ('nua' in nm) or ('half' in nm)
 
-        base = [c for c in cfgs if c.start_date <= d <= c.end_date]
+    def _is_half_day_hours(h: float) -> bool:
+        try: h = float(h or 0)
+        except: h = 0.0
+        return 0 < h <= 4.5
 
-        if dept_is_lab:
-            nm_sched = _normalize(sched_machine)
-            nm_selected = _normalize(selected_machine)
-            if nm_sched:
-                base = [c for c in base if not c.machine_type or _normalize(c.machine_type) == nm_sched]
-            elif nm_selected:
-                base = [c for c in base if not c.machine_type or _normalize(c.machine_type) == nm_selected]
+    def _is_full_day_hours(h: float) -> bool:
+        try: h = float(h or 0)
+        except: h = 0.0
+        return h >= 7.5
+
+    def _day_meta(user_id, d):
+        """Trả (max_hours, oncall_today, has_half_today, has_any)."""
+        lst = scheds_by_key.get((user_id, d), [])
+        if not lst:
+            return (0.0, False, False, False)
+        max_hours = 0.0
+        oncall = False
+        has_half = False
+        for s in lst:
+            ca = shift_by_id.get(s.shift_id) if s.shift_id else None
+            # Giờ của bản ghi: ưu tiên work_hours, fallback duration
+            if s.work_hours not in (None, 0):
+                try: h = float(s.work_hours)
+                except: h = 0.0
             else:
-                base = [c for c in base if not c.machine_type]
-
-        # 1) Ưu tiên cuối tuần (T7=5, CN=6)
-        if d.weekday() in (5, 6):
-            wk = [c for c in base if c.unit == 'gio' and float(c.duration_hours) in (7.0, 17.0)]
-            if wk:
-                # Nếu có 7h thì chọn 7h (đặc biệt khi ca ≤ 8h), nếu không có thì chọn 17h
-                has7 = any(abs(float(c.duration_hours) - 7.0) < EPS for c in wk)
-                has17 = any(abs(float(c.duration_hours) - 17.0) < EPS for c in wk)
-                if has7 and float(want_hours) <= 8.0:
-                    return [c for c in wk if abs(float(c.duration_hours) - 7.0) < EPS]
-                if has17:
-                    return [c for c in wk if abs(float(c.duration_hours) - 17.0) < EPS]
-                # fallback: nếu có 7h nhưng ca > 8h thì vẫn lấy 7h
-                if has7:
-                    return [c for c in wk if abs(float(c.duration_hours) - 7.0) < EPS]
-
-        # 2) Trùng giờ ca
-        exact = [c for c in base if abs(float(c.duration_hours) - float(want_hours)) < EPS]
-        if exact:
-            return exact
-
-        # 3) Trả về mọi cấu hình trong ngày (để vẫn lấy giờ từ cấu hình)
-        return base
+                try: h = float(getattr(ca, 'duration', 0) or 0)
+                except: h = 0.0
+            if h > max_hours:
+                max_hours = h
+            if _is_oncall_shift(ca, s):
+                oncall = True
+            if _is_halfday_shift(ca, s):
+                has_half = True
+        return (max_hours, oncall, has_half, True)
 
     # --- Build table ---
     days = [start_date + timedelta(days=i) for i in range((end_date - start_date).days + 1)]
@@ -5426,9 +6273,6 @@ def bang_doc_hai():
     for user in users:
         if selected_user_ids and str(user.id) not in selected_user_ids:
             continue
-
-        cfgs_user = [c for c in hazard_configs if c.department == user.department]
-        is_lab = 'xet nghiem' in _normalize(user.department)
 
         row = {
             'name': user.name,
@@ -5440,37 +6284,31 @@ def bang_doc_hai():
         }
 
         for d in days:
-            sched = schedule_map.get((user.id, d))
-            if not sched or not sched.shift_id:
+            today_hours, today_oncall, today_half, today_has = _day_meta(user.id, d)
+            if not today_has:
                 row['daily_hours'].append('–')
                 continue
 
-            ca = shift_by_id.get(sched.shift_id)
-            if not ca:
-                row['daily_hours'].append('–')
-                continue
+            prev_d = d - timedelta(days=1)
+            _, prev_oncall, _, _ = _day_meta(user.id, prev_d)
 
-            ca_hours = float(getattr(ca, 'duration', 0) or 0)
-
-            cfgs_in_day = match_configs_for_day(
-                cfgs_user, d, ca_hours,
-                dept_is_lab=is_lab,
-                sched_machine=getattr(sched, 'machine_type', ''),
-                selected_machine=selected_machine or ''
-            )
-
-            match_pos = [c for c in cfgs_in_day
-                         if c.position and c.position.strip().upper() == (user.position or '').strip().upper()]
-            pool = match_pos if match_pos else [c for c in cfgs_in_day if not c.position or c.position.strip() == '']
-
-            if pool:
-                # Nếu cấu hình theo giờ → hiển thị đúng giờ trong cấu hình (7h/17h); ngược lại hiển thị giờ ca
-                show_hours = int(pool[0].duration_hours) if (pool[0].unit == 'gio') else int(ca_hours)
-                row['daily_hours'].append(f"{show_hours}h")
-                row['total_days'] += 1
-                row['hazard_level'] = max(row['hazard_level'], max(c.hazard_level for c in pool))
+            # Quy tắc quyết định
+            if today_oncall:
+                desired = 17
+            elif prev_oncall and today_half:
+                desired = 7
+            elif today_half:
+                desired = 4
             else:
-                row['daily_hours'].append('–')
+                if _is_full_day_hours(today_hours):
+                    desired = 8
+                elif _is_half_day_hours(today_hours):
+                    desired = 4
+                else:
+                    desired = 8 if today_hours >= 6 else 4
+
+            row['daily_hours'].append(f"{int(desired)}h")
+            row['total_days'] += 1
 
         (nhom_ho_ly if (row['position'] or '').upper().startswith('HL') else nhom_chung).append(row)
 
@@ -5487,6 +6325,7 @@ def bang_doc_hai():
         selected_user_ids=selected_user_ids,
         selected_machine=selected_machine
     )
+
 
 def _normalize_no_accent(s: str) -> str:
     """Dùng để khử trùng lặp theo kiểu 'Huyết học' vs 'Huyet hoc'."""

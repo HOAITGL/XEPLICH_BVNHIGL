@@ -1,6 +1,6 @@
 from models import db
 from models.shift import Shift
-from app import app
+from models import db
 from sqlalchemy.exc import OperationalError
 
 with app.app_context():

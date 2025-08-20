@@ -113,6 +113,10 @@
         <li><a href="/bang-cham-cong">📋 Bảng chấm công</a></li>
       {% endif %}
 
+      {% if 'bang_cham_cong_2' in allowed_modules %}
+        <li><a href="/timesheet2">📝 Bảng chấm công BHYT</a></li>
+      {% endif %}
+
       {% if 'bang_cong_gop' in allowed_modules %}
         <li><a href="/tong-hop-cong-truc-view">📊 Bảng tổng hợp công trực</a></li>
       {% endif %}

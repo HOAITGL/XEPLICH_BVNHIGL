@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Bảng chấm công 2</h2>
+
+<form method="post" class="mb-3" style="margin-bottom:16px;">
+  <label>Tên bảng</label>
+  <input type="text" name="name" placeholder="Bảng chấm công 2">
+  <label>Khoa/Phòng</label>
+  <select name="department" required>
+    {% for d in departments %}
+      <option value="{{ d }}">{{ d }}</option>
+    {% endfor %}
+  </select>
+  <label>Từ ngày</label>
+  <input type="date" name="start_date" required>
+  <label>Đến ngày</label>
+  <input type="date" name="end_date" required>
+  <button type="submit">Tạo bảng trống</button>
+</form>
+
+<form method="post" action="/timesheet2/create-from-schedule" class="mb-3" style="margin-bottom:24px;">
+  <strong>Tạo bằng cách sao chép từ lịch (Schedule):</strong><br>
+  <input type="text" name="name" placeholder="Bảng chấm công 2 (sao chép)">
+  <select name="department" required>
+    {% for d in departments %}
+      <option value="{{ d }}">{{ d }}</option>
+    {% endfor %}
+  </select>
+  <input type="date" name="start_date" required>
+  <input type="date" name="end_date" required>
+  <button type="submit">Sao chép</button>
+</form>
+
+<table border="1" cellpadding="6" style="border-collapse: collapse;">
+  <tr><th>ID</th><th>Tên</th><th>Khoa</th><th>Khoảng ngày</th><th>Mở</th></tr>
+  {% for s in sheets %}
+    <tr>
+      <td>{{ s.id }}</td>
+      <td>{{ s.name }}</td>
+      <td>{{ s.department }}</td>
+      <td>{{ s.start_date }} → {{ s.end_date }}</td>
+      <td><a href="/timesheet2/{{ s.id }}">Mở</a></td>
+    </tr>
+  {% endfor %}
+</table>
+{% endblock %}
