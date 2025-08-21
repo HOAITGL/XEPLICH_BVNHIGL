@@ -3307,7 +3307,10 @@ from datetime import datetime, timedelta, date
 import openpyxl
 from flask import request, session, redirect, render_template, send_file
 
-# ---------- Chuẩn hoá & map tên ca -> mã ----------
+# ========= TIMESHEET2 – RECALC USING YOUR CODE MAP =========
+from collections import defaultdict
+
+# ----- (giữ NGUYÊN các hằng & hàm bạn đã cung cấp) -----
 SHIFT_NAME_TO_CODES = {
     'làm ngày': ['X'],
     'trực 24h': ['XĐ24'],
@@ -3317,12 +3320,9 @@ SHIFT_NAME_TO_CODES = {
     'nghỉ trực': ['NT'],
     'nghỉ bù': ['NB'],
 }
-
-# ví dụ: X, XĐ, XĐ16, /X, P100, BHXH ...
 _CODE_RE = re.compile(r'^/?[A-ZĐƠƯ]{1,4}[0-9]{0,3}%?$')
 
 def _normalize_code(s: str) -> str:
-    """Viết hoa, đổi XD → XĐ, bỏ khoảng trắng thừa."""
     s = (s or '').strip().upper()
     if not s:
         return ''
@@ -3348,37 +3348,33 @@ def _codes_from_shift_name(name: str):
     return []
 
 def ts2_codes_from_shift(shift):
-    """Trả về danh sách MÃ ca từ Shift (lọc bỏ tên, xử lý '\n', '/n')."""
     code_field = getattr(shift, 'code', None)
     if not code_field:
         return _codes_from_shift_name(getattr(shift, 'name', ''))
 
     raw = str(code_field).strip()
-    raw = re.sub(r'(\\n|/n|\r\n|\r)', '\n', raw)   # chuẩn hoá xuống dòng
-    parts = re.split(r'[\n,;]+', raw)              # tách theo dòng, ',', ';'
+    raw = re.sub(r'(\\n|/n|\r\n|\r)', '\n', raw)
+    parts = re.split(r'[\n,;]+', raw)
 
     codes = []
     for p in parts:
         p = p.strip()
         if not p:
             continue
-        token = p.split()[0]           # "XĐ24 Trực 24h" -> "XĐ24"
+        token = p.split()[0]
         c = _normalize_code(token)
         if _CODE_RE.match(c):
             codes.append(c)
         else:
             codes += _codes_from_shift_name(p)
 
-    # bỏ trùng, giữ thứ tự
     seen, uniq = set(), []
     for c in codes:
         if c not in seen:
             seen.add(c); uniq.append(c)
     return uniq
 
-# ---------- Ưu tiên X (nếu có) & gom 1 ô ----------
 def _resolve_codes_in_cell(codes):
-    """Bỏ trùng, chuẩn hoá; nếu đã có X thì loại toàn bộ mã bắt đầu bằng 'XĐ'."""
     seen, ordered = set(), []
     for c in codes:
         c = _normalize_code(c)
@@ -3388,60 +3384,126 @@ def _resolve_codes_in_cell(codes):
         ordered = [c for c in ordered if not c.startswith('XĐ')]
     return ordered
 
-# ---------- Quy tắc đếm 4 cột tổng hợp ----------
-PRIORITY_ORDER = ['GĐ', 'PGĐ', 'TK', 'TP', 'PTK', 'PTP', 'BS', 'BSCK1', 'BSCK2', 'ĐDT', 'KTVT', 'KTV', 'ĐD', 'NV', 'HL', 'BV']
+# ==== Sort nhân sự theo chức danh rồi theo tên (dùng chung) ====
+PRIORITY_ORDER = [
+    'GĐ', 'PGĐ', 'TK', 'TP', 'PTK', 'PTP',
+    'BS', 'BSCK1', 'BSCK2', 'ĐDT', 'KTVT', 'KTV',
+    'ĐD', 'NV', 'HL', 'BV'
+]
 
-MAP_KL    = {'KL'}                                             # Không hưởng lương
-MAP_100   = {'NB','P','H','CT','L','NT','PC','NBL','PT','NBS','NBC','P100'}  # Công 100%
-MAP_BHXH  = {'Ô','CÔ','DS','TS','TN','ỐM','OM'}               # BHXH
-HALF_PAIR = {'/X','/NT'}                                       # 0.5 TG + 0.5 100%
+def _sort_by_position(u):
+    """
+    Trả về tuple (độ ưu tiên chức danh, tên viết thường) để dùng cho key của sorted().
+    """
+    pos = (getattr(u, 'position', '') or '').upper().strip()
+    for i, p in enumerate(PRIORITY_ORDER):
+        if pos.startswith(p):
+            return (i, (getattr(u, 'name', '') or '').lower())
+    return (len(PRIORITY_ORDER), (getattr(u, 'name', '') or '').lower())
+
+
+MAP_KL    = {'KL'}                                              # Không hưởng lương
+MAP_100   = {'NB','P','H','CT','L','NT','PC','NBL','PT','NBS','NBC','P100'}  # 100%
+MAP_BHXH  = {'Ô','CÔ','DS','TS','TN','ỐM','OM'}                # BHXH
+HALF_PAIR = {'/X','/NT'}                                        # 0.5 TG + 0.5 100%
 
 def _is_tg(c: str) -> bool:
     c = _normalize_code(c)
     return (c == 'X') or c.startswith('XĐ') or c.startswith('XĐL') or c in {'XD','XĐ'}
 
-def _sort_by_position(user):
-    pos = (user.position or '').upper().strip()
-    for i, p in enumerate(PRIORITY_ORDER):
-        if pos.startswith(p):
-            return i
-    return len(PRIORITY_ORDER)
-
 def _resolve_cell_to_counts(code_list):
-    """
-    Nhận danh sách code (chips) của 1 ô (một nhân sự trong 1 ngày),
-    trả về dict {'kl': x, 'tg': y, '100': z, 'bhxh': t}
-    """
-    # chuẩn hoá, loại trùng, giữ thứ tự
     seen, codes = set(), []
     for raw in code_list:
         c = _normalize_code(raw)
         if c and c not in seen:
             seen.add(c); codes.append(c)
 
-    # nửa công trước
     if any(c in HALF_PAIR for c in codes):
-        return {'kl': 0, 'tg': 0.5, '100': 0.5, 'bhxh': 0}
-
-    # KL
+        return {'kl': 0.0, 'tg': 0.5, '100': 0.5, 'bhxh': 0.0}
     if any(c in MAP_KL for c in codes):
-        return {'kl': 1, 'tg': 0, '100': 0, 'bhxh': 0}
-
-    # 100%
+        return {'kl': 1.0, 'tg': 0.0, '100': 0.0, 'bhxh': 0.0}
     if any(c in MAP_100 for c in codes):
-        return {'kl': 0, 'tg': 0, '100': 1, 'bhxh': 0}
-
-    # BHXH
+        return {'kl': 0.0, 'tg': 0.0, '100': 1.0, 'bhxh': 0.0}
     if any(c in MAP_BHXH for c in codes):
-        return {'kl': 0, 'tg': 0, '100': 0, 'bhxh': 1}
+        return {'kl': 0.0, 'tg': 0.0, '100': 0.0, 'bhxh': 1.0}
+    if 'X' in codes or any(_is_tg(c) for c in codes):
+        return {'kl': 0.0, 'tg': 1.0, '100': 0.0, 'bhxh': 0.0}
+    return {'kl': 0.0, 'tg': 0.0, '100': 0.0, 'bhxh': 0.0}
+# ----- /giữ NGUYÊN -----
 
-    # TG
-    if 'X' in codes:
-        return {'kl': 0, 'tg': 1, '100': 0, 'bhxh': 0}
-    if any(_is_tg(c) for c in codes):
-        return {'kl': 0, 'tg': 1, '100': 0, 'bhxh': 0}
+# ----- Parse mã từ 1 ô (Timesheet2Entry) -----
+def _codes_from_free_text(txt: str):
+    if not txt:
+        return []
+    raw = re.sub(r'(\\n|/n|\r\n|\r)', '\n', str(txt))
+    parts = re.split(r'[\n,;]+', raw)
+    codes = []
+    for p in parts:
+        token = _normalize_code(p.split()[0] if p else '')
+        if token and _CODE_RE.match(token):
+            codes.append(token)
+        else:
+            # nếu user gõ "trực 24h", "làm ngày"… thì map qua
+            codes += _codes_from_shift_name(p)
+    return codes
 
-    return {'kl': 0, 'tg': 0, '100': 0, 'bhxh': 0}
+def _codes_from_entry(e, shift_by_id=None):
+    """
+    Trả về list mã của 1 ô:
+      - ưu tiên text trong ô (code/value/note…)
+      - nếu có shift_id và có bảng Shift: bổ sung theo ts2_codes_from_shift
+    """
+    texts = []
+    for fld in ('code', 'value', 'note', 'text'):
+        if hasattr(e, fld):
+            v = getattr(e, fld) or ''
+            if v:
+                texts.append(v)
+    codes = []
+    for t in texts:
+        codes += _codes_from_free_text(t)
+
+    if shift_by_id and getattr(e, 'shift_id', None):
+        sh = shift_by_id.get(e.shift_id)
+        if sh:
+            codes += ts2_codes_from_shift(sh)
+
+    return _resolve_codes_in_cell(codes)
+
+# ----- TÍNH LẠI 4 CỘT CHO 1 BẢNG (sheet_id) -----
+def t2_recalc_summary(sheet_id: int):
+    """
+    Trả: { user_id: {'kl':..., 'tg':..., '100':..., 'bhxh':...} }
+    """
+    # đổi import theo model thực tế của bạn
+    from models.timesheet2 import Timesheet2Entry
+    from models.shift import Shift
+
+    # cache Shift (nếu có)
+    try:
+        shift_by_id = {s.id: s for s in Shift.query.all()}
+    except Exception:
+        shift_by_id = {}
+
+    totals = defaultdict(lambda: {'kl': 0.0, 'tg': 0.0, '100': 0.0, 'bhxh': 0.0})
+
+    entries = (Timesheet2Entry.query
+               .filter(Timesheet2Entry.sheet_id == sheet_id)
+               .all())
+
+    for e in entries:
+        codes = _codes_from_entry(e, shift_by_id=shift_by_id)
+        c = _resolve_cell_to_counts(codes)
+        u = getattr(e, 'user_id', None)
+        if not u:
+            continue
+        totals[u]['kl']   += c['kl']
+        totals[u]['tg']   += c['tg']
+        totals[u]['100']  += c['100']
+        totals[u]['bhxh'] += c['bhxh']
+
+    return totals
+# ========= /TIMESHEET2 – RECALC =========
 
 # ========================= INDEX =========================
 @app.route('/timesheet2', methods=['GET', 'POST'])

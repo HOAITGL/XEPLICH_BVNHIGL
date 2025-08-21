@@ -102,6 +102,10 @@
           {% endfor %}
         </select>
       </form>
+
+      <!-- ⭐ Nút Xem lại -->
+      <button id="btnReload" class="btn btn-outline-secondary btn-sm" type="button">🔄 Xem lại</button>
+
       <a class="btn btn-outline-secondary btn-sm" href="/timesheet2">Danh sách</a>
       <a class="btn btn-secondary btn-sm"
    	  href="/timesheet2/{{ sheet.id }}/print{% if request.args.get('contract_type') %}?contract_type={{ request.args.get('contract_type') }}{% endif %}">
@@ -234,6 +238,14 @@ async function saveCell(div){
   const j = await res.json();
   if(!j.ok){ alert(j.msg || 'Lỗi cập nhật'); }
 }
+
+/* 🔄 Nút Xem lại: tải lại trang để lấy dữ liệu mới nhất */
+document.getElementById('btnReload').addEventListener('click', function(){
+  // Nếu bạn đã có endpoint /timesheet2/<id>/recalc thì có thể gọi trước rồi reload:
+  // fetch('/timesheet2/{{ sheet.id }}/recalc', {method:'POST'}).finally(()=>location.reload());
+  location.reload();
+});
+
 function printTimesheet(){ window.print(); }
 </script>
 {% endblock %}
