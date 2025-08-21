@@ -3565,7 +3565,7 @@ def ts2_index():
         user_dept=my_dept
     )
 
-# ========== SAO CHÉP TỪ SCHEDULE (ưu tiên X) ==========
+# ========== SAO CHÉP TỪ SCHEDULE (gộp mã 1 ô = 1 dòng + UPSERT) ==========
 @app.route('/timesheet2/create-from-schedule', methods=['POST'])
 def ts2_create_from_schedule():
     role = session.get('role')
@@ -3602,17 +3602,36 @@ def ts2_create_from_schedule():
         for c in codes:
             bucket[(u.id, s.work_date)].append(c)
 
-    entries = []
+    # --- GỘP MÃ THEO Ô & UPSERT 1 DÒNG/Ô ---
+    rows = []  # list[dict]: 1 row cho mỗi (uid, work_date)
     for (uid, wdate), codes in bucket.items():
         ordered = _resolve_codes_in_cell(codes)  # Ưu tiên X, loại XĐ*
-        for c in ordered:
-            entries.append(Timesheet2Entry(
-                sheet_id=sheet.id, user_id=uid, work_date=wdate,
-                code=c, deleted=False
-            ))
+        code_text = '\n'.join(_normalize_code(c) for c in ordered)  # 1 ô = 1 dòng
+        rows.append({
+            "sheet_id": sheet.id,
+            "user_id": uid,
+            "work_date": wdate,
+            "code": code_text,
+            "deleted": False
+        })
 
-    if entries:
-        db.session.add_all(entries)
+    if rows:
+        if db.engine.url.get_backend_name().startswith('postgres'):
+            stmt = pg_insert(Timesheet2Entry).values(rows)
+            stmt = stmt.on_conflict_do_update(
+                index_elements=['sheet_id', 'user_id', 'work_date'],
+                set_={'code': stmt.excluded.code, 'deleted': False}
+            )
+            db.session.execute(stmt)
+        else:
+            # SQLite fallback: xoá ô cũ trong range -> chèn lại 1 dòng/ô
+            Timesheet2Entry.query.filter(
+                Timesheet2Entry.sheet_id == sheet.id,
+                Timesheet2Entry.work_date >= start_date,
+                Timesheet2Entry.work_date <= end_date
+            ).delete(synchronize_session=False)
+            db.session.bulk_insert_mappings(Timesheet2Entry, rows)
+
     db.session.commit()
     return redirect(f'/timesheet2/{sheet.id}')
 
@@ -3624,8 +3643,6 @@ def favicon():
                                'favicon.ico', mimetype='image/vnd.microsoft.icon')
 
 # ========================= VIEW =========================
-from datetime import date
-
 def _norm_contract_type(s: str) -> str:
     s = (s or '').strip().lower()
     if s in ('bc','biên chế','bien che','bienché','biênchế'):
@@ -3703,15 +3720,6 @@ def ts2_view(sheet_id):
                            contract_options=contract_options,
                            contract_header_text=contract_header_text)
 
-# --- Chuẩn hóa loại HĐ dùng để lọc (giống bảng chính) ---
-def _norm_contract_type(s: str) -> str:
-    s = (s or '').strip().lower()
-    if s in ('bc','biên chế','bien che','bienché','biênchế'):
-        return 'bienche'
-    if s.startswith('hđ') or 'hợp' in s or 'hop dong' in s or 'hđlđ' in s:
-        return 'hopdong'
-    return 'khac'
-
 # --- IN BẢNG CHẤM CÔNG (A4 ngang) ---
 @app.route('/timesheet2/<int:sheet_id>/print')
 def ts2_print(sheet_id):
@@ -3780,34 +3788,19 @@ def ts2_print(sheet_id):
                            contract_label=contract_label, manager_label=manager_label,
                            today=today)
 
-# ========== CẬP NHẬT 1 Ô (dán nhiều dòng) ==========
-import json  # thêm nếu chưa có
-
+# ========== CẬP NHẬT 1 Ô (gộp nhiều mã; UPSERT 1 dòng/ô) ==========
 @app.route('/timesheet2/<int:sheet_id>/cell', methods=['POST'])
 def timesheet2_update_cell(sheet_id):
     sheet = Timesheet2.query.get_or_404(sheet_id)
     if session.get('role') not in ('admin', 'admin1', 'manager') and sheet.department != session.get('department'):
         return {"ok": False, "msg": "Không có quyền"}, 403
 
-    # Parse body an toàn: ưu tiên JSON, fallback form/raw, body rỗng thì coi như xoá ô
-    data = request.get_json(silent=True)
-    if data is None:
-        if request.form:
-            data = request.form.to_dict()
-        else:
-            raw = (request.data or b'').decode('utf-8').strip()
-            if raw:
-                try:
-                    data = json.loads(raw)
-                except Exception:
-                    return {"ok": False, "msg": "Payload không phải JSON hợp lệ"}, 400
-            else:
-                data = {}
-
+    # Parse body an toàn
+    data = request.get_json(silent=True) or (request.form.to_dict() if request.form else {})
     try:
         user_id   = int(data.get('user_id'))
         work_date = data.get('work_date')
-        code      = (data.get('code') or '').strip()
+        code_raw  = (data.get('code') or '').strip()
     except Exception:
         return {"ok": False, "msg": "Thiếu hoặc sai tham số"}, 400
     if not user_id or not work_date:
@@ -3815,32 +3808,43 @@ def timesheet2_update_cell(sheet_id):
 
     work_date = datetime.strptime(work_date, '%Y-%m-%d').date()
 
-    # Xoá mềm toàn bộ entry cũ của ô
-    Timesheet2Entry.query.filter_by(
-        sheet_id=sheet.id, user_id=user_id, work_date=work_date
-    ).update({"deleted": True})
-    db.session.flush()
+    # Chuẩn hoá & gộp mã thành 1 chuỗi
+    if code_raw:
+        code_raw = re.sub(r'(\\n|/n|\r\n|\r)', '\n', code_raw)
+        parts = [p.strip() for p in code_raw.split('\n') if p.strip()]
+        resolved = _resolve_codes_in_cell(parts)
+        code_text = '\n'.join(_normalize_code(p) for p in resolved)
+    else:
+        code_text = ''
 
-    # Nếu rỗng thì chỉ xoá
-    if not code:
-        db.session.commit()
-        return {"ok": True}
-
-    # Chuẩn hoá & thêm lại các chip
-    code = re.sub(r'(\\n|/n|\r\n|\r)', '\n', code)
-    parts = [p.strip() for p in code.split('\n') if p.strip()]
-    resolved = _resolve_codes_in_cell(parts)
-
-    for p in resolved:
-        db.session.add(Timesheet2Entry(
-            sheet_id=sheet.id, user_id=user_id,
-            work_date=work_date, code=_normalize_code(p), deleted=False
-        ))
+    # UPSERT 1 dòng/ô (Postgres) hoặc replace (SQLite)
+    if db.engine.url.get_backend_name().startswith('postgres'):
+        stmt = pg_insert(Timesheet2Entry).values({
+            "sheet_id": sheet.id,
+            "user_id": user_id,
+            "work_date": work_date,
+            "code": code_text,
+            "deleted": False
+        }).on_conflict_do_update(
+            index_elements=['sheet_id', 'user_id', 'work_date'],
+            set_={'code': code_text, 'deleted': False}
+        )
+        db.session.execute(stmt)
+    else:
+        # SQLite: xoá ô -> chèn lại 1 dòng (nếu có code)
+        Timesheet2Entry.query.filter_by(
+            sheet_id=sheet.id, user_id=user_id, work_date=work_date
+        ).delete(synchronize_session=False)
+        if code_text:
+            db.session.add(Timesheet2Entry(
+                sheet_id=sheet.id, user_id=user_id, work_date=work_date,
+                code=code_text, deleted=False
+            ))
 
     db.session.commit()
     return {"ok": True}
 
-# ========== Thêm / Sửa / Xoá 1 CHIP ==========
+# ========== Thêm / Sửa / Xoá 1 CHIP (gộp vào 1 dòng/ô) ==========
 @app.route('/timesheet2/<int:sheet_id>/item/add', methods=['POST'])
 def ts2_add_item(sheet_id):
     sheet = Timesheet2.query.get_or_404(sheet_id)
@@ -3851,25 +3855,37 @@ def ts2_add_item(sheet_id):
     user_id   = int(data['user_id'])
     work_date = datetime.strptime(data['work_date'], '%Y-%m-%d').date()
     raw = (data.get('code') or '').strip()
-    code = _normalize_code(raw)
-    if not code:
+    new_code = _normalize_code(raw)
+    if not new_code:
         return {"ok": False, "msg": "Ký hiệu trống!"}, 400
 
-    exists = Timesheet2Entry.query.filter_by(sheet_id=sheet.id, user_id=user_id,
-                                             work_date=work_date, code=code, deleted=False).first()
-    if exists:
-        return {"ok": True, "id": exists.id, "code": exists.code}
+    # Lấy dòng hiện tại của ô (1 dòng/ô)
+    row = Timesheet2Entry.query.filter_by(
+        sheet_id=sheet.id, user_id=user_id, work_date=work_date
+    ).first()
 
-    if code.startswith('XĐ'):
-        has_x = Timesheet2Entry.query.filter_by(sheet_id=sheet.id, user_id=user_id,
-                                                work_date=work_date, code='X', deleted=False).first()
-        if has_x:
-            return {"ok": True, "skipped": True}
+    if not row:
+        # tạo mới
+        db.session.add(Timesheet2Entry(
+            sheet_id=sheet.id, user_id=user_id, work_date=work_date,
+            code=new_code, deleted=False
+        ))
+        db.session.commit()
+        return {"ok": True, "code": new_code}
 
-    e = Timesheet2Entry(sheet_id=sheet.id, user_id=user_id, work_date=work_date, code=code, deleted=False)
-    db.session.add(e)
+    # đã có -> ghép mã vào cuối, loại trùng / ưu tiên X
+    existing = []
+    if row.code and row.code.strip():
+        txt = re.sub(r'(\\n|/n|\r\n|\r)', '\n', row.code.strip())
+        existing = [p.strip() for p in txt.split('\n') if p.strip()]
+
+    # hợp nhất
+    parts = existing + [new_code]
+    resolved = _resolve_codes_in_cell(parts)
+    row.code = '\n'.join(_normalize_code(p) for p in resolved)
+    row.deleted = False
     db.session.commit()
-    return {"ok": True, "id": e.id, "code": e.code}
+    return {"ok": True, "code": new_code}
 
 @app.route('/timesheet2/<int:sheet_id>/item/<int:item_id>/update', methods=['POST'])
 def ts2_update_item(sheet_id, item_id):
@@ -3929,7 +3945,7 @@ def ts2_delete_sheet(sheet_id):
     db.session.commit()
     return {"ok": True}
 
-# ========== DỌN/CHUẨN HOÁ SHEET ==========
+# ========== DỌN/CHUẨN HOÁ SHEET (gộp nhiều dòng/ô thành 1) ==========
 @app.route('/timesheet2/<int:sheet_id>/normalize', methods=['POST'])
 def ts2_normalize_sheet(sheet_id):
     sheet = Timesheet2.query.get_or_404(sheet_id)
@@ -3951,12 +3967,11 @@ def ts2_normalize_sheet(sheet_id):
             it.deleted = True
 
         resolved = _resolve_codes_in_cell(raw_codes)
-        for c in resolved:
-            db.session.add(Timesheet2Entry(
-                sheet_id=sheet.id, user_id=key[0], work_date=key[1],
-                code=_normalize_code(c), deleted=False
-            ))
-            changed += 1
+        db.session.add(Timesheet2Entry(
+            sheet_id=sheet.id, user_id=key[0], work_date=key[1],
+            code='\n'.join(_normalize_code(c) for c in resolved), deleted=False
+        ))
+        changed += 1
 
     db.session.commit()
     return {"ok": True, "changed": changed}
