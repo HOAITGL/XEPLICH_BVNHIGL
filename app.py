@@ -3309,6 +3309,11 @@ from flask import request, session, redirect, render_template, send_file
 
 # ========= TIMESHEET2 – RECALC USING YOUR CODE MAP =========
 from collections import defaultdict
+# Ở đầu app.py (khu import)
+try:
+    from sqlalchemy.dialects.postgresql import insert as pg_insert
+except Exception:
+    pg_insert = None  # chạy được cả khi không dùng Postgres
 
 # ----- (giữ NGUYÊN các hằng & hàm bạn đã cung cấp) -----
 SHIFT_NAME_TO_CODES = {
@@ -3616,7 +3621,8 @@ def ts2_create_from_schedule():
         })
 
     if rows:
-        if db.engine.url.get_backend_name().startswith('postgres'):
+        backend = (db.engine.url.get_backend_name() or "").lower()
+        if pg_insert and backend.startswith('postgres'):
             stmt = pg_insert(Timesheet2Entry).values(rows)
             stmt = stmt.on_conflict_do_update(
                 index_elements=['sheet_id', 'user_id', 'work_date'],
@@ -3624,7 +3630,7 @@ def ts2_create_from_schedule():
             )
             db.session.execute(stmt)
         else:
-            # SQLite fallback: xoá ô cũ trong range -> chèn lại 1 dòng/ô
+            # Fallback cho non‑Postgres: xóa ô trong khoảng ngày rồi chèn lại 1 dòng/ô
             Timesheet2Entry.query.filter(
                 Timesheet2Entry.sheet_id == sheet.id,
                 Timesheet2Entry.work_date >= start_date,
@@ -3818,7 +3824,8 @@ def timesheet2_update_cell(sheet_id):
         code_text = ''
 
     # UPSERT 1 dòng/ô (Postgres) hoặc replace (SQLite)
-    if db.engine.url.get_backend_name().startswith('postgres'):
+    backend = (db.engine.url.get_backend_name() or "").lower()
+    if pg_insert and backend.startswith('postgres'):
         stmt = pg_insert(Timesheet2Entry).values({
             "sheet_id": sheet.id,
             "user_id": user_id,
@@ -3831,15 +3838,14 @@ def timesheet2_update_cell(sheet_id):
         )
         db.session.execute(stmt)
     else:
-        # SQLite: xoá ô -> chèn lại 1 dòng (nếu có code)
         Timesheet2Entry.query.filter_by(
             sheet_id=sheet.id, user_id=user_id, work_date=work_date
         ).delete(synchronize_session=False)
-        if code_text:
-            db.session.add(Timesheet2Entry(
-                sheet_id=sheet.id, user_id=user_id, work_date=work_date,
-                code=code_text, deleted=False
-            ))
+            if code_text:
+                db.session.add(Timesheet2Entry(
+                    sheet_id=sheet.id, user_id=user_id, work_date=work_date,
+                    code=code_text, deleted=False
+                ))
 
     db.session.commit()
     return {"ok": True}
