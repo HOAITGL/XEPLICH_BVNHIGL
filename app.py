@@ -3841,11 +3841,11 @@ def timesheet2_update_cell(sheet_id):
         Timesheet2Entry.query.filter_by(
             sheet_id=sheet.id, user_id=user_id, work_date=work_date
         ).delete(synchronize_session=False)
-            if code_text:
-                db.session.add(Timesheet2Entry(
-                    sheet_id=sheet.id, user_id=user_id, work_date=work_date,
-                    code=code_text, deleted=False
-                ))
+        if code_text:
+            db.session.add(Timesheet2Entry(
+                sheet_id=sheet.id, user_id=user_id, work_date=work_date,
+                code=code_text, deleted=False
+            ))
 
     db.session.commit()
     return {"ok": True}
