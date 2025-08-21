@@ -6299,7 +6299,6 @@ def bang_doc_hai():
 
     def _is_halfday_shift(shift_obj, sched_obj=None) -> bool:
         """Nửa ngày: work_hours/ duration <= 4.5 **hoặc** tên ca có '1/2', 'nua', 'half'."""
-        # Theo giờ
         h = None
         if sched_obj and sched_obj.work_hours not in (None, 0):
             try: h = float(sched_obj.work_hours)
@@ -6309,7 +6308,6 @@ def bang_doc_hai():
             except: h = None
         if h is not None and 0 < h <= 4.5:
             return True
-        # Theo tên
         name = (getattr(shift_obj, 'name', '') if shift_obj else '')
         nm = _norm_noaccent(name)
         return ('1/2' in nm) or ('nua' in nm) or ('half' in nm)
@@ -6334,7 +6332,6 @@ def bang_doc_hai():
         has_half = False
         for s in lst:
             ca = shift_by_id.get(s.shift_id) if s.shift_id else None
-            # Giờ của bản ghi: ưu tiên work_hours, fallback duration
             if s.work_hours not in (None, 0):
                 try: h = float(s.work_hours)
                 except: h = 0.0
@@ -6366,6 +6363,10 @@ def bang_doc_hai():
             'hazard_level': 0.0
         }
 
+        # Xác định khoa đặc thù (Bệnh nhiệt đới, Xét nghiệm)
+        dept_norm = _norm_noaccent(user.department or '')
+        is_special_dept = ('benh nhiet doi' in dept_norm) or ('xet nghiem' in dept_norm)
+
         for d in days:
             today_hours, today_oncall, today_half, today_has = _day_meta(user.id, d)
             if not today_has:
@@ -6375,22 +6376,36 @@ def bang_doc_hai():
             prev_d = d - timedelta(days=1)
             _, prev_oncall, _, _ = _day_meta(user.id, prev_d)
 
-            # Quy tắc quyết định
-            if today_oncall:
-                desired = 17
-            elif prev_oncall and today_half:
-                desired = 7
-            elif today_half:
-                desired = 4
-            else:
-                if _is_full_day_hours(today_hours):
-                    desired = 8
-                elif _is_half_day_hours(today_hours):
+            # ===== Quy tắc quyết định giờ độc hại =====
+            if is_special_dept:
+                # Bệnh Nhiệt Đới & Xét nghiệm: 17/7/8/4 theo điều kiện
+                if today_oncall:
+                    desired = 17
+                elif prev_oncall and today_half:
+                    desired = 7
+                elif today_half:
                     desired = 4
                 else:
-                    desired = 8 if today_hours >= 6 else 4
+                    if _is_full_day_hours(today_hours):
+                        desired = 8
+                    elif _is_half_day_hours(today_hours):
+                        desired = 4
+                    else:
+                        if today_hours >= 6:
+                            desired = 8
+                        elif today_hours > 0:
+                            desired = 4
+                        else:
+                            desired = 0
+            else:
+                # Các khoa khác: làm (kể cả trực) = 8h, nửa ngày = 4h, không làm = 0h
+                if today_half:
+                    desired = 4
+                else:
+                    desired = 8 if (today_hours > 0 or today_oncall) else 0
 
-            row['daily_hours'].append(f"{int(desired)}h")
+            # Hiển thị
+            row['daily_hours'].append(f"{int(desired)}h" if desired else "–")
             row['total_days'] += 1
 
         (nhom_ho_ly if (row['position'] or '').upper().startswith('HL') else nhom_chung).append(row)
