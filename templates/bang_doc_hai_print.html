@@ -53,9 +53,7 @@
       <th rowspan="2">Tổng ngày</th>
     </tr>
     <tr>
-      {% for d in days_range %}
-        <th>{{ "%02d"|format(d.day) }}</th>
-      {% endfor %}
+      {% for d in days_range %}<th>{{ "%02d"|format(d.day) }}</th>{% endfor %}
     </tr>
   </thead>
   <tbody>
@@ -65,15 +63,9 @@
       <td style="text-align: left;">{{ row.name }}</td>
       <td style="text-align: left;">{{ row.position }}</td>
       <td><strong>{{ "%.1f"|format(row.hazard_level or 0) }}</strong></td>
-
-      {# ====== CHỖ SỬA: hiển thị 7h nếu hôm nay 4h và hôm qua 17h ====== #}
       {% for h in row.daily_hours %}
-        {% set prev = row.daily_hours[loop.index0 - 1] if loop.index0 > 0 else '' %}
-        {% set show = '7h' if (h|string).strip() == '4h' and (prev|string).strip() == '17h' else h %}
-        <td>{{ show }}</td>
+        <td>{{ h }}</td>
       {% endfor %}
-      {# ====== HẾT CHỖ SỬA ====== #}
-
       <td><strong>{{ "%.0f"|format(row.total_days) }} ngày</strong></td>
     </tr>
   {% endfor %}
@@ -83,18 +75,10 @@
 <div style="margin-top: 10px;">
   <table style="width:100%; border: none;">
     <tr>
-      <td style="text-align: center; border: none;">
-        NGƯỜI LẬP BẢNG<br>(Ký, ghi rõ họ tên)
-      </td>
-      <td style="text-align: center; border: none;">
-        TRƯỞNG KHOA<br>(Ký, ghi rõ họ tên)
-      </td>
-      <td style="text-align: center; border: none;">
-        PHÒNG TỔ CHỨC - HCQT<br>(Ký, ghi rõ họ tên)
-      </td>
-      <td style="text-align: center; border: none;">
-        GIÁM ĐỐC<br>(Ký, ghi rõ họ tên)
-      </td>
+      <td style="text-align: center; border: none;">NGƯỜI LẬP BẢNG<br>(Ký, ghi rõ họ tên)</td>
+      <td style="text-align: center; border: none;">TRƯỞNG KHOA<br>(Ký, ghi rõ họ tên)</td>
+      <td style="text-align: center; border: none;">PHÒNG TỔ CHỨC - HCQT<br>(Ký, ghi rõ họ tên)</td>
+      <td style="text-align: center; border: none;">GIÁM ĐỐC<br>(Ký, ghi rõ họ tên)</td>
     </tr>
   </table>
 </div>

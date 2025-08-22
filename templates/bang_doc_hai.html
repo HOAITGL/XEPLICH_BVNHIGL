@@ -36,7 +36,7 @@
       <button type="button" class="btn btn-success" id="btn-export-excel">
         <i class="bi bi-file-earmark-excel"></i> Xuất Excel
       </button>
-      <button type="button" class="btn btn-secondary" id="btn-print" target="_blank">
+      <button type="button" class="btn btn-secondary" id="btn-print">
         <i class="bi bi-printer"></i> In
       </button>
       {% endif %}
@@ -113,28 +113,32 @@ if (selectAll) {
 const normalize = s => (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
 const isLabDept = text => normalize(text).includes('xet nghiem');
 
-// --- Máy theo khoa ---
+// --- Nạp máy theo khoa ---
 async function loadMachinesForDept(dept, preselect = '') {
   const select = document.getElementById('machine_type');
   select.innerHTML = '<option value="">-- Tất cả --</option>';
   if (!dept) return;
-  const res = await fetch('/machines-by-department?department=' + encodeURIComponent(dept));
-  const data = await res.json();
-  data.forEach(m => {
-    const opt = document.createElement('option');
-    opt.value = m;
-    opt.textContent = m;
-    if (preselect && preselect === m) opt.selected = true;
-    select.appendChild(opt);
-  });
+  try {
+    const res = await fetch('/machines-by-department?department=' + encodeURIComponent(dept));
+    const data = await res.json();
+    data.forEach(m => {
+      const opt = document.createElement('option');
+      opt.value = m;
+      opt.textContent = m;
+      if (preselect && preselect === m) opt.selected = true;
+      select.appendChild(opt);
+    });
+  } catch (e) {
+    console.error('Không tải được danh sách máy:', e);
+  }
 }
 
 function toggleMachineBox() {
   const deptSel = document.getElementById('department');
   const container = document.getElementById('machine-select-container');
   const machineSel = document.getElementById('machine_type');
-  const text = deptSel.options[deptSel.selectedIndex]?.text || deptSel.value || '';
-  const show = isLabDept(text);
+  const label = deptSel.options[deptSel.selectedIndex]?.text || deptSel.value || '';
+  const show = isLabDept(label);
   container.style.display = show ? 'block' : 'none';
   if (!show) {
     machineSel.value = '';
