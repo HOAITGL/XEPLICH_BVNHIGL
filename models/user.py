@@ -14,9 +14,9 @@ class User(db.Model, UserMixin):
     department = db.Column(db.String(100))
     position = db.Column(db.String(50))  # Bác sĩ / Điều dưỡng / KTV...
     contract_type = db.Column(db.String(50))  # Hợp đồng / Biên chế / v.v.
-    email = db.Column(db.String(120))
     phone = db.Column(db.String(20))
     start_year = db.Column(db.Integer)  # ✅ Năm vào công tác (mới thêm)
+    signature_file = db.Column(db.String(255), nullable=True)  # tên file ảnh chữ ký
 
     # Quan hệ đến lịch trực
     schedules = relationship("Schedule", back_populates="user")

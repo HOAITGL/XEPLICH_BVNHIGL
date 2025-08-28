@@ -89,7 +89,9 @@ def add_missing_columns():
                 ('order', 'INTEGER DEFAULT 0')
             ],
             'user': [
-                ('contract_type', 'TEXT')
+                ('contract_type', 'TEXT'),
+                ('signature_file', 'TEXT'),   # 👈 thêm dòng này
+                ('start_year', 'INTEGER')     # 👈 (tùy bạn, khuyến nghị thêm để đồng bộ model)
             ]
         }
 
@@ -498,7 +500,6 @@ from flask import render_template, request, session, flash
 from sqlalchemy import desc
 # leave_balance_by_schedule phải được định nghĩa sẵn (helper đã gửi trước đó)
 # ==================================================
-
 
 @app.route('/leaves')
 def leaves_list():
@@ -5199,50 +5200,68 @@ def tong_hop_cong_truc_print():
     user_role = session.get('role')
     user_dept = session.get('department')
 
+    # --- Lấy tham số ---
     selected_department = request.args.get('department', '')
-    start_date = request.args.get('start_date')
-    end_date = request.args.get('end_date')
+    start_date_str = request.args.get('start_date')
+    end_date_str = request.args.get('end_date')
     mode = request.args.get('mode', '16h')
 
     today = datetime.now()
 
-    # Nếu chưa chọn ngày → báo lỗi
+    # --- Chuẩn hoá ngày ---
+    try:
+        start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date() if start_date_str else None
+        end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date() if end_date_str else None
+    except Exception:
+        start_date, end_date = None, None
+
+    # Nếu chưa chọn ngày → báo lỗi (giữ nguyên template in)
     if not start_date or not end_date:
         return render_template(
             'tong_hop_cong_truc.html',
             rows=[],
             sum_row={},
             selected_department=selected_department,
-            start_date=start_date,
+            start_date=start_date_str,
             current_day=today.day,
             current_month=today.month,
             current_year=today.year,
             thang=today.month,
             nam=today.year,
             mode=mode,
-            unit_config=UnitConfig.query.first(),  # thêm truyền tên bệnh viện
+            unit_config=UnitConfig.query.first(),
             error_message="Bạn chưa chọn ngày bắt đầu và ngày kết thúc để in báo cáo!"
         )
 
-    try:
-        thang = int(start_date.split('-')[1])
-        nam = int(start_date.split('-')[0])
-    except:
-        thang = today.month
-        nam = today.year
+    thang = start_date.month
+    nam = start_date.year
 
-    # --- Query lịch trực ---
-    query = Schedule.query.join(User).join(Shift).filter(Schedule.work_date.between(start_date, end_date))
+    # --- Query lịch trực (giống view) ---
+    query = Schedule.query.join(User).join(Shift).filter(
+        Schedule.work_date.between(start_date, end_date)
+    )
     if selected_department not in ['Tất cả', 'all', None]:
+        # dùng ilike như view
         query = query.filter(User.department.ilike(selected_department))
 
     schedules = query.all()
 
-    # --- Danh sách HSCC ---
-    hscc_depts = [d.department_name for d in HSCCDepartment.query.all()]
+    # --- Danh sách HSCC (giống view, có try/except) ---
+    try:
+        hscc_depts = [d.department_name for d in HSCCDepartment.query.all()]
+    except Exception:
+        hscc_depts = []
 
     result_by_user = defaultdict(lambda: defaultdict(lambda: {'so_ngay': 0}))
     summary = defaultdict(int)
+
+    # --- Danh sách ca hợp lệ (y như view) ---
+    valid_shifts = [
+        "trực 16h", "trực 16h t7cn",
+        "trực 24h", "trực 24h t7cn",
+        "trực lễ16h", "trực lễ 24h"
+    ]
+    skip_keywords = ['nghỉ trực', 'nghỉ phép', 'làm ngày', 'làm 1/2 ngày', 'làm 1/2 ngày c', 'phòng khám']
 
     for s in schedules:
         if not s.shift or not s.user:
@@ -5250,13 +5269,19 @@ def tong_hop_cong_truc_print():
 
         shift_name = s.shift.name.strip().lower()
 
+        # chỉ tính ca hợp lệ
+        if shift_name not in valid_shifts:
+            continue
+
+        # bỏ thường trú
         if 'thường trú' in shift_name:
             continue
 
-        skip_keywords = ['nghỉ trực', 'nghỉ phép', 'làm ngày', 'làm 1/2 ngày', 'làm 1/2 ngày c', 'phòng khám']
+        # bỏ các từ khoá nghỉ/làm ngày
         if any(x in shift_name for x in skip_keywords):
             continue
 
+        # lọc theo mode
         if mode == '24h' and '24h' not in shift_name:
             continue
         if mode == '16h' and '24h' in shift_name:
@@ -5266,7 +5291,6 @@ def tong_hop_cong_truc_print():
 
         mmdd = s.work_date.strftime('%m-%d')
         weekday = s.work_date.weekday()
-
         if mmdd in ['01-01', '04-30', '05-01', '09-02']:
             loai_ngay = 'ngày_lễ'
         elif weekday >= 5:
@@ -5277,9 +5301,11 @@ def tong_hop_cong_truc_print():
         result_by_user[s.user_id][(loai_ca, loai_ngay)]['so_ngay'] += 1
         summary[(loai_ca, loai_ngay)] += 1
 
+    # --- Lấy user giống view: BỎ admin ---
     user_ids = list(result_by_user.keys())
-    users = User.query.filter(User.id.in_(user_ids)).all() if user_ids else []
+    users = User.query.filter(User.id.in_(user_ids), User.role != 'admin').all() if user_ids else []
 
+    # --- Sắp xếp theo chức danh (giữ nguyên) ---
     priority_order = ['GĐ', 'PGĐ', 'TK', 'PTK', 'PK', 'BS', 'ĐDT', 'ĐD', 'KTV', 'NV', 'HL', 'BV']
     def get_priority(pos):
         pos = pos.upper() if pos else ''
@@ -5297,7 +5323,6 @@ def tong_hop_cong_truc_print():
             'tong_ngay': sum([v['so_ngay'] for v in detail.values()]),
             'ghi_chu': ''
         })
-
     rows.sort(key=lambda x: get_priority(x['user'].position))
 
     sum_row = {
@@ -5305,7 +5330,7 @@ def tong_hop_cong_truc_print():
         'tong_ngay': sum(summary.values())
     }
 
-    # --- Xử lý hiển thị tên khoa/phòng ---
+    # --- Hiển thị tên khoa/phòng (đồng bộ với view) ---
     if selected_department in ['Tất cả', 'all', None]:
         if user_role == 'admin1' and user_dept:
             dept_display = user_dept
@@ -5319,14 +5344,14 @@ def tong_hop_cong_truc_print():
         rows=rows,
         sum_row=sum_row,
         selected_department=dept_display,
-        start_date=start_date,
+        start_date=start_date_str,
         current_day=today.day,
         current_month=today.month,
         current_year=today.year,
         thang=thang,
         nam=nam,
         mode=mode,
-        unit_config=UnitConfig.query.first()  # thêm để hiển thị tên bệnh viện
+        unit_config=UnitConfig.query.first()
     )
 
 @app.route('/tong-hop-cong-truc-view/export-excel')
