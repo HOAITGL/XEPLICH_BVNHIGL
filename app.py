@@ -91,7 +91,7 @@ def add_missing_columns():
             'user': [
                 ('contract_type', 'TEXT'),
                 ('signature_file', 'TEXT'),   # 👈 thêm dòng này
-                ('start_year', 'INTEGER')     # 👈 (tùy bạn, khuyến nghị thêm để đồng bộ model)
+                ('start_year', 'INTEGER')     # 👈 thêm dòng này
             ]
         }
 
@@ -115,7 +115,7 @@ def add_missing_columns():
                 if not column_exists:
                     db.session.execute(sql_text(f'ALTER TABLE {table} ADD COLUMN "{col_name}" {col_type};'))
                     db.session.commit()
-                    print(f"Đã thêm cột '{col_name}' vào bảng {table}.")
+                    print(f"✅ Đã thêm cột '{col_name}' vào bảng {table}.")
 
                     # Nếu là cột order trong shift → cập nhật giá trị mặc định
                     if table == 'shift' and col_name == 'order':
@@ -123,15 +123,20 @@ def add_missing_columns():
                         for i, s in enumerate(shifts):
                             s.order = i
                         db.session.commit()
-                        print("Đã cập nhật giá trị mặc định cho cột 'order'.")
+                        print("✅ Đã cập nhật giá trị mặc định cho cột 'order'.")
 
                     # Nếu là cột contract_type trong user → set mặc định 'biên chế'
                     if table == 'user' and col_name == 'contract_type':
                         db.session.execute(sql_text("UPDATE \"user\" SET contract_type = 'biên chế' WHERE contract_type IS NULL;"))
                         db.session.commit()
-                        print("Đã set mặc định contract_type = 'biên chế' cho tất cả user cũ.")
+                        print("✅ Đã set mặc định contract_type = 'biên chế' cho tất cả user cũ.")
                 else:
-                    print(f"Cột '{col_name}' đã tồn tại trong bảng {table}, bỏ qua.")
+                    print(f"ℹ️ Cột '{col_name}' đã tồn tại trong bảng {table}, bỏ qua.")
+
+        # 🔍 Debug: in danh sách cột của bảng user
+        insp = db.inspect(db.engine)
+        cols = [c["name"] for c in insp.get_columns("user")]
+        print("📌 Các cột bảng user:", cols)
 
 # ✅ Tạo bảng nếu thiếu (dùng cho Render khi không gọi __main__)
 with app.app_context():
