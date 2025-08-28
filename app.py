@@ -83,60 +83,85 @@ from sqlalchemy import text
 @app.before_first_request
 def add_missing_columns():
     with app.app_context():
-        # Danh sách cột cần kiểm tra
+        from sqlalchemy import text as sql_text
+
         required_columns = {
             'shift': [
                 ('order', 'INTEGER DEFAULT 0')
             ],
             'user': [
                 ('contract_type', 'TEXT'),
-                ('signature_file', 'TEXT'),   # 👈 thêm dòng này
-                ('start_year', 'INTEGER')     # 👈 thêm dòng này
+                ('signature_file', 'TEXT'),
+                ('start_year', 'INTEGER')
             ]
         }
 
-        for table, columns in required_columns.items():
-            for col_name, col_type in columns:
-                # Kiểm tra cột tồn tại
-                if 'postgres' in db.engine.url.drivername:
-                    # Postgres: kiểm tra qua information_schema
-                    check_col = db.session.execute(sql_text(f"""
-                        SELECT column_name FROM information_schema.columns
-                        WHERE table_name='{table}' AND column_name='{col_name}';
-                    """)).fetchall()
-                    column_exists = len(check_col) > 0
-                else:
-                    # SQLite: kiểm tra qua PRAGMA
-                    existing_cols = db.session.execute(sql_text(f"PRAGMA table_info({table});")).fetchall()
-                    existing_col_names = [col[1] for col in existing_cols]
-                    column_exists = col_name in existing_col_names
+        # ✅ Dò cột bằng SQLAlchemy Inspector (ổn định trên cả Postgres/SQLite)
+        insp = db.inspect(db.engine)
 
-                # Nếu chưa có cột thì thêm
+        # Xác định schema hiện hành cho Postgres (mặc định 'public')
+        current_schema = 'public'
+        try:
+            if 'postgres' in db.engine.url.drivername:
+                # lấy schema mặc định (nếu cần bạn có thể query SHOW search_path)
+                current_schema = 'public'
+        except Exception:
+            pass
+
+        for table, columns in required_columns.items():
+            # Lấy danh sách cột hiện có của bảng
+            try:
+                if 'postgres' in db.engine.url.drivername:
+                    existing_cols = [c['name'] for c in insp.get_columns(table, schema=current_schema)]
+                else:
+                    existing_cols = [c['name'] for c in insp.get_columns(table)]
+            except Exception:
+                existing_cols = []
+
+            for col_name, col_type in columns:
+                column_exists = col_name in existing_cols
+
                 if not column_exists:
-                    db.session.execute(sql_text(f'ALTER TABLE {table} ADD COLUMN "{col_name}" {col_type};'))
+                    # ✅ Quote tên bảng & cột, kèm schema cho Postgres
+                    if 'postgres' in db.engine.url.drivername:
+                        alter_sql = f'ALTER TABLE "{current_schema}"."{table}" ADD COLUMN "{col_name}" {col_type};'
+                    else:
+                        alter_sql = f'ALTER TABLE "{table}" ADD COLUMN "{col_name}" {col_type};'
+
+                    db.session.execute(sql_text(alter_sql))
                     db.session.commit()
                     print(f"✅ Đã thêm cột '{col_name}' vào bảng {table}.")
 
-                    # Nếu là cột order trong shift → cập nhật giá trị mặc định
+                    # Nếu là cột order trong shift → gán thứ tự mặc định
                     if table == 'shift' and col_name == 'order':
+                        from models.shift import Shift
                         shifts = Shift.query.order_by(Shift.id).all()
                         for i, s in enumerate(shifts):
                             s.order = i
                         db.session.commit()
                         print("✅ Đã cập nhật giá trị mặc định cho cột 'order'.")
 
-                    # Nếu là cột contract_type trong user → set mặc định 'biên chế'
+                    # Nếu là cột contract_type → set mặc định cho bản ghi cũ
                     if table == 'user' and col_name == 'contract_type':
-                        db.session.execute(sql_text("UPDATE \"user\" SET contract_type = 'biên chế' WHERE contract_type IS NULL;"))
+                        if 'postgres' in db.engine.url.drivername:
+                            update_sql = f'UPDATE "{current_schema}"."user" SET contract_type = \'biên chế\' WHERE contract_type IS NULL;'
+                        else:
+                            update_sql = 'UPDATE "user" SET contract_type = \'biên chế\' WHERE contract_type IS NULL;'
+                        db.session.execute(sql_text(update_sql))
                         db.session.commit()
-                        print("✅ Đã set mặc định contract_type = 'biên chế' cho tất cả user cũ.")
+                        print("✅ Đã set mặc định contract_type = 'biên chế' cho user cũ.")
                 else:
                     print(f"ℹ️ Cột '{col_name}' đã tồn tại trong bảng {table}, bỏ qua.")
 
-        # 🔍 Debug: in danh sách cột của bảng user
-        insp = db.inspect(db.engine)
-        cols = [c["name"] for c in insp.get_columns("user")]
-        print("📌 Các cột bảng user:", cols)
+        # 🔍 Debug: in danh sách cột bảng user sau khi xử lý
+        try:
+            if 'postgres' in db.engine.url.drivername:
+                cols = [c["name"] for c in insp.get_columns('user', schema=current_schema)]
+            else:
+                cols = [c["name"] for c in insp.get_columns('user')]
+            print("📌 Các cột bảng user:", cols)
+        except Exception as e:
+            print("⚠️ Không đọc được danh sách cột bảng user:", e)
 
 # ✅ Tạo bảng nếu thiếu (dùng cho Render khi không gọi __main__)
 with app.app_context():
