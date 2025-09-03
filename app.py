@@ -1792,39 +1792,70 @@ def view_schedule():
         highlight_days=highlight_days
     )
 
-@app.route('/schedule/edit/<int:user_id>', methods=['GET', 'POST'])
-def edit_user_schedule(user_id):
-    user = User.query.get_or_404(user_id)
-    shifts = Shift.query.order_by(Shift.order).all()
+from datetime import date, datetime
+import calendar
+from urllib.parse import urlparse, parse_qs
+from sqlalchemy import func
 
-    # Lấy khoảng ngày từ query hoặc form (request.values ăn cả GET & POST)
-    start_str = request.values.get('start')
-    end_str = request.values.get('end')
-    if start_str and end_str:
-        start = datetime.strptime(start_str, '%Y-%m-%d').date()
-        end = datetime.strptime(end_str, '%Y-%m-%d').date()
-    else:
-        # fallback: tháng hiện tại
+@app.route('/schedule/edit/<int:user_id>', methods=['GET', 'POST'])
+@login_required
+def edit_user_schedule(user_id):
+    from models.user import User
+    from models.schedule import Schedule
+    from models.shift import Shift
+    from models.schedule_lock import ScheduleLock
+
+    user = User.query.get_or_404(user_id)
+
+    # ---- lấy khoảng ngày: ưu tiên start/end, rồi start_date/end_date
+    start_str = request.values.get('start') or request.values.get('start_date')
+    end_str   = request.values.get('end')   or request.values.get('end_date')
+    mode_str  = request.values.get('mode')  or request.args.get('mode', '16h')
+
+    def parse_ymd(s):
+        try:
+            return datetime.strptime(s, '%Y-%m-%d').date() if s else None
+        except Exception:
+            return None
+
+    start = parse_ymd(start_str)
+    end   = parse_ymd(end_str)
+
+    # ---- nếu vẫn chưa có, lấy từ URL trang trước (referrer)
+    if (not start or not end) and request.referrer:
+        q = parse_qs(urlparse(request.referrer).query)
+        start = start or parse_ymd((q.get('start_date') or q.get('start') or [None])[0])
+        end   = end   or parse_ymd((q.get('end_date')   or q.get('end')   or [None])[0])
+        mode_str = mode_str or (q.get('mode') or ['16h'])[0]
+
+    # ---- fallback cuối: tháng hiện tại
+    if not start or not end:
         today = date.today()
         start = date(today.year, today.month, 1)
-        end = date(today.year, today.month, calendar.monthrange(today.year, today.month)[1])
+        end   = date(today.year, today.month, calendar.monthrange(today.year, today.month)[1])
 
-    # Chỉ load lịch trong khoảng bạn đang xem (VD: T8)
+    # ---- danh sách ca (coalesce order cho an toàn)
+    try:
+        shifts = Shift.query.order_by(func.coalesce(Shift.order, 999999).asc(), Shift.id.asc()).all()
+    except Exception:
+        shifts = Shift.query.order_by(Shift.id.asc()).all()
+
+    # ---- lịch trong khoảng
     schedules = (Schedule.query
                  .filter_by(user_id=user_id)
-                 .filter(Schedule.work_date >= start,
-                         Schedule.work_date <= end)
+                 .filter(Schedule.work_date >= start, Schedule.work_date <= end)
                  .order_by(Schedule.work_date)
                  .all())
 
-    # Không cho sửa nếu đã khoá
+    # ---- chặn nếu có khóa
     for s in schedules:
-        locked = ScheduleLock.query.filter_by(department=user.department)\
-            .filter(ScheduleLock.start_date <= s.work_date,
-                    ScheduleLock.end_date >= s.work_date).first()
+        locked = (ScheduleLock.query.filter_by(department=user.department)
+                  .filter(ScheduleLock.start_date <= s.work_date,
+                          ScheduleLock.end_date >= s.work_date).first())
         if locked:
             return "Không thể chỉnh sửa. Lịch trực đã được ký xác nhận và khóa.", 403
 
+    # ---- lưu
     if request.method == 'POST':
         changed = 0
         for key, value in request.form.items():
@@ -1839,7 +1870,6 @@ def edit_user_schedule(user_id):
             s = Schedule.query.get(sched_id)
             if not s or s.user_id != user_id:
                 continue
-
             if s.shift_id != new_shift_id:
                 s.shift_id = new_shift_id
                 changed += 1
@@ -1848,17 +1878,16 @@ def edit_user_schedule(user_id):
             try:
                 db.session.commit()
                 flash(f"✅ Đã lưu {changed} thay đổi ca trực.", "success")
-            except Exception as e:
+            except Exception:
                 db.session.rollback()
                 flash("❌ Lỗi khi lưu lịch trực.", "danger")
 
-        # Quay lại đúng khoảng ngày đang xem
         return redirect(url_for('view_schedule',
-                                department=user.department,
+                                department=user.department or '',
                                 start_date=start.strftime('%Y-%m-%d'),
-                                end_date=end.strftime('%Y-%m-%d')))
+                                end_date=end.strftime('%Y-%m-%d'),
+                                mode=mode_str))
 
-    # Truyền start/end xuống template để form giữ lại khi POST
     return render_template('edit_schedule.html',
                            user=user, shifts=shifts, schedules=schedules,
                            start=start.strftime('%Y-%m-%d'),
