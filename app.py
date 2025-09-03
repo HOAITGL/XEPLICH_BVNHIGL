@@ -6345,10 +6345,11 @@ def bang_doc_hai():
     selected_user_ids   = request.values.getlist('hazard_user_ids')
 
     from datetime import date, datetime, timedelta
-    import calendar, unicodedata
+    import calendar, unicodedata, re
     from collections import defaultdict
     from sqlalchemy import or_
 
+    # Khoảng ngày
     if not start_date_str or not end_date_str:
         today = date.today()
         start_date = date(today.year, today.month, 1)
@@ -6369,7 +6370,7 @@ def bang_doc_hai():
         departments = [user_dept]
 
     # ===== Users =====
-    users_q = User.query.filter(User.active == True)
+    users_q = User.query.filter(getattr(User, 'active', True) == True)
     if is_super:
         if selected_department and selected_department != 'Tất cả':
             users_q = users_q.filter(User.department == selected_department)
@@ -6380,6 +6381,7 @@ def bang_doc_hai():
     if selected_user_ids:
         ids_int = set(map(int, selected_user_ids))
         users = [u for u in users if u.id in ids_int]
+
     PRIORITY_ORDER = ['GĐ','PGĐ','TK','TP','PTK','PTP','BS','BSCK1','BSCK2','ĐDT','KTV','KTVT','ĐD','NV','HL','BV']
     def _sort_key(u):
         pos = (u.position or '').upper().strip()
@@ -6389,7 +6391,7 @@ def bang_doc_hai():
     users = sorted(users, key=_sort_key)
     user_ids = [u.id for u in users]
 
-    # ===== Lịch & Ca (để render) =====
+    # ===== Lịch & Ca (cần cả ngày hôm qua để tính +7h) =====
     query_start = start_date - timedelta(days=1)
     schedules_q = Schedule.query.filter(
         Schedule.work_date >= query_start,
@@ -6404,6 +6406,7 @@ def bang_doc_hai():
         )
     schedules = schedules_q.all()
 
+    # Gom lịch theo (user, date)
     def _as_date(v):
         return v if isinstance(v, date) and not isinstance(v, datetime) else v.date()
     scheds_by_key = defaultdict(list)
@@ -6412,8 +6415,7 @@ def bang_doc_hai():
 
     ca_map = {ca.id: ca for ca in Shift.query.all()}
 
-    # ===== Helper normalize & nhận diện ca =====
-    import unicodedata
+    # ===== Helpers =====
     def _norm(s: str) -> str:
         s = (s or '')
         s = unicodedata.normalize('NFD', s)
@@ -6421,140 +6423,123 @@ def bang_doc_hai():
         s = s.replace('Đ','D').replace('đ','d')
         return s.lower().strip()
 
+    # Nhận diện trực 24h (text/mã rõ ràng)
+    oncall_regexes = [
+        re.compile(r'\btruc\s*24\b'),
+        re.compile(r'\b24h\b'),
+        re.compile(r'\b24gio\b|\b24g\b'),
+        re.compile(r'\bxd+\s*24\b'),  # vd: "xd 24", "xdd 24", "xd24"
+    ]
     def _is_oncall(sched_obj, shift_obj) -> bool:
-        try: dur_shift = float(getattr(shift_obj, 'duration', 0) or 0.0)
-        except: dur_shift = 0.0
-        if dur_shift >= 16.5: return True
-        try: dur_sched = float(getattr(sched_obj, 'work_hours', 0) or 0.0)
-        except: dur_sched = 0.0
-        if dur_sched >= 16.5: return True
-        pool = []
-        if shift_obj: pool += [getattr(shift_obj, 'name', ''), getattr(shift_obj, 'code', '')]
+        tokens = []
+        if shift_obj:
+            tokens += [getattr(shift_obj, 'name', ''), getattr(shift_obj, 'code', '')]
         if sched_obj:
             for fld in ('code','value','note','text'):
-                pool.append(getattr(sched_obj, fld, '') or '')
-        t = _norm(' '.join(pool)); t0 = t.replace(' ','')
-        if 'truc24' in t0 or '24h' in t: return True
-        return ('xd' in t and '24' in t)
+                tokens.append(getattr(sched_obj, fld, '') or '')
+        t = _norm(' '.join(tokens)).replace('đ','d')
+        t = re.sub(r'\s+', ' ', t)
+        return any(rx.search(t) for rx in oncall_regexes)
 
+    # Nghỉ phép: MỌI khoa đều không hưởng độc hại
+    def _is_leave_day(sched_obj, shift_obj) -> bool:
+        tokens = []
+        if shift_obj: tokens += [getattr(shift_obj, 'name',''), getattr(shift_obj,'code','')]
+        if sched_obj:
+            for fld in ('code','value','note','text'):
+                tokens.append(getattr(sched_obj, fld, '') or '')
+        t = _norm(' '.join(tokens)).replace(' ', '')
+        # ví dụ: "nghiphep", "phep", "P"
+        return ('nghiphep' in t) or (t == 'p') or t.startswith('p')
+
+    # Nghỉ khác (không hưởng độc hại): nghỉ trực, nghỉ bù, ... (trừ case 7h do hôm qua trực)
+    def _is_off_nonleave(sched_obj, shift_obj) -> bool:
+        tokens = []
+        if shift_obj: tokens += [getattr(shift_obj, 'name',''), getattr(shift_obj,'code','')]
+        if sched_obj:
+            for fld in ('code','value','note','text'):
+                tokens.append(getattr(sched_obj, fld, '') or '')
+        t = _norm(' '.join(tokens)).replace(' ', '')
+        # NT (nghỉ trực), /NT (nghỉ trực 1/2), NB (nghỉ bù), etc.
+        return any(k in t for k in ['nt', '/nt', 'nghitruc', 'nb', 'nghibu'])
+
+    # Nửa ngày làm việc
     def _is_half(sched_obj, shift_obj) -> bool:
-        h = None
-        if sched_obj and sched_obj.work_hours not in (None, 0):
-            try: h = float(sched_obj.work_hours)
-            except: h = None
-        if h is None and shift_obj:
-            try: h = float(getattr(shift_obj, 'duration', 0) or 0)
-            except: h = None
-        if h is not None and 0 < h <= 4.5: return True
-        pool = []
-        if shift_obj: pool += [getattr(shift_obj, 'name', ''), getattr(shift_obj, 'code', '')]
+        tokens = []
+        if shift_obj: tokens += [getattr(shift_obj, 'name',''), getattr(shift_obj,'code','')]
         if sched_obj:
             for fld in ('code','value','note','text'):
-                pool.append(getattr(sched_obj, fld, '') or '')
-        t = _norm(' '.join(pool))
-        return any(k in t for k in ['1/2','nua','half','nn/','nn','/x','/nt'])
-
-    def _is_off_day(sched_obj, shift_obj) -> bool:
-        pool = []
-        if shift_obj: pool += [getattr(shift_obj, 'name', ''), getattr(shift_obj, 'code', '')]
-        if sched_obj:
-            for fld in ('code','value','note','text'):
-                pool.append(getattr(sched_obj, fld, '') or '')
-        t = _norm(' '.join(pool)); t0 = t.replace(' ','')
-        if ('nghiphep' in t0 or 'nghibu' in t0 or 'nghiom' in t0 or
-            'omdau' in t0 or 'thaisan' in t0 or 'nghile' in t0): return True
-        if ' nghi phep' in t or 'phep ' in t or t == 'p' or ' nghi bu' in t: return True
-        if any(k in t0 for k in ['dihoc','hoc','taphuan','daotao','hocvien','huanluyen']): return True
-        if '/h' in t or 'h/' in t: return True
-        if any(k in t0 for k in ['congtac','ctac']): return True
-        if '/ct' in t or 'ct/' in t: return True
-        return False
+                tokens.append(getattr(sched_obj, fld, '') or '')
+        t = _norm(' '.join(tokens))
+        return any(k in t for k in ['1/2','nua','half','nn/','nn','/x'])
 
     def _day_meta(user_id, d):
+        """Trả về: (has_any, is_oncall24h, is_halfday, is_leave, is_off_nonleave)"""
         lst = scheds_by_key.get((user_id, d), [])
-        if not lst: return (0.0, False, False, False, False)
-        max_hours = 0.0; oncall = False; half = False; off = False
-        for s in lst:
-            ca = ca_map.get(getattr(s, 'shift_id', None))
-            if s.work_hours not in (None, 0):
-                try: h = float(s.work_hours)
-                except: h = 0.0
-            else:
-                try: h = float(getattr(ca, 'duration', 0) or 0)
-                except: h = 0.0
-            if h > max_hours: max_hours = h
-            if _is_oncall(s, ca): oncall = True
-            if _is_half(s, ca):   half   = True
-            if _is_off_day(s, ca): off   = True
-        return (max_hours, oncall, half, True, off)
+        if not lst: return (False, False, False, False, False)
+        oncall = any(_is_oncall(s, ca_map.get(getattr(s, 'shift_id', None))) for s in lst)
+        half   = any(_is_half(s,   ca_map.get(getattr(s, 'shift_id', None))) for s in lst)
+        leave  = any(_is_leave_day(s, ca_map.get(getattr(s, 'shift_id', None))) for s in lst)
+        off_nl = any(_is_off_nonleave(s, ca_map.get(getattr(s, 'shift_id', None))) for s in lst)
+        return (True, oncall, half, leave, off_nl)
 
-    # ===== (THÊM) Map hôm sau của ngày trực 24h, KHÔNG lọc máy =====
-    schedules_all_prev = (Schedule.query
-        .filter(Schedule.work_date >= query_start, Schedule.work_date <= end_date)
-        .filter(Schedule.user_id.in_(user_ids)).all())
-    prev_oncall_map = {}  # key: (user_id, date_d_plus_1)
-    for s in schedules_all_prev:
-        ca = ca_map.get(getattr(s, 'shift_id', None))
-        if _is_oncall(s, ca):
-            prev_oncall_map[(s.user_id, _as_date(s.work_date) + timedelta(days=1))] = True
+    # Map: đúng NGÀY LIỀN SAU ca trực 24h → 7h
+    prev_oncall_map = {}
+    for (uid, d), lst in scheds_by_key.items():
+        if any(_is_oncall(s, ca_map.get(getattr(s, 'shift_id', None))) for s in lst):
+            prev_oncall_map[(uid, d + timedelta(days=1))] = True  # chỉ một ngày sau
 
-    # ===== Hazard config (giữ nguyên logic của bạn) =====
-    hazard_cfgs = HazardConfig.query.filter(
-        HazardConfig.start_date <= end_date,
-        HazardConfig.end_date   >= start_date
-    ).all()
-    def pick_hazard_level(user) -> float:
-        cand = [c for c in hazard_cfgs
-                if c.department == user.department and c.start_date <= start_date <= c.end_date]
-        if not cand: return 0.0
-        up  = (user.position or '').upper().strip()
-        sel = (selected_machine or '').strip()
-        def pos_score(c):
-            cp = (c.position or '').upper().strip()
-            if not cp: return 1
-            return 2 if up.startswith(cp) else 0
-        def mac_score(c):
-            cm = (c.machine_type or '').strip()
-            if not cm: return 1
-            return 2 if cm == sel else 0
-        best = max(cand, key=lambda c: (pos_score(c), mac_score(c), c.start_date or date.min))
-        try:    return float(best.hazard_level or 0.0)
-        except: return 0.0
-
-    # ===== Build table =====
+    # ===== Render =====
     nhom_chung, nhom_ho_ly = [], []
     for u in users:
         row = {'name': u.name, 'position': u.position or '', 'department': u.department,
-               'daily_hours': [], 'total_days': 0, 'hazard_level': pick_hazard_level(u)}
-        dept_key = _norm(u.department or '')
+               'daily_hours': [], 'total_days': 0}
+        dept_key   = _norm(u.department or '')
         is_special = ('benh nhiet doi' in dept_key) or ('xet nghiem' in dept_key)
 
         for d in days:
-            today_hours, today_oncall, today_half, today_has, today_off = _day_meta(u.id, d)
+            has_any, today_oncall, today_half, today_leave, today_off_nl = _day_meta(u.id, d)
             is_prev_oncall = prev_oncall_map.get((u.id, d), False)
 
-            # ✅ CHỈ THÊM 2 NHÁNH ƯU TIÊN, các điều kiện khác GIỮ NGUYÊN
-            if is_special and today_oncall:
-                row['daily_hours'].append('17h'); row['total_days'] += 1; continue
-            if is_special and is_prev_oncall and not today_oncall:
-                row['daily_hours'].append('7h');  row['total_days'] += 1; continue
-
-            # ⬇️ Phần dưới giữ đúng như hiện tại của bạn
-            if not today_has:
-                row['daily_hours'].append('–'); continue
-            if today_off:
-                row['daily_hours'].append('–'); continue
+            # Quy tắc chung: NGHỈ PHÉP -> không hưởng độc hại
+            if today_leave:
+                row['daily_hours'].append('–')
+                continue
 
             if is_special:
-                if today_half:
-                    desired = 4
-                else:
-                    desired = 8 if (today_hours >= 7.5 or today_hours >= 6) else (4 if today_hours > 0 else 0)
-            else:
-                desired = 4 if today_half else (8 if (today_hours > 0 or today_oncall) else 0)
+                # (1) Hôm nay trực 24h -> 17h
+                if today_oncall:
+                    row['daily_hours'].append('17h')
+                    row['total_days'] += 1
+                    continue
 
-            row['daily_hours'].append(f"{int(desired)}h" if desired else "–")
-            if desired: row['total_days'] += 1
+                # (2) Không trực hôm nay nhưng HÔM QUA trực 24h -> 7h
+                if is_prev_oncall:
+                    row['daily_hours'].append('7h')  # áp dụng kể cả nghỉ trực/ nghỉ bù/ 1/2/ làm
+                    row['total_days'] += 1
+                    continue
+
+                # (3) Các ngày nghỉ khác (NT/NB/...) -> không hưởng
+                if today_off_nl:
+                    row['daily_hours'].append('–')
+                    continue
+
+                # (4) Ngày thường: 8h / 4h
+                if not has_any:
+                    row['daily_hours'].append('–'); continue
+                row['daily_hours'].append('4h' if today_half else '8h')
+                row['total_days'] += 1
+                continue
+
+            # ===== Khoa khác =====
+            if today_off_nl:
+                row['daily_hours'].append('–')
+                continue
+            if not has_any:
+                row['daily_hours'].append('–')
+                continue
+            row['daily_hours'].append('4h' if today_half else '8h')
+            row['total_days'] += 1
 
         (nhom_ho_ly if (row['position'] or '').upper().startswith('HL') else nhom_chung).append(row)
 
@@ -6645,10 +6630,11 @@ def bang_doc_hai_print():
     end                 = request.values.get('end')
 
     from datetime import date, datetime, timedelta
-    import calendar, unicodedata
+    import calendar, unicodedata, re
     from collections import defaultdict
     from sqlalchemy import or_
 
+    # ===== Dates =====
     if not start or not end:
         today = date.today()
         start_date = date(today.year, today.month, 1)
@@ -6659,14 +6645,15 @@ def bang_doc_hai_print():
     days_range = [start_date + timedelta(days=i) for i in range((end_date - start_date).days + 1)]
     query_start = start_date - timedelta(days=1)
 
-    # Users
-    users_q = User.query.filter(User.active == True)
+    # ===== Users =====
+    users_q = User.query.filter(getattr(User, 'active', True) == True)
     if selected_department and selected_department != 'Tất cả':
         users_q = users_q.filter(User.department == selected_department)
     users = users_q.all()
     if selected_user_ids:
         ids_int = set(map(int, selected_user_ids))
         users = [u for u in users if u.id in ids_int]
+
     PRIORITY_ORDER = ['GĐ','PGĐ','TK','TP','PTK','PTP','BS','BSCK1','BSCK2','ĐDT','KTV','KTVT','ĐD','NV','HL','BV']
     def _sort_key(u):
         pos = (u.position or '').upper().strip()
@@ -6676,7 +6663,7 @@ def bang_doc_hai_print():
     users = sorted(users, key=_sort_key)
     user_ids = [u.id for u in users]
 
-    # Lịch để render (có lọc máy)
+    # ===== Schedules (include prev day; filter machine if given) =====
     schedules_q = Schedule.query.filter(
         Schedule.work_date >= query_start,
         Schedule.work_date <= end_date
@@ -6693,126 +6680,136 @@ def bang_doc_hai_print():
 
     def _as_date(v):
         return v if isinstance(v, date) and not isinstance(v, datetime) else v.date()
+
     scheds_by_key = defaultdict(list)
     for s in schedules:
         scheds_by_key[(s.user_id, _as_date(s.work_date))].append(s)
 
-    # Helpers (giống VIEW)
+    # ===== Helpers: giống view (siết nhận diện oncall, nghỉ phép, nghỉ khác, nửa ngày) =====
     def _norm(s: str) -> str:
         s = (s or '')
         s = unicodedata.normalize('NFD', s)
         s = ''.join(ch for ch in s if unicodedata.category(ch) != 'Mn')
         s = s.replace('Đ','D').replace('đ','d')
         return s.lower().strip()
+
+    oncall_regexes = [
+        re.compile(r'\btruc\s*24\b'),
+        re.compile(r'\b24h\b'),
+        re.compile(r'\b24gio\b|\b24g\b'),
+        re.compile(r'\bxd+\s*24\b'),  # "xd 24", "xdd 24", "xd24"
+    ]
     def _is_oncall(sched_obj, shift_obj) -> bool:
-        try: dur_shift = float(getattr(shift_obj, 'duration', 0) or 0.0)
-        except: dur_shift = 0.0
-        if dur_shift >= 16.5: return True
-        try: dur_sched = float(getattr(sched_obj, 'work_hours', 0) or 0.0)
-        except: dur_sched = 0.0
-        if dur_sched >= 16.5: return True
-        pool = []
-        if shift_obj: pool += [getattr(shift_obj, 'name', ''), getattr(shift_obj, 'code', '')]
+        toks = []
+        if shift_obj: toks += [getattr(shift_obj, 'name',''), getattr(shift_obj,'code','')]
         if sched_obj:
             for fld in ('code','value','note','text'):
-                pool.append(getattr(sched_obj, fld, '') or '')
-        t = _norm(' '.join(pool)); t0 = t.replace(' ','')
-        if 'truc24' in t0 or '24h' in t: return True
-        return ('xd' in t and '24' in t)
+                toks.append(getattr(sched_obj, fld, '') or '')
+        t = _norm(' '.join(toks)).replace('đ','d')
+        t = re.sub(r'\s+', ' ', t)
+        return any(rx.search(t) for rx in oncall_regexes)
+
+    def _is_leave_day(sched_obj, shift_obj) -> bool:
+        toks = []
+        if shift_obj: toks += [getattr(shift_obj, 'name',''), getattr(shift_obj,'code','')]
+        if sched_obj:
+            for fld in ('code','value','note','text'):
+                toks.append(getattr(sched_obj, fld, '') or '')
+        t = _norm(' '.join(toks)).replace(' ', '')
+        # nghỉ phép: "nghiphep", "phep", "p..."
+        return ('nghiphep' in t) or (t == 'p') or t.startswith('p')
+
+    def _is_off_nonleave(sched_obj, shift_obj) -> bool:
+        toks = []
+        if shift_obj: toks += [getattr(shift_obj, 'name',''), getattr(shift_obj,'code','')]
+        if sched_obj:
+            for fld in ('code','value','note','text'):
+                toks.append(getattr(sched_obj, fld, '') or '')
+        t = _norm(' '.join(toks)).replace(' ', '')
+        return any(k in t for k in ['nt','/nt','nghitruc','nb','nghibu'])
+
     def _is_half(sched_obj, shift_obj) -> bool:
-        h = None
-        if sched_obj and sched_obj.work_hours not in (None, 0):
-            try: h = float(sched_obj.work_hours)
-            except: h = None
-        if h is None and shift_obj:
-            try: h = float(getattr(shift_obj, 'duration', 0) or 0)
-            except: h = None
-        if h is not None and 0 < h <= 4.5: return True
-        pool = []
-        if shift_obj: pool += [getattr(shift_obj, 'name', ''), getattr(shift_obj, 'code', '')]
+        toks = []
+        if shift_obj: toks += [getattr(shift_obj, 'name',''), getattr(shift_obj,'code','')]
         if sched_obj:
             for fld in ('code','value','note','text'):
-                pool.append(getattr(sched_obj, fld, '') or '')
-        t = _norm(' '.join(pool))
-        return any(k in t for k in ['1/2','nua','half','nn/','nn','/x','/nt'])
-    def _is_off_day(sched_obj, shift_obj) -> bool:
-        pool = []
-        if shift_obj: pool += [getattr(shift_obj, 'name', ''), getattr(shift_obj, 'code', '')]
-        if sched_obj:
-            for fld in ('code','value','note','text'):
-                pool.append(getattr(sched_obj, fld, '') or '')
-        t = _norm(' '.join(pool)); t0 = t.replace(' ','')
-        if ('nghiphep' in t0 or 'nghibu' in t0 or 'nghiom' in t0 or
-            'omdau' in t0 or 'thaisan' in t0 or 'nghile' in t0): return True
-        if ' nghi phep' in t or 'phep ' in t or t == 'p' or ' nghi bu' in t: return True
-        if any(k in t0 for k in ['dihoc','hoc','taphuan','daotao','hocvien','huanluyen']): return True
-        if '/h' in t or 'h/' in t: return True
-        if any(k in t0 for k in ['congtac','ctac']): return True
-        if '/ct' in t or 'ct/' in t: return True
-        return False
+                toks.append(getattr(sched_obj, fld, '') or '')
+        t = _norm(' '.join(toks))
+        return any(k in t for k in ['1/2','nua','half','nn/','nn','/x'])
+
     def _day_meta(user_id, d):
+        """ -> (has_any, is_oncall24h, is_halfday, is_leave, is_off_nonleave) """
         lst = scheds_by_key.get((user_id, d), [])
-        if not lst: return (0.0, False, False, False, False)
-        max_hours = 0.0; oncall = False; half = False; off = False
-        for s in lst:
-            ca = ca_map.get(getattr(s, 'shift_id', None))
-            if s.work_hours not in (None, 0):
-                try: h = float(s.work_hours)
-                except: h = 0.0
-            else:
-                try: h = float(getattr(ca, 'duration', 0) or 0)
-                except: h = 0.0
-            if h > max_hours: max_hours = h
-            if _is_oncall(s, ca): oncall = True
-            if _is_half(s, ca):   half   = True
-            if _is_off_day(s, ca): off   = True
-        return (max_hours, oncall, half, True, off)
+        if not lst: return (False, False, False, False, False)
+        oncall = any(_is_oncall(s, ca_map.get(getattr(s, 'shift_id', None))) for s in lst)
+        half   = any(_is_half(s,   ca_map.get(getattr(s, 'shift_id', None))) for s in lst)
+        leave  = any(_is_leave_day(s, ca_map.get(getattr(s, 'shift_id', None))) for s in lst)
+        off_nl = any(_is_off_nonleave(s, ca_map.get(getattr(s, 'shift_id', None))) for s in lst)
+        return (True, oncall, half, leave, off_nl)
 
-    # (THÊM) Map hôm sau của ngày trực 24h, KHÔNG lọc máy
-    schedules_all_prev = (Schedule.query
-        .filter(Schedule.work_date >= query_start, Schedule.work_date <= end_date)
-        .filter(Schedule.user_id.in_(user_ids)).all())
+    # Map: đúng NGÀY LIỀN SAU ca trực 24h -> 7h
     prev_oncall_map = {}
-    for s in schedules_all_prev:
-        ca = ca_map.get(getattr(s, 'shift_id', None))
-        if _is_oncall(s, ca):
-            prev_oncall_map[(s.user_id, _as_date(s.work_date) + timedelta(days=1))] = True
+    for (uid, d), lst in scheds_by_key.items():
+        if any(_is_oncall(s, ca_map.get(getattr(s, 'shift_id', None))) for s in lst):
+            prev_oncall_map[(uid, d + timedelta(days=1))] = True
 
-    # Build table
+    # ===== Build printable table =====
     table_data = []
     for u in users:
-        row = {'name': u.name, 'position': u.position or '',
-               'hazard_level': 0.0, 'daily_hours': [], 'total_days': 0}
-        # mức % giữ nguyên tính toán của bạn (nếu có), mình không đụng thêm
-
-        dept_key = _norm(u.department or '')
+        dept_key   = _norm(u.department or '')
         is_special = ('benh nhiet doi' in dept_key) or ('xet nghiem' in dept_key)
 
+        row = {
+            'name': u.name,
+            'position': u.position or '',
+            'hazard_level': 0.0,  # nếu bạn có tính % thì thêm vào sau
+            'daily_hours': [],
+            'total_days': 0
+        }
+
         for d in days_range:
-            today_hours, today_oncall, today_half, today_has, today_off = _day_meta(u.id, d)
+            has_any, today_oncall, today_half, today_leave, today_off_nl = _day_meta(u.id, d)
             is_prev_oncall = prev_oncall_map.get((u.id, d), False)
 
-            # ✅ Ưu tiên 17h / 7h, các điều kiện khác giữ nguyên
-            if is_special and today_oncall:
-                row['daily_hours'].append('17h'); row['total_days'] += 1; continue
-            if is_special and is_prev_oncall and not today_oncall:
-                row['daily_hours'].append('7h');  row['total_days'] += 1; continue
-
-            if not today_has:
-                row['daily_hours'].append('–'); continue
-            if today_off:
-                row['daily_hours'].append('–'); continue
+            # Quy tắc chung: nghỉ phép -> không hưởng (mọi khoa)
+            if today_leave:
+                row['daily_hours'].append('–')
+                continue
 
             if is_special:
-                if today_half:
-                    desired = 4
-                else:
-                    desired = 8 if (today_hours >= 7.5 or today_hours >= 6) else (4 if today_hours > 0 else 0)
-            else:
-                desired = 4 if today_half else (8 if (today_hours > 0 or today_oncall) else 0)
+                # (1) Hôm nay trực 24h -> 17h
+                if today_oncall:
+                    row['daily_hours'].append('17h')
+                    row['total_days'] += 1
+                    continue
 
-            row['daily_hours'].append(f"{int(desired)}h" if desired else "–")
-            if desired: row['total_days'] += 1
+                # (2) Không trực hôm nay nhưng HÔM QUA trực 24h -> 7h
+                if is_prev_oncall:
+                    row['daily_hours'].append('7h')  # áp dụng cả khi nghỉ trực/nb/1/2/làm
+                    row['total_days'] += 1
+                    continue
+
+                # (3) Các ngày nghỉ khác (NT/NB/...) -> không hưởng
+                if today_off_nl:
+                    row['daily_hours'].append('–')
+                    continue
+
+                # (4) Ngày thường: 8h / 4h
+                if not has_any:
+                    row['daily_hours'].append('–'); continue
+                row['daily_hours'].append('4h' if today_half else '8h')
+                row['total_days'] += 1
+                continue
+
+            # ===== Khoa khác =====
+            if today_off_nl:
+                row['daily_hours'].append('–')
+                continue
+            if not has_any:
+                row['daily_hours'].append('–')
+                continue
+            row['daily_hours'].append('4h' if today_half else '8h')
+            row['total_days'] += 1
 
         table_data.append(row)
 
