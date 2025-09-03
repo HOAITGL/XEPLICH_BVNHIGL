@@ -3222,6 +3222,7 @@ def bang_cham_cong():
 
             if "/NT" in cset:
                 summary[u.id]['tg'] += 0.5  # nghỉ trực nửa ngày, còn lại đi làm nửa ngày
+                summary[u.id]['100'] += 0.5     # nửa ngày nghỉ hưởng 100%
                 continue
 
             if NB_VARIANTS & cset:
