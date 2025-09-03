@@ -3216,9 +3216,17 @@ def bang_cham_cong():
                 summary[u.id]['kl'] += 1
                 continue
 
-            # 2) Bỏ hoàn toàn: nghỉ trực, nghỉ bù (mọi ngày)
-            if {"NT", "/NT"} & cset or (NB_VARIANTS & cset):
+            # 2) Xử lý nghỉ trực, nghỉ bù
+            if "NT" in cset:
+                continue  # nghỉ trực cả ngày → không tính
+
+            if "/NT" in cset:
+                summary[u.id]['tg'] += 0.5  # nghỉ trực nửa ngày, còn lại đi làm nửa ngày
                 continue
+
+            if NB_VARIANTS & cset:
+                continue  # nghỉ bù → không tính
+
 
             if is_weekend:
                 # ===== Cuối tuần: KHÔNG tính công cho trực + H/DH/CT
